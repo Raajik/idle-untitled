@@ -3,9 +3,10 @@
 export const REBIRTH_MIN_ZONE = 1; // must have reached at least zone index 1 (Goblin Camp)
 
 // Hero Souls earned on rebirth: driven by highest zone unlocked and levels gained this run.
+// Tuned so a first rebirth (zone 1-2, ~level 15) yields ~2 souls, scaling to ~8 by zone 5.
 export function soulsForRun(highestZoneIndex, heroLevel) {
   if (highestZoneIndex < REBIRTH_MIN_ZONE) return 0;
-  return Math.floor(3 * Math.pow(highestZoneIndex + 1, 1.8) + heroLevel / 5);
+  return Math.floor(Math.pow(highestZoneIndex + 1, 1.5) / 2 + heroLevel / 25);
 }
 
 export const REBIRTH_UPGRADES = [

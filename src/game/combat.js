@@ -6,7 +6,7 @@ import { derivedStats, grantXp } from './hero.js';
 import { rollDrop, maybeAutoEquip } from './loot.js';
 import { addLog } from './state.js';
 
-const MONSTER_ATTACK_INTERVAL = 1.0; // seconds
+const MONSTER_ATTACK_INTERVAL = 1.2; // seconds
 const RESPAWN_DELAY = 3.0;
 
 // Gentle per-kill ramp within a zone: +2% stats per kill.
@@ -113,8 +113,8 @@ export function tickCombat(state, dt) {
     if (m.hp <= 0) {
       onMonsterDeath(state);
       spawnMonster(state);
-      // HP regen between fights: recover 15% of max
-      h.hp = Math.min(stats.maxHp, h.hp + Math.round(stats.maxHp * 0.15));
+      // HP regen between fights: recover 30% of max
+      h.hp = Math.min(stats.maxHp, h.hp + Math.round(stats.maxHp * 0.3));
       return;
     }
   }
@@ -135,7 +135,7 @@ export function tickCombat(state, dt) {
   }
 
   // Slow passive regen in combat
-  h.hp = Math.min(stats.maxHp, h.hp + stats.maxHp * 0.01 * dt);
+  h.hp = Math.min(stats.maxHp, h.hp + stats.maxHp * 0.02 * dt);
 }
 
 // Travel to an unlocked zone. Only allowed between fights is NOT required — swap freely.
