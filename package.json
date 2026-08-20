@@ -1,0 +1,10 @@
+{
+  "name": "idle-untitled",
+  "version": "0.1.0",
+  "description": "A text-based idle RPG. No energy, no tokens, no premium anything.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "license": "MIT"
+}
