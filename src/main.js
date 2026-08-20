@@ -27,7 +27,7 @@ const renderer = createRenderer(state, {
 
 const loop = createLoop({
   tick: (dt) => tickCombat(state, dt),
-  render: () => renderer.render(),
+  frame: () => renderer.frame(),
   autosave: () => saveGame(state),
 });
 

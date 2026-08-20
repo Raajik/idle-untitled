@@ -40,12 +40,12 @@ export function createStepper({ tickMs = TICK_MS, renderMs = RENDER_MS, saveMs =
   };
 }
 
-export function createLoop({ tick, render, autosave }) {
+export function createLoop({ tick, frame, autosave }) {
   const step = createStepper();
   let last = null;
   let timer = null;
 
-  function frame(now) {
+  function raf(now) {
     if (last === null) last = now;
     let dt = now - last;
     last = now;
@@ -55,15 +55,15 @@ export function createLoop({ tick, render, autosave }) {
 
     const s = step(dt);
     for (let i = 0; i < s.ticks; i++) tick(TICK_MS / 1000);
-    if (s.doRender) render();
+    if (frame) frame(dt);
     if (s.doSave) autosave();
 
-    timer = requestAnimationFrame(frame);
+    timer = requestAnimationFrame(raf);
   }
 
   return {
     start() {
-      timer = requestAnimationFrame(frame);
+      timer = requestAnimationFrame(raf);
     },
     stop() {
       if (timer !== null) cancelAnimationFrame(timer);

@@ -12,7 +12,7 @@ export const RARITIES = [
 
 export const AFFIXES = [
   { id: 'atkPct', label: (v) => `+${v}% ATK`, min: 4, max: 12 },
-  { id: 'hpFlat', label: (v) => `+${v} Max HP`, min: 10, max: 40 },
+  { id: 'hpFlat', label: (v) => `+${v} Max HP`, min: 4, max: 16 },
   { id: 'goldPct', label: (v) => `+${v}% Gold`, min: 5, max: 15 },
   { id: 'xpPct', label: (v) => `+${v}% XP`, min: 5, max: 15 },
   { id: 'critPct', label: (v) => `+${v}% Crit`, min: 2, max: 6 },
@@ -36,5 +36,5 @@ export const PREFIXES = {
 // Base power a drop of a given zone has, before rarity multiplier.
 // Weapons convert power to ATK; armor to DEF + HP; trinket/charm lean on affixes.
 export function zoneItemPower(zoneIndex) {
-  return 4 + zoneIndex * 7;
+  return 2 + zoneIndex * 3;
 }

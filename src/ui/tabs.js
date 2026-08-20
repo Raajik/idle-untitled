@@ -11,9 +11,13 @@ function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function bar(cls, pct, label) {
+function bar(cls, pct, label, id, target) {
   const w = Math.max(0, Math.min(100, pct));
-  return `<div class="bar ${cls}"><div class="fill" style="width:${w}%"></div><div class="label">${esc(label)}</div></div>`;
+  const bid = id ? ` id="${id}"` : '';
+  const fid = id ? ` id="${id}-fill"` : '';
+  const lid = id ? ` id="${id}-label"` : '';
+  const tgt = target ? ` data-target="${target}"` : '';
+  return `<div class="bar ${cls}"${bid}${tgt}><div class="fill"${fid} style="width:${w}%"></div><div class="fx-flash"></div><div class="label"${lid}>${esc(label)}</div></div>`;
 }
 
 function logHtml(state, limit = 40) {
@@ -36,11 +40,10 @@ export function battleTab(state) {
   }).join('');
 
   const zone = ZONES[p.zone];
-  const monsterPanel = m
-    ? `<div><b class="${m.isBoss ? 'soul' : ''}">${esc(m.name)}${m.isBoss ? ' ☠ BOSS' : ''}</b></div>
-       ${bar('hp', (m.hp / m.maxHp) * 100, `${Math.max(0, Math.ceil(m.hp))} / ${m.maxHp}`)}
-       <div class="muted">ATK ${m.atk} · DEF ${m.def} · ${p.killsInZone}/${zone.killsToBoss} kills to boss</div>`
-    : `<div class="muted">Searching for a monster...</div>`;
+  const monsterPanel = `
+    <div><b id="m-name" class="${m && m.isBoss ? 'soul' : ''}">${m ? esc(m.name) + (m.isBoss ? ' ☠ BOSS' : '') : 'Searching...'}</b></div>
+    ${bar('hp', m ? (m.hp / m.maxHp) * 100 : 0, m ? `${Math.max(0, Math.ceil(m.hp))} / ${m.maxHp}` : '...', 'm-hp', 'monster')}
+    <div id="m-meta" class="muted">${m ? `ATK ${m.atk} · DEF ${m.def} · ${p.killsInZone}/${zone.killsToBoss} kills to boss` : ''}</div>`;
 
   return `
     <div class="panel"><h2>Zone</h2><div class="zone-list">${zoneButtons}</div></div>
@@ -48,9 +51,9 @@ export function battleTab(state) {
       <h2>${esc(zone.name)}</h2>
       ${monsterPanel}
       <h2 style="margin-top:14px">You — Level ${h.level}</h2>
-      ${bar('hp', (h.hp / d.maxHp) * 100, h.dead ? 'Dead... reviving' : `${Math.ceil(h.hp)} / ${d.maxHp} HP`)}
-      ${bar('xp', (h.xp / xpForLevel(h.level)) * 100, `XP ${h.xp} / ${xpForLevel(h.level)}`)}
-      <div class="muted">ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s · Crit ${d.critChance.toFixed(1)}% · <span class="gold">${state.gold} gold</span></div>
+      ${bar('hp', (h.hp / d.maxHp) * 100, h.dead ? 'Dead... reviving' : `${Math.ceil(h.hp)} / ${d.maxHp} HP`, 'h-hp', 'hero')}
+      ${bar('xp', (h.xp / xpForLevel(h.level)) * 100, `XP ${h.xp} / ${xpForLevel(h.level)}`, 'h-xp')}
+      <div id="h-stats" class="muted">ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s · Crit ${d.critChance.toFixed(1)}% · ${state.gold} gold</div>
     </div>
     <div class="panel"><h2>Combat Log</h2><div class="log" id="combat-log">${logHtml(state)}</div></div>`;
 }
@@ -71,8 +74,8 @@ export function heroTab(state) {
   return `
     <div class="panel">
       <h2>Level ${h.level} — ${h.statPoints} stat points available</h2>
-      ${allocRow('str', 'STR', '+2 ATK each')}
-      ${allocRow('vit', 'VIT', '+8 Max HP, +1 DEF each')}
+      ${allocRow('str', 'STR', '+1.5 ATK each')}
+      ${allocRow('vit', 'VIT', '+5 Max HP, +0.75 DEF each')}
       ${allocRow('agi', 'AGI', '+4% attack speed, +0.3% crit each')}
     </div>
     <div class="panel"><h2>Derived Stats</h2><div class="stat-grid">
@@ -177,14 +180,15 @@ export function overviewTab(state) {
 
   const tiles = [];
   tiles.push(`<div class="panel"><h2>Hero</h2>
-    Level ${h.level} · <span class="gold">${state.gold}g</span> · <span class="soul">${state.rebirth.souls} souls</span><br/>
-    ${bar('hp', (h.hp / d.maxHp) * 100, `${Math.ceil(h.hp)} / ${d.maxHp} HP`)}
-    ${bar('xp', (h.xp / xpForLevel(h.level)) * 100, `XP ${h.xp} / ${xpForLevel(h.level)}`)}
+    <span id="ov-hero-line">Level ${h.level} · <span class="gold">${state.gold}g</span> · <span class="soul">${state.rebirth.souls} souls</span></span><br/>
+    ${bar('hp', (h.hp / d.maxHp) * 100, `${Math.ceil(h.hp)} / ${d.maxHp} HP`, 'h-hp', 'hero')}
+    ${bar('xp', (h.xp / xpForLevel(h.level)) * 100, `XP ${h.xp} / ${xpForLevel(h.level)}`, 'h-xp')}
     <div class="muted">ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s</div></div>`);
 
   tiles.push(`<div class="panel"><h2>Battle — ${esc(ZONES[state.progress.zone].name)}</h2>
-    ${m ? `<b class="${m.isBoss ? 'soul' : ''}">${esc(m.name)}</b>${bar('hp', (m.hp / m.maxHp) * 100, `${Math.ceil(m.hp)} / ${m.maxHp}`)}` : '<span class="muted">—</span>'}
-    <div class="muted">${state.progress.killsInZone}/${ZONES[state.progress.zone].killsToBoss} kills to boss</div></div>`);
+    <b id="m-name" class="${m && m.isBoss ? 'soul' : ''}">${m ? esc(m.name) + (m.isBoss ? ' ☠ BOSS' : '') : 'Searching...'}</b>
+    ${bar('hp', m ? (m.hp / m.maxHp) * 100 : 0, m ? `${Math.ceil(m.hp)} / ${m.maxHp}` : '...', 'm-hp', 'monster')}
+    <div id="ov-kills" class="muted">${state.progress.killsInZone}/${ZONES[state.progress.zone].killsToBoss} kills to boss</div></div>`);
 
   if (unlocked.includes('training')) tiles.push(`<div class="panel"><h2>Training</h2>${trainingTab(state).replace(/<div class="panel">|<\/div>$/g, '')}</div>`);
 

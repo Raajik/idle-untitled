@@ -2,6 +2,7 @@
 
 import { getZone, ZONES } from '../data/zones.js';
 import { pick, rand } from '../engine/rng.js';
+import { pushFx } from '../engine/fx.js';
 import { derivedStats, grantXp } from './hero.js';
 import { rollDrop, maybeAutoEquip } from './loot.js';
 import { addLog } from './state.js';
@@ -68,7 +69,10 @@ function onMonsterDeath(state) {
     addLog(state, `${m.name} slain. +${m.xp} XP, +${goldGain} gold`, 'dim');
   }
 
-  if (levels > 0) addLog(state, `Level up! Now level ${state.hero.level} (+${levels * 3} stat points)`, 'good');
+  if (levels > 0) {
+    addLog(state, `Level up! Now level ${state.hero.level} (+${levels * 3} stat points)`, 'good');
+    pushFx({ type: 'levelup' });
+  }
 
   const drop = rollDrop(state, m.isBoss);
   if (drop) {
@@ -109,8 +113,10 @@ export function tickCombat(state, dt) {
     h.attackTimer -= attackInterval;
     const { dmg, crit } = dealDamage(stats.atk, m.def, stats.critChance);
     m.hp -= dmg;
+    pushFx({ type: 'hit', target: 'monster', dmg, crit });
     if (crit) addLog(state, `Critical hit! ${dmg} damage to ${m.name}.`, 'dim');
     if (m.hp <= 0) {
+      pushFx({ type: 'kill', target: 'monster' });
       onMonsterDeath(state);
       spawnMonster(state);
       // HP regen between fights: recover 30% of max
@@ -125,6 +131,7 @@ export function tickCombat(state, dt) {
     h.monsterTimer -= MONSTER_ATTACK_INTERVAL;
     const { dmg } = dealDamage(m.atk, stats.def, 0);
     h.hp -= dmg;
+    pushFx({ type: 'hit', target: 'hero', dmg });
     if (h.hp <= 0) {
       h.hp = 0;
       h.dead = true;

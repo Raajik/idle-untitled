@@ -107,10 +107,9 @@ body {
   background: var(--bg-inset);
   border: 1px solid var(--border);
   border-radius: 3px;
-  overflow: hidden;
   margin: 4px 0;
 }
-.bar > .fill { height: 100%; transition: width 0.15s linear; }
+.bar > .fill { height: 100%; transition: width 0.18s ease-out; will-change: width; border-radius: inherit; }
 .bar.hp > .fill { background: var(--hp); }
 .bar.xp > .fill { background: var(--xp); }
 .bar > .label {
@@ -122,6 +121,7 @@ body {
   font-size: 11px;
   color: #fff;
   text-shadow: 0 1px 2px #000;
+  z-index: 2;
 }
 
 /* Combat log */
@@ -226,4 +226,49 @@ textarea.save-io {
   font: inherit;
   font-size: 11px;
   padding: 6px;
+}
+
+/* --- Combat FX --- */
+#hero-summary, .bar .label, .float-dmg { font-variant-numeric: tabular-nums; }
+
+.bar .fx-flash {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+.bar.hit .fx-flash { animation: barFlashRed 0.25s ease-out; }
+.bar.crit .fx-flash { animation: barFlashGold 0.4s ease-out; }
+.bar.kill .fx-flash { animation: barFlashWhite 0.3s ease-out; }
+.bar.level .fx-flash { animation: barFlashGreen 0.35s ease-out; }
+.bar.crit { animation: barShake 0.3s ease-out; }
+
+@keyframes barFlashRed { 0% { opacity: 0.65; } 100% { opacity: 0; } }
+@keyframes barFlashGold { 0% { opacity: 0.9; } 100% { opacity: 0; } }
+@keyframes barFlashWhite { 0% { opacity: 0.7; } 100% { opacity: 0; } }
+@keyframes barFlashGreen { 0% { opacity: 0.6; } 100% { opacity: 0; } }
+@keyframes barShake {
+  0% { transform: translateX(0); }
+  25% { transform: translateX(-3px); }
+  50% { transform: translateX(3px); }
+  75% { transform: translateX(-2px); }
+  100% { transform: translateX(0); }
+}
+
+.float-dmg {
+  position: absolute;
+  top: -6px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 0 1px 3px #000;
+  pointer-events: none;
+  z-index: 3;
+  animation: floatUp 0.7s ease-out forwards;
+}
+.float-dmg.crit { color: var(--accent); font-size: 1.25em; }
+@keyframes floatUp {
+  0% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-30px); }
 }

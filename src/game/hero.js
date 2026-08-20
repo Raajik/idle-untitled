@@ -41,9 +41,9 @@ export function getBonuses(state) {
 export function derivedStats(state) {
   const h = state.hero;
   const b = getBonuses(state);
-  const maxHp = Math.floor((25 + h.vit * 10 + b.hpFlat) * (1 + b.hpPct / 100));
-  const atk = Math.floor((4 + h.str * 2.5 + b.weaponAtk) * (1 + b.atkPct / 100));
-  const def = Math.floor(h.vit * 1.5 + b.armorDef);
+  const maxHp = Math.floor((20 + h.vit * 5 + b.hpFlat) * (1 + b.hpPct / 100));
+  const atk = Math.floor((3 + h.str * 1.5 + b.weaponAtk) * (1 + b.atkPct / 100));
+  const def = Math.floor(h.vit * 0.75 + b.armorDef);
   const spd = 1 + h.agi * 0.04; // attacks per second
   const critChance = 5 + h.agi * 0.3 + b.critPct; // percent
   return {
