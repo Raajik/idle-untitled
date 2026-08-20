@@ -7,7 +7,15 @@ import { generateItem, maybeAutoEquip, DROP_CHANCE } from './game/loot.js';
 
 const SAVE_KEY = 'idle-untitled-save-v1';
 
+let saveSuppressed = false;
+
+// Stop saves until reload (used by hard reset so unload handlers can't re-write the save).
+export function suppressSave() {
+  saveSuppressed = true;
+}
+
 export function saveGame(state) {
+  if (saveSuppressed) return;
   state.lastSeen = Date.now();
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify(state));

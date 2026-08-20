@@ -10,7 +10,7 @@ import { allocateStat, derivedStats, xpForLevel } from '../game/hero.js';
 import { equipItem } from '../game/loot.js';
 import { buyTraining } from '../game/training.js';
 import { performRebirth, buyUpgrade } from '../game/prestige.js';
-import { exportSave, importSave, hardReset, saveGame } from '../save.js';
+import { exportSave, importSave, hardReset, saveGame, suppressSave } from '../save.js';
 import { drainFx } from '../engine/fx.js';
 import { ZONES } from '../data/zones.js';
 
@@ -46,7 +46,10 @@ export function createRenderer(state, { onImport }) {
     for (const u of drainNewUnlocks(state)) toast(u.toast);
 
     const tabs = unlockedTabs(state);
-    sidebar.classList.toggle('hidden', tabs.length <= 2); // minimal until there's something to switch between
+    // Always show the sidebar: Settings (save/export/reset) must stay reachable even on a
+    // fresh save with only Battle + Settings unlocked. The progressive feel comes from tabs
+    // appearing over time, not from hiding the nav entirely.
+    sidebar.classList.remove('hidden');
 
     // If active tab got locked (e.g., after rebirth resets progress), fall back to battle
     if (!tabs.some((t) => t.id === state.ui.activeTab)) state.ui.activeTab = 'battle';
@@ -219,7 +222,9 @@ export function createRenderer(state, { onImport }) {
       case 'hard-reset':
         if (confirm('Really delete ALL progress? This cannot be undone.')) {
           hardReset();
+          suppressSave();
           location.reload();
+          return;
         }
         break;
     }
