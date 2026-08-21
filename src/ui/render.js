@@ -3,9 +3,9 @@
 //   - render(): full structural rebuild (tab switch, unlocks, player actions)
 //   - frame():  per-animation-frame in-place updates for live combat + fx
 
-import { unlockedTabs, drainNewUnlocks, UNLOCKS } from './unlocks.js';
-import { battleTab, heroTab, equipmentTab, trainingTab, rebirthTab, overviewTab, settingsTab } from './tabs.js';
-import { travelToZone } from '../game/combat.js';
+import { topLevelEntries, childTabs, drainNewUnlocks, UNLOCKS } from './unlocks.js';
+import { battleTab, attributesTab, skillsTab, inventoryTab, trainingTab, rebirthTab, overviewTab, settingsTab } from './tabs.js';
+import { startTravelToRegion, startTravelToPoi } from '../game/travel.js';
 import { raiseAttribute, derivedStats, xpForLevel, totalXpForLevel } from '../game/hero.js';
 import { equipItem } from '../game/loot.js';
 import { buyTraining } from '../game/training.js';
@@ -13,9 +13,18 @@ import { performRebirth, buyUpgrade } from '../game/prestige.js';
 import { exportSave, importSave, hardReset, saveGame, suppressSave } from '../save.js';
 import { drainFx } from '../engine/fx.js';
 import { fmt } from '../engine/format.js';
-import { ZONES } from '../data/zones.js';
+import { computeDepth } from '../game/combat.js';
 
-const TAB_RENDERERS = { battle: battleTab, hero: heroTab, equipment: equipmentTab, training: trainingTab, rebirth: rebirthTab, overview: overviewTab, settings: settingsTab };
+const TAB_RENDERERS = {
+  battle: battleTab,
+  attributes: attributesTab,
+  skills: skillsTab,
+  inventory: inventoryTab,
+  training: trainingTab,
+  rebirth: rebirthTab,
+  overview: overviewTab,
+  settings: settingsTab,
+};
 const LIVE_TABS = new Set(['battle', 'overview']);
 
 function toast(text) {
@@ -42,26 +51,39 @@ export function createRenderer(state, { onImport }) {
       `\nATK ${d.atk} · HP ${Math.ceil(state.hero.hp)}/${d.maxHp}`;
   }
 
-  function render() {
-    // Toasts for newly unlocked features
-    for (const u of drainNewUnlocks(state)) toast(u.toast);
-
-    const tabs = unlockedTabs(state);
+  function renderNav() {
     // Always show the sidebar: Settings (save/export/reset) must stay reachable even on a
     // fresh save with only Battle + Settings unlocked. The progressive feel comes from tabs
     // appearing over time, not from hiding the nav entirely.
     sidebar.classList.remove('hidden');
 
-    // If active tab got locked (e.g., after rebirth resets progress), fall back to battle
-    if (!tabs.some((t) => t.id === state.ui.activeTab)) state.ui.activeTab = 'battle';
+    const allTabs = UNLOCKS.filter((u) => u.kind === 'tab' && u.when(state));
+    if (!allTabs.some((t) => t.id === state.ui.activeTab)) state.ui.activeTab = 'battle';
 
-    nav.innerHTML = tabs
-      .map((t) => {
-        const teaser = t.teaser && t.teaser(state);
-        return `<button class="tab-btn ${state.ui.activeTab === t.id ? 'active' : ''}" data-tab="${t.id}">${t.label}${teaser ? ' <span class="teaser">(soon)</span>' : ''}</button>`;
+    nav.innerHTML = topLevelEntries(state)
+      .map((entry) => {
+        if (entry.kind === 'category') {
+          const kids = childTabs(state, entry.id);
+          if (kids.length === 0) return '';
+          const kidBtns = kids
+            .map((t) => {
+              const teaser = t.teaser && t.teaser(state);
+              return `<button class="tab-btn nav-child ${state.ui.activeTab === t.id ? 'active' : ''}" data-tab="${t.id}">${t.label}${teaser ? ' <span class="teaser">(soon)</span>' : ''}</button>`;
+            })
+            .join('');
+          return `<div class="nav-category"><div class="nav-category-label">${entry.label}</div>${kidBtns}</div>`;
+        }
+        const teaser = entry.teaser && entry.teaser(state);
+        return `<button class="tab-btn ${state.ui.activeTab === entry.id ? 'active' : ''}" data-tab="${entry.id}">${entry.label}${teaser ? ' <span class="teaser">(soon)</span>' : ''}</button>`;
       })
       .join('');
+  }
 
+  function render() {
+    // Toasts for newly unlocked features
+    for (const u of drainNewUnlocks(state)) toast(u.toast);
+
+    renderNav();
     updateSummary();
     main.innerHTML = TAB_RENDERERS[state.ui.activeTab](state);
     lastLogLen = state.log.length;
@@ -130,34 +152,7 @@ export function createRenderer(state, { onImport }) {
     if (el) el.textContent = text;
   }
 
-  function updateLive() {
-    const d = derivedStats(state);
-    const h = state.hero;
-    const m = state.monster;
-    const zone = ZONES[state.progress.zone];
-
-    updateSummary();
-
-    if (m) {
-      const nameEl = document.getElementById('m-name');
-      if (nameEl) {
-        nameEl.textContent = m.name + (m.isBoss ? ' ☠ BOSS' : '');
-        nameEl.className = m.isBoss ? 'soul' : '';
-      }
-      setBar('m-hp', (m.hp / m.maxHp) * 100, `${Math.max(0, Math.ceil(m.hp))} / ${m.maxHp}`);
-      setText('m-meta', `ATK ${m.atk} · DEF ${m.def} · ${state.progress.killsInZone}/${zone.killsToBoss} kills to boss`);
-    }
-
-    setBar('h-hp', (h.hp / d.maxHp) * 100, h.dead ? 'Dead... reviving' : `${Math.ceil(h.hp)} / ${d.maxHp} HP`);
-    const xpProgress = state.progress.totalXpEarned - totalXpForLevel(h.level);
-    setBar('h-xp', (xpProgress / xpForLevel(h.level)) * 100, `XP ${fmt(xpProgress)} / ${fmt(xpForLevel(h.level))}`);
-    setText('h-stats', `ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s · Dodge ${d.dodge.toFixed(0)}% · Crit ${d.critChance.toFixed(1)}% · ${fmt(state.pyreals)} pyreals`);
-
-    const ovLine = document.getElementById('ov-hero-line');
-    if (ovLine) ovLine.innerHTML = `Level ${h.level} · <span class="gold">${fmt(state.pyreals)} pyreals</span> · <span class="soul">${state.rebirth.souls} souls</span>`;
-    setText('ov-kills', `${state.progress.killsInZone}/${zone.killsToBoss} kills to boss`);
-
-    // append only new log lines so the log doesn't rebuild (keeps scroll stable)
+  function appendLog() {
     if (state.log.length > lastLogLen) {
       const logEl = document.getElementById('combat-log');
       if (logEl) {
@@ -177,6 +172,37 @@ export function createRenderer(state, { onImport }) {
     }
   }
 
+  function updateLive() {
+    const d = derivedStats(state);
+    const h = state.hero;
+    const m = state.monster;
+
+    updateSummary();
+
+    if (m) {
+      const nameEl = document.getElementById('m-name');
+      if (nameEl) {
+        nameEl.textContent = m.name + (m.isBoss ? ' ☠ BOSS' : '');
+        nameEl.className = m.isBoss ? 'soul' : '';
+      }
+      setBar('m-hp', (m.hp / m.maxHp) * 100, `${Math.max(0, Math.ceil(m.hp))} / ${m.maxHp}`);
+      setText('m-meta', `ATK ${m.atk} · DEF ${m.def}`);
+    }
+
+    setBar('h-hp', (h.hp / d.maxHp) * 100, h.dead ? 'Dead... reviving' : `${Math.ceil(h.hp)} / ${d.maxHp} HP`);
+    const xpProgress = state.progress.totalXpEarned - totalXpForLevel(h.level);
+    setBar('h-xp', (xpProgress / xpForLevel(h.level)) * 100, `XP ${fmt(xpProgress)} / ${fmt(xpForLevel(h.level))}`);
+    setText('h-stats', `ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s · Dodge ${d.dodge.toFixed(0)}% · Crit ${d.critChance.toFixed(1)}% · ${fmt(state.pyreals)} pyreals`);
+
+    const ovLine = document.getElementById('ov-hero-line');
+    if (ovLine) ovLine.innerHTML = `Level ${h.level} · <span class="gold">${fmt(state.pyreals)} pyreals</span> · <span class="soul">${state.rebirth.souls} souls</span>`;
+    if (state.location.poiId) {
+      setText('ov-kills', `+${Math.round(computeDepth(state.progress) * 100)}% difficulty`);
+    }
+
+    appendLog();
+  }
+
   function frame() {
     applyFx();
     const fresh = drainNewUnlocks(state);
@@ -186,7 +212,13 @@ export function createRenderer(state, { onImport }) {
       return;
     }
     if (LIVE_TABS.has(state.ui.activeTab)) {
-      updateLive();
+      // Travel/town screens have countdown tiles and swap panels entirely on arrival,
+      // which is easiest to keep correct with a full rebuild rather than patching DOM.
+      if (state.ui.activeTab === 'battle' && (state.travel || !state.location.poiId)) {
+        render();
+      } else {
+        updateLive();
+      }
     } else {
       // menu tabs: refresh periodically so gold/level stay current
       menuRenderFrames += 1;
@@ -207,7 +239,8 @@ export function createRenderer(state, { onImport }) {
     const { action, arg } = btn.dataset;
 
     switch (action) {
-      case 'travel': travelToZone(state, Number(arg)); break;
+      case 'travel-region': startTravelToRegion(state, arg); break;
+      case 'travel-poi': startTravelToPoi(state, arg); break;
       case 'raise': raiseAttribute(state, arg); break;
       case 'equip': equipItem(state, Number(arg)); break;
       case 'toggle-autoequip': state.settings.autoEquip = !state.settings.autoEquip; break;

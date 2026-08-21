@@ -2,6 +2,12 @@
 
 export const SLOTS = ['weapon', 'armor', 'amulet', 'ring'];
 
+// Slots always shown once Inventory unlocks.
+export const STARTING_SLOTS = ['weapon', 'armor', 'amulet', 'ring'];
+
+// Hidden until progress.aetheriaSlots unlocks them — nothing drops these yet.
+export const AETHERIA_SLOTS = ['aetheria1', 'aetheria2', 'aetheria3'];
+
 export const RARITIES = [
   { name: 'Common', weight: 100, powerMult: 1.0, affixes: 0 },
   { name: 'Uncommon', weight: 45, powerMult: 1.25, affixes: 1 },
@@ -33,8 +39,8 @@ export const PREFIXES = {
   Legendary: ['Peerless', 'Dawnborn', 'Kingsfall', 'Everlasting'],
 };
 
-// Base power a drop of a given zone has, before rarity multiplier.
+// Base power of a drop from a point of interest, derived from its average monster ATK.
 // Weapons convert power to ATK; armor to DEF + HP; amulet/ring lean on affixes.
-export function zoneItemPower(zoneIndex) {
-  return 2 + zoneIndex * 3;
+export function poiItemPower(avgMonsterAtk) {
+  return Math.max(2, Math.round(avgMonsterAtk * 0.5));
 }

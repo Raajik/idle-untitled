@@ -30,7 +30,7 @@ test('soulsForRun is zero before reaching Banderling Plains and grows after', ()
 
 test('rebirth resets the run but keeps souls and upgrades', () => {
   const s = createInitialState();
-  s.progress.highestZone = 2;
+  s.progress.unlockedRegions = ['holtburg', 'glenden-wood'];
   s.hero.level = 25;
   s.pyreals = 5000;
   s.inventory.push({ id: 1, slot: 'weapon', power: 5, affixes: [], rarity: 'Common', name: 'x' });
@@ -42,11 +42,11 @@ test('rebirth resets the run but keeps souls and upgrades', () => {
   assert.equal(s.rebirth.count, 1);
   assert.equal(s.pyreals, 0);
   assert.equal(s.hero.level, 1);
-  assert.equal(s.progress.highestZone, 0);
+  assert.equal(s.progress.unlockedRegions.length, 0);
   assert.equal(s.inventory.length, 0);
 });
 
-test('cannot rebirth before reaching zone 1', () => {
+test('cannot rebirth before reaching Glenden Wood', () => {
   const s = createInitialState();
   assert.equal(canRebirth(s), false);
   assert.equal(performRebirth(s), 0);

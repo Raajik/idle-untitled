@@ -1,12 +1,15 @@
 // Tab views: each returns an HTML string. Events are delegated via data-action attributes.
 
-import { ZONES } from '../data/zones.js';
+import { REGIONS, getRegion, getPoiById } from '../data/regions.js';
 import { derivedStats, xpForLevel, totalXpForLevel, attributeCost, ATTRIBUTES } from '../game/hero.js';
+import { xpToNextRunRank } from '../game/skills.js';
+import { computeDepth } from '../game/combat.js';
 import { TRAINING_TRACKS, trainingCost } from '../game/training.js';
 import { soulsAvailable, canRebirth, REBIRTH_UPGRADES } from '../game/prestige.js';
 import { itemScore } from '../game/loot.js';
+import { STARTING_SLOTS, AETHERIA_SLOTS } from '../data/items.js';
 import { UNLOCKS } from './unlocks.js';
-import { fmt } from '../engine/format.js';
+import { fmt, formatDuration } from '../engine/format.js';
 
 function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -32,36 +35,75 @@ export function battleTab(state) {
   const d = derivedStats(state);
   const m = state.monster;
   const p = state.progress;
+  const travel = state.travel;
 
-  const zoneButtons = ZONES.map((z, i) => {
-    const locked = i > p.highestZone;
-    const cls = ['btn', 'zone-btn', locked ? 'locked' : '', i === p.zone ? 'current' : ''].join(' ');
-    const sub = locked ? '🔒 locked' : i === p.highestZone && p.bossesKilled <= i ? 'in progress' : 'cleared';
-    return `<button class="${cls}" data-action="travel" data-arg="${i}" ${locked ? 'disabled' : ''}>${esc(z.name)}<span class="sub">${sub}</span></button>`;
-  }).join('');
+  const regionTiles = REGIONS.filter((r) => p.visibleRegions.includes(r.id))
+    .map((r, i) => {
+      const arrived = p.unlockedRegions.includes(r.id);
+      const travelling = travel && travel.kind === 'region' && travel.id === r.id;
+      const cls = ['tile', 'region-tile', arrived ? 'arrived' : '', travelling ? 'travelling' : '', i > 0 ? 'fade-in' : ''].join(' ');
+      let sub;
+      if (travelling) sub = `<span class="travel-timer">${formatDuration(travel.remaining)}</span>`;
+      else if (arrived) sub = '<span class="sub">arrived</span>';
+      else sub = '<span class="sub">Travel</span>';
+      const disabled = arrived || (travel && !travelling) ? 'disabled' : '';
+      return `<button class="${cls}" title="Travel" data-action="travel-region" data-arg="${r.id}" ${disabled}>${esc(r.name)}${sub}</button>`;
+    })
+    .join('');
 
-  const zone = ZONES[p.zone];
-  const xpProgress = p.totalXpEarned - totalXpForLevel(h.level);
-  const monsterPanel = `
-    <div><b id="m-name" class="${m && m.isBoss ? 'soul' : ''}">${m ? esc(m.name) + (m.isBoss ? ' ☠ BOSS' : '') : 'Searching...'}</b></div>
-    ${bar('hp', m ? (m.hp / m.maxHp) * 100 : 0, m ? `${Math.max(0, Math.ceil(m.hp))} / ${m.maxHp}` : '...', 'm-hp', 'monster')}
-    <div id="m-meta" class="muted">${m ? `ATK ${m.atk} · DEF ${m.def} · ${p.killsInZone}/${zone.killsToBoss} kills to boss` : ''}</div>`;
+  let poiSection = '';
+  if (state.location.regionId) {
+    const region = getRegion(state.location.regionId);
+    const poiTiles = region.pois
+      .map((poi) => {
+        const here = state.location.poiId === poi.id;
+        const travelling = travel && travel.kind === 'poi' && travel.id === poi.id;
+        const cls = ['tile', 'poi-tile', here ? 'current' : '', travelling ? 'travelling' : ''].join(' ');
+        let sub;
+        if (travelling) sub = `<span class="travel-timer">${formatDuration(travel.remaining)}</span>`;
+        else if (here) sub = '<span class="sub">here</span>';
+        else sub = '<span class="sub">Travel</span>';
+        const disabled = here || (travel && !travelling) ? 'disabled' : '';
+        return `<button class="${cls}" title="Travel" data-action="travel-poi" data-arg="${poi.id}" ${disabled}>${esc(poi.name)}${sub}</button>`;
+      })
+      .join('');
+    poiSection = `<div class="panel"><h2>Points of Interest — ${esc(region.name)}</h2><div class="tile-list">${poiTiles}</div></div>`;
+  }
 
-  return `
-    <div class="panel"><h2>Zone</h2><div class="zone-list">${zoneButtons}</div></div>
+  let combatPanel = '';
+  if (travel) {
+    const label = travel.kind === 'region' ? getRegion(travel.id).name : getPoiById(travel.id).name;
+    combatPanel = `<div class="panel"><h2>On the Road</h2>
+      <p class="muted">Walking to ${esc(label)}... ${formatDuration(travel.remaining)} remaining.</p></div>`;
+  } else if (!state.location.poiId) {
+    combatPanel = `<div class="panel"><h2>Town</h2><p class="muted">Pick a point of interest to start hunting.</p></div>`;
+  } else {
+    const poi = getPoiById(state.location.poiId);
+    const depth = computeDepth(p);
+    const xpProgress = state.progress.totalXpEarned - totalXpForLevel(h.level);
+    const bossNote = depth >= 0.75 ? ` · boss may appear` : '';
+    combatPanel = `
     <div class="panel">
-      <h2>${esc(zone.name)}</h2>
-      ${monsterPanel}
+      <h2>${esc(poi.name)} <span class="muted" style="font-size:0.7em">+${Math.round(depth * 100)}% difficulty${bossNote}</span></h2>
+      <div><b id="m-name" class="${m && m.isBoss ? 'soul' : ''}">${m ? esc(m.name) + (m.isBoss ? ' ☠ BOSS' : '') : 'Searching...'}</b></div>
+      ${bar('hp', m ? (m.hp / m.maxHp) * 100 : 0, m ? `${Math.max(0, Math.ceil(m.hp))} / ${m.maxHp}` : '...', 'm-hp', 'monster')}
+      <div id="m-meta" class="muted">${m ? `ATK ${m.atk} · DEF ${m.def}` : ''}</div>
       <h2 style="margin-top:14px">You — Level ${h.level}</h2>
       ${bar('hp', (h.hp / d.maxHp) * 100, h.dead ? 'Dead... reviving' : `${Math.ceil(h.hp)} / ${d.maxHp} HP`, 'h-hp', 'hero')}
       ${bar('xp', (xpProgress / xpForLevel(h.level)) * 100, `XP ${fmt(xpProgress)} / ${fmt(xpForLevel(h.level))}`, 'h-xp')}
       <div id="h-stats" class="muted">ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s · Dodge ${d.dodge.toFixed(0)}% · Crit ${d.critChance.toFixed(1)}% · ${fmt(state.pyreals)} pyreals</div>
-    </div>
+    </div>`;
+  }
+
+  return `
+    <div class="panel"><h2>Regions</h2><div class="tile-list">${regionTiles}</div></div>
+    ${poiSection}
+    ${combatPanel}
     <div class="panel"><h2>Combat Log</h2><div class="log" id="combat-log">${logHtml(state)}</div></div>`;
 }
 
-// --- Hero ---
-export function heroTab(state) {
+// --- Hero / Attributes ---
+export function attributesTab(state) {
   const h = state.hero;
   const d = derivedStats(state);
   const progress = state.progress.totalXpEarned - totalXpForLevel(h.level);
@@ -96,7 +138,20 @@ export function heroTab(state) {
     </div></div>`;
 }
 
-// --- Equipment ---
+// --- Skills ---
+export function skillsTab(state) {
+  const run = state.hero.skills.run;
+  const need = xpToNextRunRank(run.rank);
+  const speedPct = Math.round(100 - (100 * 100) / (100 + run.rank * 4));
+  return `
+    <div class="panel">
+      <h2>Run — rank ${run.rank}</h2>
+      ${bar('xp', (run.xp / need) * 100, `XP ${fmt(run.xp)} / ${fmt(need)}`)}
+      <p class="muted" style="margin-top:8px">Trained only by walking. Currently cuts travel time by ${speedPct}%.</p>
+    </div>`;
+}
+
+// --- Inventory ---
 function itemHtml(state, item, equipped) {
   const affixes = item.affixes.map((a) => a.label).join(', ');
   const base = item.slot === 'weapon' ? `${item.power} ATK` : item.slot === 'armor' ? `${Math.floor(item.power * 0.6)} DEF, +${item.power * 2} HP` : `${item.power} power`;
@@ -115,12 +170,13 @@ function itemHtml(state, item, equipped) {
     ${action}</div>`;
 }
 
-export function equipmentTab(state) {
-  const slots = ['weapon', 'armor', 'amulet', 'ring'];
-  const equipped = slots
+export function inventoryTab(state) {
+  const slots = [...STARTING_SLOTS, ...AETHERIA_SLOTS.slice(0, state.progress.aetheriaSlots)];
+  const equippedGrid = slots
     .map((s) => {
       const it = state.equipment[s];
-      return `<h2 style="margin-top:8px">${s}</h2>` + (it ? itemHtml(state, it, true) : '<div class="muted">— empty —</div>');
+      const label = s.startsWith('aetheria') ? `Aetheria ${s.slice(-1)}` : s;
+      return `<div class="equip-slot"><div class="slot-name">${esc(label)}</div>${it ? itemHtml(state, it, true) : '<div class="muted">— empty —</div>'}</div>`;
     })
     .join('');
 
@@ -129,7 +185,7 @@ export function equipmentTab(state) {
     : '<div class="muted">No loot yet. Monsters drop equipment as you fight.</div>';
 
   return `
-    <div class="panel"><h2>Equipped</h2>${equipped}</div>
+    <div class="panel"><h2>Equipped</h2><div class="equip-grid">${equippedGrid}</div></div>
     <div class="panel">
       <h2>Inventory (${state.inventory.length})</h2>
       <div style="margin-bottom:8px"><button class="btn" data-action="toggle-autoequip">Auto-equip: ${state.settings.autoEquip ? 'ON' : 'OFF'}</button></div>
@@ -169,9 +225,9 @@ export function rebirthTab(state) {
   return `
     <div class="panel">
       <h2>Rebirth — <span class="soul">${state.rebirth.souls} Hero Souls</span> · ${state.rebirth.count} rebirths</h2>
-      <p class="muted" style="margin-bottom:10px">Reset your level, pyreals, gear, and zone progress in exchange for Hero Souls — permanent power that carries across every run.</p>
+      <p class="muted" style="margin-bottom:10px">Reset your level, pyreals, gear, and region progress in exchange for Hero Souls — permanent power that carries across every run.</p>
       <button class="btn primary" data-action="rebirth" ${can ? '' : 'disabled'}>
-        ${can ? `Rebirth now — gain ${souls} souls` : `Reach ${ZONES[1].name} to unlock rebirth`}
+        ${can ? `Rebirth now — gain ${souls} souls` : `Reach Glenden Wood to unlock rebirth`}
       </button>
     </div>
     <div class="panel"><h2>Soul Upgrades</h2>${upgrades}</div>`;
@@ -182,7 +238,7 @@ export function overviewTab(state) {
   const h = state.hero;
   const d = derivedStats(state);
   const m = state.monster;
-  const unlocked = UNLOCKS.filter((u) => u.when(state)).map((u) => u.id);
+  const p = state.progress;
 
   const tiles = [];
   const xpProgress = state.progress.totalXpEarned - totalXpForLevel(h.level);
@@ -192,11 +248,13 @@ export function overviewTab(state) {
     ${bar('xp', (xpProgress / xpForLevel(h.level)) * 100, `XP ${fmt(xpProgress)} / ${fmt(xpForLevel(h.level))}`, 'h-xp')}
     <div class="muted">ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s</div></div>`);
 
-  tiles.push(`<div class="panel"><h2>Battle — ${esc(ZONES[state.progress.zone].name)}</h2>
-    <b id="m-name" class="${m && m.isBoss ? 'soul' : ''}">${m ? esc(m.name) + (m.isBoss ? ' ☠ BOSS' : '') : 'Searching...'}</b>
+  const poi = state.location.poiId ? getPoiById(state.location.poiId) : null;
+  tiles.push(`<div class="panel"><h2>Battle — ${poi ? esc(poi.name) : 'Town'}</h2>
+    <b id="m-name" class="${m && m.isBoss ? 'soul' : ''}">${m ? esc(m.name) + (m.isBoss ? ' ☠ BOSS' : '') : state.travel ? 'Travelling...' : 'Searching...'}</b>
     ${bar('hp', m ? (m.hp / m.maxHp) * 100 : 0, m ? `${Math.ceil(m.hp)} / ${m.maxHp}` : '...', 'm-hp', 'monster')}
-    <div id="ov-kills" class="muted">${state.progress.killsInZone}/${ZONES[state.progress.zone].killsToBoss} kills to boss</div></div>`);
+    <div id="ov-kills" class="muted">${poi ? `+${Math.round(computeDepth(p) * 100)}% difficulty` : ''}</div></div>`);
 
+  const unlocked = UNLOCKS.filter((u) => u.when(state)).map((u) => u.id);
   if (unlocked.includes('training')) tiles.push(`<div class="panel"><h2>Training</h2>${trainingTab(state).replace(/<div class="panel">|<\/div>$/g, '')}</div>`);
 
   tiles.push(`<div class="panel"><h2>Log</h2><div class="log" style="height:180px" id="combat-log">${logHtml(state, 20)}</div></div>`);

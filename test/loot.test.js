@@ -49,6 +49,7 @@ test('maybeAutoEquip only equips strictly better items', () => {
 
 test('bosses always drop', () => {
   const s = createInitialState();
+  s.location = { regionId: 'holtburg', poiId: 'holtburg-meeting-hall' };
   for (let i = 0; i < 10; i++) assert.ok(rollDrop(s, true));
 });
 

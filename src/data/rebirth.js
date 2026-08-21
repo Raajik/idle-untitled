@@ -1,12 +1,13 @@
 // Rebirth (prestige) definitions: soul formula inputs + permanent upgrade tree.
 
-export const REBIRTH_MIN_ZONE = 1; // must have reached at least zone index 1 (Banderling Plains)
+export const REBIRTH_MIN_REGION = 'glenden-wood'; // must have reached at least this region
 
-// Hero Souls earned on rebirth: driven by highest zone unlocked and levels gained this run.
-// Tuned so a first rebirth (zone 1-2, ~level 15) yields ~2 souls, scaling to ~8 by zone 5.
-export function soulsForRun(highestZoneIndex, heroLevel) {
-  if (highestZoneIndex < REBIRTH_MIN_ZONE) return 0;
-  return Math.floor(Math.pow(highestZoneIndex + 1, 1.5) / 2 + heroLevel / 25);
+// Hero Souls earned on rebirth: driven by highest region reached and levels gained
+// this run. Tuned so a first rebirth (region 1-2, ~level 15) yields ~2 souls,
+// scaling to ~8 by region 5.
+export function soulsForRun(highestRegionIndex, heroLevel) {
+  if (highestRegionIndex < 1) return 0; // index 0 = Holtburg only, doesn't count
+  return Math.floor(Math.pow(highestRegionIndex + 1, 1.5) / 2 + heroLevel / 25);
 }
 
 export const REBIRTH_UPGRADES = [

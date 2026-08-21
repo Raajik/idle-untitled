@@ -2,9 +2,11 @@
 
 import { createInitialState, SAVE_VERSION, addLog } from './game/state.js';
 import { derivedStats, heroDps, grantXp } from './game/hero.js';
-import { getZone } from './data/zones.js';
+import { getPoiById } from './data/regions.js';
 import { generateItem, maybeAutoEquip, DROP_CHANCE } from './game/loot.js';
+import { poiItemPower } from './data/items.js';
 import { fmt } from './engine/format.js';
+import { skipTravel } from './game/travel.js';
 
 const SAVE_KEY = 'idle-untitled-save-v1';
 
@@ -30,7 +32,10 @@ function migrate(raw) {
   const state = { ...fresh, ...raw };
   // deep-merge critical nested objects so old saves gain new fields
   state.hero = { ...fresh.hero, ...(raw.hero || {}) };
+  state.hero.skills = { ...fresh.hero.skills, ...(raw.hero && raw.hero.skills) };
   state.progress = { ...fresh.progress, ...(raw.progress || {}) };
+  state.location = { ...fresh.location, ...(raw.location || {}) };
+  state.travel = raw.travel !== undefined ? raw.travel : fresh.travel;
   state.rebirth = { ...fresh.rebirth, ...(raw.rebirth || {}) };
   state.training = { ...fresh.training, ...(raw.training || {}) };
   state.settings = { ...fresh.settings, ...(raw.settings || {}) };
@@ -47,6 +52,29 @@ function migrate(raw) {
     delete state.progress.totalGoldEarned;
   }
 
+  // Migrate pre-region saves (flat zone/poi index) into the Holtburg region + POI system.
+  // These saves predate depth-based difficulty, so we drop them into Holtburg's town hub.
+  const isPreRegion = raw.progress && (raw.progress.zone !== undefined || raw.progress.poi !== undefined) && !raw.location;
+  if (isPreRegion) {
+    delete state.progress.zone;
+    delete state.progress.poi;
+    delete state.progress.highestZone;
+    delete state.progress.highestPoi;
+    delete state.progress.killsInZone;
+    state.progress.unlockedRegions = ['holtburg'];
+    state.progress.visibleRegions = ['holtburg'];
+    state.location = { regionId: 'holtburg', poiId: 'holtburg-meeting-hall' };
+    if (!state.progress.visitedPois.includes('holtburg-meeting-hall')) {
+      state.progress.visitedPois.push('holtburg-meeting-hall');
+    }
+  }
+  // Belt-and-suspenders: strip any leftover legacy keys even if the save already had `location`.
+  delete state.progress.zone;
+  delete state.progress.poi;
+  delete state.progress.highestZone;
+  delete state.progress.highestPoi;
+  delete state.progress.killsInZone;
+
   // Normalize item slots (trinket -> amulet, charm -> ring) from pre-AC-theme saves.
   const remap = (slot) => (slot === 'trinket' ? 'amulet' : slot === 'charm' ? 'ring' : slot);
   state.equipment = { ...fresh.equipment, ...(raw.equipment || {}) };
@@ -60,6 +88,10 @@ function migrate(raw) {
     if (item && remap(item.slot) !== item.slot) item.slot = remap(item.slot);
   }
   state.inventory = (raw.inventory || []).map((it) => ({ ...it, slot: remap(it.slot) }));
+
+  // Migrate the old single Hero/Equipment tabs into the Hero category's subsections.
+  if (state.ui.activeTab === 'hero') state.ui.activeTab = 'attributes';
+  if (state.ui.activeTab === 'equipment') state.ui.activeTab = 'inventory';
 
   state.version = SAVE_VERSION;
   return state;
@@ -96,8 +128,9 @@ export function hardReset() {
 
 // --- Offline progress ---
 // Analytical approximation: kills = elapsed / secondsPerKill, where secondsPerKill comes
-// from the hero's current DPS vs the average monster in the current zone. Loot is sampled
+// from the hero's current DPS vs the average monster in the current POI. Loot is sampled
 // at the expected drop count (capped), keeping only auto-equips to avoid inventory floods.
+// If the hero was travelling or in town, we just finish the walk / do nothing.
 
 const MAX_OFFLINE_DROPS_KEPT = 8;
 
@@ -106,17 +139,26 @@ export function applyOfflineProgress(state) {
   const elapsedSec = Math.max(0, (now - (state.lastSeen || now)) / 1000);
   if (elapsedSec < 60) return null; // not worth reporting under a minute
 
-  const zone = getZone(state.progress.zone);
-  const avgMonster =
-    zone.monsters.reduce((s, m) => s + m.hp, 0) / zone.monsters.length;
-  const dps = heroDps(state, Math.round(zone.monsters[0].def));
+  // Finish an in-progress walk instantly if enough time passed; Run trains for the
+  // skipped time either way. `null` means the walk still isn't done.
+  const afterTravel = skipTravel(state, elapsedSec);
+  const remaining = afterTravel === null ? 0 : afterTravel;
+
+  if (!state.location.poiId) return null; // travelling or in town: nothing to simulate
+
+  const poi = getPoiById(state.location.poiId);
+  const depth = state.progress.poiDepth || 0;
+  const avgMonsterHp = poi.monsters.reduce((s, m) => s + m.hp, 0) / poi.monsters.length * (1 + depth);
+  const avgDef = Math.round((poi.monsters.reduce((s, m) => s + m.def, 0) / poi.monsters.length) * (1 + depth));
+  const dps = heroDps(state, avgDef);
   if (dps <= 0) return null;
 
-  const kills = Math.floor((elapsedSec * dps) / avgMonster);
+  const kills = Math.floor((remaining * dps) / avgMonsterHp);
   if (kills <= 0) return null;
 
-  const avgXp = zone.monsters.reduce((s, m) => s + m.xp, 0) / zone.monsters.length;
-  const avgPyreals = zone.monsters.reduce((s, m) => s + m.pyreals, 0) / zone.monsters.length;
+  const avgXp = poi.monsters.reduce((s, m) => s + m.xp, 0) / poi.monsters.length;
+  const avgPyreals = poi.monsters.reduce((s, m) => s + m.pyreals, 0) / poi.monsters.length;
+  const avgAtk = poi.monsters.reduce((s, m) => s + m.atk, 0) / poi.monsters.length;
 
   const stats = derivedStats(state);
   const pyrealsGain = Math.round(kills * avgPyreals * (1 + stats.pyrealsPct / 100));
@@ -125,12 +167,14 @@ export function applyOfflineProgress(state) {
   state.pyreals += pyrealsGain;
   state.progress.totalPyrealsEarned += pyrealsGain;
   state.progress.totalKills += kills;
+  state.progress.killsInPoi += kills;
+  state.progress.timeInPoi += remaining;
 
   // Sample expected drops, keep the best few
   const expectedDrops = Math.min(Math.round(kills * DROP_CHANCE), 200);
   const kept = [];
   for (let i = 0; i < expectedDrops; i++) {
-    const item = generateItem(state.progress.zone, { luckPct: stats.luckPct });
+    const item = generateItem(Math.round(poiItemPower(avgAtk) * (1 + depth)), { luckPct: stats.luckPct });
     if (maybeAutoEquip(state, item)) {
       kept.push(item);
       if (kept.length > MAX_OFFLINE_DROPS_KEPT) kept.shift();

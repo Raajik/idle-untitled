@@ -1,29 +1,48 @@
 // Combat: pure tick-based battle resolution. Mutates state; no DOM access.
+// Combat only runs when the hero is standing at a POI (not travelling, not in town).
+// Difficulty within a POI ("depth") rises with time spent and kills, resets when
+// you travel away, and gates the boss in as a random encounter rather than a
+// one-time unlock.
 
-import { getZone, ZONES } from '../data/zones.js';
+import { getPoiById } from '../data/regions.js';
 import { pick, rand } from '../engine/rng.js';
 import { pushFx } from '../engine/fx.js';
 import { fmt } from '../engine/format.js';
 import { derivedStats, grantXp } from './hero.js';
 import { rollDrop, maybeAutoEquip } from './loot.js';
 import { addLog } from './state.js';
+import { tickTravel } from './travel.js';
 
 const MONSTER_ATTACK_INTERVAL = 1.2; // seconds
 const RESPAWN_DELAY = 3.0;
 
-// Gentle per-kill ramp within a zone: +1% stats per kill.
-function ramp(killsInZone) {
-  return 1 + killsInZone * 0.01;
+const DEPTH_CAP = 3.0;
+const BOSS_DEPTH_THRESHOLD = 0.75;
+const BOSS_CHANCE_AT_THRESHOLD = 0.075;
+const BOSS_CHANCE_CAP = 0.28;
+const MIN_TRASH_AFTER_BOSS = 3;
+
+// Difficulty multiplier for the current POI: rises with time spent and kills,
+// capped so a POI can't scale forever.
+export function computeDepth(progress) {
+  return Math.min(DEPTH_CAP, progress.timeInPoi * 0.0025 + progress.killsInPoi * 0.01);
+}
+
+function bossChance(depth) {
+  if (depth < BOSS_DEPTH_THRESHOLD) return 0;
+  const t = (depth - BOSS_DEPTH_THRESHOLD) / (DEPTH_CAP - BOSS_DEPTH_THRESHOLD);
+  return BOSS_CHANCE_AT_THRESHOLD + t * (BOSS_CHANCE_CAP - BOSS_CHANCE_AT_THRESHOLD);
 }
 
 export function spawnMonster(state) {
-  const zone = getZone(state.progress.zone);
-  const needsBoss =
-    state.progress.killsInZone >= zone.killsToBoss && !state.progress[`bossDead_${state.progress.zone}`];
+  const poi = getPoiById(state.location.poiId);
+  const p = state.progress;
+  const depth = computeDepth(p);
+  p.poiDepth = depth;
 
-  const def = needsBoss ? zone.boss : pick(zone.monsters);
-  // Bosses are a fixed challenge (no per-kill ramp); normal monsters ramp gently.
-  const r = needsBoss ? 1 : ramp(state.progress.killsInZone);
+  const canRollBoss = p.killsSinceBoss >= MIN_TRASH_AFTER_BOSS && Math.random() < bossChance(depth);
+  const def = canRollBoss ? poi.boss : pick(poi.monsters);
+  const r = 1 + depth;
   state.monster = {
     name: def.name,
     maxHp: Math.round(def.hp * r),
@@ -32,9 +51,9 @@ export function spawnMonster(state) {
     def: Math.round(def.def * r),
     xp: def.xp,
     pyreals: def.pyreals,
-    isBoss: needsBoss,
+    isBoss: canRollBoss,
   };
-  if (needsBoss) addLog(state, `☠ ${def.name} appears!`, 'boss');
+  if (canRollBoss) addLog(state, `☠ ${def.name} appears!`, 'boss');
 }
 
 function dealDamage(rawAtk, targetDef, critChance) {
@@ -58,16 +77,12 @@ function onMonsterDeath(state) {
 
   p.totalKills += 1;
   if (m.isBoss) {
-    p[`bossDead_${p.zone}`] = true;
     p.bossesKilled += 1;
-    p.bossActive = false;
+    p.killsSinceBoss = 0;
     addLog(state, `☠ ${m.name} defeated! +${fmt(m.xp)} XP, +${fmt(pyrealsGain)} pyreals`, 'boss');
-    if (p.zone + 1 < ZONES.length && p.highestZone < p.zone + 1) {
-      p.highestZone = p.zone + 1;
-      addLog(state, `New zone unlocked: ${getZone(p.zone + 1).name}!`, 'good');
-    }
   } else {
-    p.killsInZone += 1;
+    p.killsInPoi += 1;
+    p.killsSinceBoss += 1;
     addLog(state, `${m.name} slain. +${fmt(m.xp)} XP, +${fmt(pyrealsGain)} pyreals`, 'dim');
   }
 
@@ -90,7 +105,11 @@ function onMonsterDeath(state) {
 
 // One game tick. dt in seconds.
 export function tickCombat(state, dt) {
+  if (tickTravel(state, dt)) return; // travelling: no combat, Run trains instead
+
   const h = state.hero;
+  if (!state.location.poiId) return; // in town: nothing to fight
+
   const stats = derivedStats(state);
 
   if (h.hp === 0) h.hp = stats.maxHp; // initialize on first tick
@@ -105,6 +124,7 @@ export function tickCombat(state, dt) {
     return;
   }
 
+  state.progress.timeInPoi += dt;
   if (!state.monster) spawnMonster(state);
   const m = state.monster;
 
@@ -143,9 +163,8 @@ export function tickCombat(state, dt) {
       h.dead = true;
       h.respawnTimer = RESPAWN_DELAY;
       if (m.isBoss) {
-        // Losing to the boss makes it retreat — you fall back to grinding normal
-        // monsters and can challenge it again once stronger.
-        state.progress.killsInZone = 0;
+        // Losing to the boss makes it retreat — depth is kept, so you can challenge
+        // it again once you've clawed back the trash kills needed to re-roll it.
         state.monster = null;
         addLog(state, `The ${m.name} batters you down and retreats into the depths. Regain your strength and try again.`, 'boss');
       } else {
@@ -157,15 +176,4 @@ export function tickCombat(state, dt) {
 
   // Very slow passive regen (healing is a skill, not a given)
   h.hp = Math.min(stats.maxHp, h.hp + stats.maxHp * 0.01 * dt);
-}
-
-// Travel to an unlocked zone. Only allowed between fights is NOT required — swap freely.
-export function travelToZone(state, zoneIndex) {
-  if (zoneIndex < 0 || zoneIndex > state.progress.highestZone) return false;
-  state.progress.zone = zoneIndex;
-  state.progress.killsInZone = 0;
-  state.monster = null;
-  state.hero.attackTimer = 0;
-  addLog(state, `Traveled to ${getZone(zoneIndex).name}.`, 'good');
-  return true;
 }

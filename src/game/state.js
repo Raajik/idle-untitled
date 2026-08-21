@@ -1,6 +1,6 @@
 // Central game state. One object, mutated by game logic, read by the UI.
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 export function createInitialState() {
   return {
@@ -21,17 +21,27 @@ export function createInitialState() {
       monsterTimer: 0,
       respawnTimer: 0,
       dead: false,
+      skills: {
+        run: { rank: 0, xp: 0 },
+      },
     },
+    location: { regionId: null, poiId: null }, // null,null = still on the road to Holtburg
+    travel: null, // { kind: 'region'|'poi', id, remaining, duration }
     progress: {
-      zone: 0, // current zone the hero is fighting in
-      highestZone: 0,
-      killsInZone: 0,
-      bossActive: false,
+      unlockedRegions: [], // arrived at
+      visibleRegions: ['holtburg'], // shown on the map at all
+      visitedPois: [],
+      revealTimer: 0, // seconds until the next hidden region fades in
+      poiDepth: 0, // current POI's difficulty multiplier (resets on travel away)
+      timeInPoi: 0,
+      killsInPoi: 0,
+      killsSinceBoss: 0,
       bossesKilled: 0,
       totalKills: 0,
       totalPyrealsEarned: 0,
       totalXpEarned: 0,
       totalDrops: 0,
+      aetheriaSlots: 0,
     },
     monster: null, // current monster instance { name, hp, maxHp, atk, def, xp, pyreals, isBoss }
     equipment: { weapon: null, armor: null, amulet: null, ring: null },
@@ -59,6 +69,8 @@ export function resetRun(state) {
   const fresh = createInitialState();
   state.pyreals = fresh.pyreals;
   state.hero = fresh.hero;
+  state.location = fresh.location;
+  state.travel = fresh.travel;
   state.progress = fresh.progress;
   state.monster = null;
   state.equipment = fresh.equipment;

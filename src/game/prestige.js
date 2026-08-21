@@ -1,14 +1,24 @@
 // Rebirth: prestige reset and permanent upgrade tree.
 
-import { soulsForRun, REBIRTH_UPGRADES, REBIRTH_MIN_ZONE } from '../data/rebirth.js';
+import { soulsForRun, REBIRTH_UPGRADES, REBIRTH_MIN_REGION } from '../data/rebirth.js';
+import { regionIndex } from '../data/regions.js';
 import { resetRun, addLog } from './state.js';
 
+function highestRegionIndex(state) {
+  let max = -1;
+  for (const id of state.progress.unlockedRegions) {
+    const idx = regionIndex(id);
+    if (idx > max) max = idx;
+  }
+  return max;
+}
+
 export function canRebirth(state) {
-  return soulsForRun(state.progress.highestZone, state.hero.level) > 0;
+  return soulsForRun(highestRegionIndex(state), state.hero.level) > 0;
 }
 
 export function soulsAvailable(state) {
-  return soulsForRun(state.progress.highestZone, state.hero.level);
+  return soulsForRun(highestRegionIndex(state), state.hero.level);
 }
 
 export function performRebirth(state) {
@@ -46,4 +56,4 @@ export function buyUpgrade(state, upgradeId) {
   return true;
 }
 
-export { REBIRTH_UPGRADES, REBIRTH_MIN_ZONE, soulsForRun };
+export { REBIRTH_UPGRADES, REBIRTH_MIN_REGION, soulsForRun };

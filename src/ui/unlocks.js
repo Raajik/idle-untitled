@@ -1,17 +1,32 @@
 // Progressive UI: declarative unlocks table. Visibility is DERIVED from game state
 // (never stored flags), so saves can't desync. `seenUnlocks` only tracks toasts.
+//
+// `kind: 'category'` entries (Hero) are headers, not routable tabs — they render
+// nested tab buttons for every unlocked entry whose `parent` matches their id.
 
 import { canRebirth } from '../game/prestige.js';
 
 export const UNLOCKS = [
   { id: 'battle', kind: 'tab', label: '⚔ Battle', when: () => true },
-  { id: 'hero', kind: 'tab', label: '🧙 Hero', when: (s) => s.hero.level >= 2, toast: '🧙 Hero unlocked — allocate your stat points!' },
-  { id: 'equipment', kind: 'tab', label: '🎒 Equipment', when: (s) => s.progress.totalDrops >= 1, toast: '🎒 Equipment unlocked — monsters can drop loot!' },
+  { id: 'hero', kind: 'category', label: '🧙 Hero', when: (s) => s.hero.level >= 2 || s.progress.visitedPois.length > 0 || s.progress.totalDrops >= 1 },
+  { id: 'attributes', kind: 'tab', parent: 'hero', label: 'Attributes', when: (s) => s.hero.level >= 2, toast: '🧙 Attributes unlocked — allocate your stat points!' },
+  { id: 'skills', kind: 'tab', parent: 'hero', label: 'Skills', when: (s) => s.progress.visitedPois.length > 0 || s.travel !== null || s.progress.unlockedRegions.length > 0, toast: '🏃 Skills unlocked — Run trains as you walk!' },
+  { id: 'inventory', kind: 'tab', parent: 'hero', label: 'Inventory', when: (s) => s.progress.totalDrops >= 1, toast: '🎒 Inventory unlocked — monsters can drop loot!' },
   { id: 'training', kind: 'tab', label: '💰 Training', when: (s) => s.progress.totalPyrealsEarned >= 5000, toast: '💰 Training unlocked — spend pyreals on permanent % upgrades!' },
   { id: 'rebirth', kind: 'tab', label: '✦ Rebirth', when: (s) => s.progress.bossesKilled >= 1, toast: '✦ Rebirth unlocked — a greater power stirs...', teaser: (s) => !canRebirth(s) },
   { id: 'overview', kind: 'tab', label: '📊 Overview', when: (s) => s.rebirth.count >= 1, toast: '📊 Overview unlocked — monitor everything at once!' },
   { id: 'settings', kind: 'tab', label: '⚙ Settings', when: () => true },
 ];
+
+// Flat top-level nav entries: routable tabs with no parent, plus category headers.
+export function topLevelEntries(state) {
+  return UNLOCKS.filter((u) => !u.parent && u.when(state));
+}
+
+// Routable child tabs under a category id.
+export function childTabs(state, categoryId) {
+  return UNLOCKS.filter((u) => u.kind === 'tab' && u.parent === categoryId && u.when(state));
+}
 
 export function unlockedTabs(state) {
   return UNLOCKS.filter((u) => u.kind === 'tab' && u.when(state));

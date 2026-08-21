@@ -70,6 +70,10 @@ body {
 .tab-btn.active { color: var(--accent); border-color: var(--border); background: var(--bg-inset); }
 .tab-btn .teaser { opacity: 0.55; }
 
+.nav-category { display: flex; flex-direction: column; gap: 2px; }
+.nav-category-label { padding: 6px 10px 2px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); }
+.tab-btn.nav-child { padding-left: 20px; font-size: 13px; }
+
 #hero-summary {
   margin-top: auto;
   border-top: 1px solid var(--border);
@@ -153,11 +157,27 @@ button.btn:hover:not(:disabled) { border-color: var(--accent); color: var(--acce
 button.btn:disabled { opacity: 0.4; cursor: default; }
 button.btn.primary { border-color: var(--accent); color: var(--accent); }
 
-/* Zone selector */
-.zone-list { display: flex; flex-wrap: wrap; gap: 6px; }
-.zone-btn.locked { opacity: 0.35; }
-.zone-btn.current { border-color: var(--accent); color: var(--accent); }
-.zone-btn .sub { display: block; font-size: 10px; color: var(--text-dim); }
+/* Regions & POIs */
+.tile-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.tile {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font: inherit;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+  min-width: 120px;
+}
+.tile:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.tile:disabled { cursor: default; }
+.tile.arrived, .tile.current { border-color: var(--accent); color: var(--accent); opacity: 0.85; }
+.tile.travelling { border-color: var(--xp); color: var(--xp); }
+.tile .sub, .tile .travel-timer { display: block; font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+.tile.travelling .travel-timer { color: var(--xp); font-weight: bold; }
+.tile.fade-in { animation: tile-fade-in 0.6s ease-out; }
+@keyframes tile-fade-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 
 /* Items */
 .item { border: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; margin-bottom: 6px; background: var(--bg-inset); }
@@ -172,6 +192,10 @@ button.btn.primary { border-color: var(--accent); color: var(--accent); }
 .rarity-Legendary { color: var(--rarity-legendary); }
 .equip-better { color: var(--xp); }
 .equip-worse { color: var(--hp); }
+
+/* Inventory: equipped-slot grid */
+.equip-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+.equip-slot .slot-name { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); margin-bottom: 4px; }
 
 /* Stat rows */
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px 18px; }

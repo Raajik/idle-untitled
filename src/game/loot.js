@@ -1,6 +1,7 @@
 // Loot: drop rolls, item generation, rarity rolls, inventory/equip helpers.
 
-import { SLOTS, RARITIES, AFFIXES, BASE_NAMES, PREFIXES, zoneItemPower } from '../data/items.js';
+import { SLOTS, RARITIES, AFFIXES, BASE_NAMES, PREFIXES, poiItemPower } from '../data/items.js';
+import { getPoiById } from '../data/regions.js';
 import { pick, pickWeighted, randInt, chance } from '../engine/rng.js';
 import { derivedStats } from './hero.js';
 
@@ -18,7 +19,7 @@ export function rollRarity(luckPct = 0) {
   return pickWeighted(table);
 }
 
-export function generateItem(zoneIndex, { luckPct = 0, rarityBoost = 0 } = {}) {
+export function generateItem(powerLevel, { luckPct = 0, rarityBoost = 0 } = {}) {
   let rarity = rollRarity(luckPct);
   if (rarityBoost > 0) {
     // bosses: bump rarity up by rarityBoost tiers (capped at Legendary)
@@ -28,7 +29,7 @@ export function generateItem(zoneIndex, { luckPct = 0, rarityBoost = 0 } = {}) {
 
   const slot = pick(SLOTS);
   const jitter = 0.9 + Math.random() * 0.2;
-  const power = Math.max(1, Math.round(zoneItemPower(zoneIndex) * rarity.powerMult * jitter));
+  const power = Math.max(1, Math.round(powerLevel * rarity.powerMult * jitter));
 
   const affixes = [];
   const pool = [...AFFIXES];
@@ -48,7 +49,6 @@ export function generateItem(zoneIndex, { luckPct = 0, rarityBoost = 0 } = {}) {
     power,
     affixes,
     name: `${prefix} ${base}`,
-    zone: zoneIndex,
   };
   for (const a of item.affixes) {
     const def = AFFIXES.find((d) => d.id === a.id);
@@ -57,12 +57,24 @@ export function generateItem(zoneIndex, { luckPct = 0, rarityBoost = 0 } = {}) {
   return item;
 }
 
+// Rarity tiers gained from depth alone, on top of any boss bonus.
+function depthRarityBoost(depth) {
+  if (depth >= 2.5) return 2;
+  if (depth >= 1.5) return 1;
+  return 0;
+}
+
 // Roll a drop for a kill; returns the item or null. Bosses always drop.
 export function rollDrop(state, isBoss) {
   const luck = derivedStats(state).luckPct;
-  if (isBoss) return generateItem(state.progress.zone, { luckPct: luck, rarityBoost: 1 });
+  const poi = getPoiById(state.location.poiId);
+  const depth = state.progress.poiDepth || 0;
+  const avgAtk = poi.monsters.reduce((s, m) => s + m.atk, 0) / poi.monsters.length;
+  const powerLevel = Math.round(poiItemPower(avgAtk) * (1 + depth));
+  const rarityBoost = depthRarityBoost(depth) + (isBoss ? 1 : 0);
+  if (isBoss) return generateItem(powerLevel, { luckPct: luck, rarityBoost });
   if (!chance(DROP_CHANCE)) return null;
-  return generateItem(state.progress.zone, { luckPct: luck });
+  return generateItem(powerLevel, { luckPct: luck, rarityBoost });
 }
 
 // Rough item "score" for auto-equip and comparison.
