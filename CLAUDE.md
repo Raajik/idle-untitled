@@ -9,8 +9,11 @@ content gets added. They live in `src/ui/tabs.js` (markup) and `styles.css`
 - **Narration** (scene-setting, non-spoken description — "You feel as if you've
   just woken up...") stays plain default text color. No special class.
 - **Spoken dialogue** from an identified character is quoted (`"..."`) and
-  wrapped in `<p class="npc-speech">` — renders in `var(--accent)` (yellow/gold).
-  One `<p class="npc-speech">` per line of speech.
+  wrapped in `.npc-speech` — renders in `var(--accent)` (yellow/gold). Use
+  `<p class="npc-speech">` when the whole line is dialogue; when narration and
+  dialogue share one line ("He points toward the village. \"That's
+  Holtburg...\""), wrap only the quoted sentence in an inline
+  `<span class="npc-speech">` and leave the narration part of that `<p>` plain.
 - **An unidentified/mysterious voice** (before the speaker is named) uses
   `<em>"..."</em>` instead — same accent color, but italicized to mark it as
   not yet attributed to anyone. Once the speaker is named, switch to

@@ -59,8 +59,8 @@ function onboardingHtml(state) {
 
   // step === 'alcott-explains'
   return `<div class="panel intro-panel">
-    <p>"Name's Alcott. That glow behind you — that's a Lifestone. It'll keep you from dying for good, though it won't spare you the pain of it. Bond with enough of them and you'll be able to call on one to travel between them in an instant."</p>
-    <p style="margin-top:8px">He points toward a distant huddle of rooftops. "That's Holtburg. Stay sharp on the way — and if trouble finds you, my friend Thorolf there can help you get your bearings."</p>
+    <p class="npc-speech">"Name's Alcott. That glow behind you — that's a <span class="lifestone-glow">Lifestone</span>. It'll keep you from dying for good, though it won't spare you the pain of it. Bond with enough of them and you'll be able to call on one to travel between them in an instant."</p>
+    <p style="margin-top:8px">He points toward a distant huddle of rooftops. <span class="npc-speech">"That's Holtburg. Stay sharp on the way — and if trouble finds you, my friend Thorolf there can help you get your bearings."</span></p>
     <button class="btn primary" data-action="ack-intro" style="margin-top:10px">Set out for Holtburg</button>
   </div>`;
 }
