@@ -14,8 +14,10 @@ export const MAX_SKILL_RANK = 100;
 export const ATHLETICS_XP_PER_SECOND = 4;
 export const COMBAT_SKILL_XP = 1; // xp granted to a combat skill per attack faced/thrown
 
-// Melee weapons (and bare fists) train their own skill; Bow/Crossbow are Ranged;
-// the Magic skills aren't tied to a weapon yet (no spellcasting system exists).
+// Melee weapons (and bare fists) train their own skill; Bow/Crossbow are Ranged.
+// War Magic governs the Magic attack bar (Arc/Volley/Streak — see
+// data/combatStances.js) and is fully playable; Life/Void Magic are latent
+// until non-combat spellcasting (heals, debuffs) lands.
 export const OFFENSE_SKILLS = [
   { key: 'unarmed', label: 'Unarmed', category: 'Melee' },
   { key: 'sword', label: 'Sword', category: 'Melee' },
@@ -23,7 +25,7 @@ export const OFFENSE_SKILLS = [
   { key: 'axe', label: 'Axe', category: 'Melee' },
   { key: 'mace', label: 'Mace', category: 'Melee' },
   { key: 'life', label: 'Life Magic', category: 'Magic', comingSoon: true },
-  { key: 'war', label: 'War Magic', category: 'Magic', comingSoon: true },
+  { key: 'war', label: 'War Magic', category: 'Magic' },
   { key: 'void', label: 'Void Magic', category: 'Magic', comingSoon: true },
   { key: 'bow', label: 'Bow', category: 'Ranged' },
   { key: 'crossbow', label: 'Crossbow', category: 'Ranged' },

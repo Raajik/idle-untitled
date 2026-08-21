@@ -44,7 +44,7 @@ test('progressive UI unlocks derive from game state', () => {
   assert.ok(tabs.includes('attributes'));
   assert.ok(!tabs.includes('inventory'));
 
-  s.progress.totalDrops = 1;
+  s.inventory.push({ id: 1, slot: 'weapon', power: 5, spells: [], rarity: 'Common', name: 'Worn Sword' });
   s.progress.totalPyrealsEarned = 10000;
   s.progress.bossesKilled = 1;
   s.progress.visitedPois = ['holtburg-meeting-hall'];
@@ -53,4 +53,12 @@ test('progressive UI unlocks derive from game state', () => {
   for (const id of ['attributes', 'skills', 'inventory', 'training', 'rebirth', 'overview']) {
     assert.ok(tabs.includes(id), `expected ${id} unlocked`);
   }
+});
+
+test('inventory unlocks from owning gear alone, with no kill-drop needed', () => {
+  const s = createInitialState();
+  assert.ok(!unlockedTabs(s).some((t) => t.id === 'inventory'));
+
+  s.inventory.push({ id: 1, slot: 'ring', power: 1, spells: [], rarity: 'Common', name: 'Plain Ring' });
+  assert.ok(unlockedTabs(s).some((t) => t.id === 'inventory'));
 });

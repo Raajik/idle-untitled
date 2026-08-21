@@ -11,7 +11,7 @@ test('generateItem produces valid items', () => {
     assert.ok(RARITIES.some((r) => r.name === item.rarity));
     assert.ok(item.power >= 1);
     assert.ok(item.name.length > 0);
-    assert.equal(item.affixes.length, RARITIES.find((r) => r.name === item.rarity).affixes);
+    assert.ok(item.spells.length <= RARITIES.find((r) => r.name === item.rarity).affixes);
   }
 });
 
@@ -39,8 +39,8 @@ test('equipItem moves item to slot and swaps old item back to inventory', () => 
 
 test('maybeAutoEquip only equips strictly better items', () => {
   const s = createInitialState();
-  const weak = { id: 1, slot: 'weapon', power: 1, affixes: [], rarity: 'Common', name: 'w' };
-  const strong = { id: 2, slot: 'weapon', power: 50, affixes: [], rarity: 'Rare', name: 's' };
+  const weak = { id: 1, slot: 'weapon', power: 1, spells: [], rarity: 'Common', name: 'w' };
+  const strong = { id: 2, slot: 'weapon', power: 50, spells: [], rarity: 'Rare', name: 's' };
   assert.equal(maybeAutoEquip(s, strong), true); // empty slot
   assert.equal(maybeAutoEquip(s, weak), false); // worse than equipped: rejected, caller keeps it
   assert.equal(s.equipment.weapon.id, 2);
@@ -53,9 +53,9 @@ test('bosses always drop', () => {
   for (let i = 0; i < 10; i++) assert.ok(rollDrop(s, true));
 });
 
-test('itemScore ranks power and affixes', () => {
-  const plain = { power: 10, affixes: [] };
-  const fancy = { power: 10, affixes: [{ id: 'atkPct', value: 10 }] };
+test('itemScore ranks power and spells', () => {
+  const plain = { power: 10, spells: [] };
+  const fancy = { power: 10, spells: [{ id: 'atkPct', value: 10 }] };
   assert.ok(itemScore(fancy) > itemScore(plain));
   assert.equal(itemScore(null), 0);
 });

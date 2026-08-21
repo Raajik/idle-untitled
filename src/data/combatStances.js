@@ -1,0 +1,38 @@
+// AC-flavored attack stances. The bar fills to the chosen stance's interval
+// (or cast time) before the attack fires — a visible tradeoff instead of pure
+// automatic timing. Quickness/SPD and the offense skill's hitChance() curve
+// still apply underneath; stances shift the tradeoff, they don't replace them.
+
+// Melee: speed <-> power. Stance 0 keeps today's `1/stats.spd` timing exactly
+// (baseInterval is filled in at use-time); stances 1-3 step up fixed windup
+// seconds and damage; stance 4 is the ~4s heavy swing with a stacking Bleed.
+export const MELEE_STANCES = [
+  { label: 'Quick', dmgMult: 1.0, bleed: false }, // interval = 1/spd
+  { label: 'Balanced', interval: 1.6, dmgMult: 1.6, bleed: false },
+  { label: 'Heavy', interval: 2.6, dmgMult: 2.3, bleed: false },
+  { label: 'Crushing', interval: 3.3, dmgMult: 2.9, bleed: false },
+  { label: 'Devastating', interval: 4.0, dmgMult: 3.5, bleed: true },
+];
+
+// Archery: speed <-> accuracy. Stance 0 keeps today's `1/stats.spd` timing;
+// accuracyMod is added directly to hitChance()'s result (clamped 0-95).
+export const ARCHERY_STANCES = [
+  { label: 'Snap Shot', accuracyMod: -15 }, // interval = 1/spd
+  { label: 'Quick Draw', interval: 1.3, accuracyMod: -7 },
+  { label: 'Steady', interval: 1.8, accuracyMod: 0 },
+  { label: 'Aimed', interval: 2.3, accuracyMod: 10 },
+  { label: 'Called Shot', interval: 2.8, accuracyMod: 20 },
+];
+
+// Magic: three spell profiles, all cast with the War Magic skill. Volley's
+// "AoE" is flavor only for now — combat is strictly one monster at a time.
+export const MAGIC_SPELLS = {
+  arc: { label: 'Arc', castTime: 2.5, dmgMult: 2.6, critMult: 3.0, manaCost: 15 },
+  volley: { label: 'Volley', castTime: 1.5, dmgMult: 1.4, critMult: 2.0, manaCost: 10 },
+  streak: { label: 'Streak', castTime: 0.5, dmgMult: 0.6, critMult: 2.0, manaCost: 4 },
+};
+
+export const BLEED_TICK_SECONDS = 1;
+export const BLEED_DURATION_SECONDS = 5;
+export const BLEED_MAX_STACKS = 5;
+export const BLEED_DAMAGE_PER_STACK_PCT = 0.2; // of the hero's atk, per stack, per tick

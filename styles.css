@@ -182,6 +182,25 @@ body {
 .vitals-row { display: flex; gap: 8px; }
 .vitals-row .bar { flex: 1; }
 
+/* AC-style attack bar: mode switcher, stance/spell picks, "reverse" fill bar */
+.attack-bar-panel { margin-top: 10px; }
+.combat-mode-row, .stance-row, .filter-group { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.filter-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+button.btn.small { padding: 3px 8px; font-size: 11px; }
+button.btn.active { border-color: var(--accent); color: var(--accent); background: var(--bg-inset); }
+.stance-seg {
+  padding: 3px 8px;
+  font-size: 11px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.stance-seg:hover { border-color: var(--accent); color: var(--accent); }
+.stance-seg.active { border-color: var(--accent); color: var(--accent); background: var(--bg-panel); }
+.bar.attack > .fill { background: var(--accent); }
+
 /* Combat log */
 .log {
   background: var(--bg-inset);

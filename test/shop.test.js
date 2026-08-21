@@ -26,7 +26,7 @@ test('buying fails without enough pyreals', () => {
 
 test('selling an inventory item removes it and grants pyreals', () => {
   const s = createInitialState();
-  const item = { id: 999, slot: 'ring', power: 5, affixes: [], rarity: 'Common', name: 'Worn Ring' };
+  const item = { id: 999, slot: 'ring', power: 5, spells: [], rarity: 'Common', name: 'Worn Ring' };
   s.inventory.push(item);
   const before = s.pyreals;
   assert.equal(sellItem(s, 999), true);

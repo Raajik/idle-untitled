@@ -7,6 +7,15 @@
 import { getPoiById } from '../data/regions.js';
 import { monsterStatsForLevel, bossStatsForLevel } from '../data/monsterScaling.js';
 import { TUTORIAL_ROAD } from '../data/tutorial.js';
+import {
+  MELEE_STANCES,
+  ARCHERY_STANCES,
+  MAGIC_SPELLS,
+  BLEED_TICK_SECONDS,
+  BLEED_DURATION_SECONDS,
+  BLEED_MAX_STACKS,
+  BLEED_DAMAGE_PER_STACK_PCT,
+} from '../data/combatStances.js';
 import { pick } from '../engine/rng.js';
 import { pushFx } from '../engine/fx.js';
 import { fmt } from '../engine/format.js';
@@ -85,12 +94,75 @@ export function spawnMonster(state) {
   if (canRollBoss) addLog(state, `☠ ${def.name} appears!`, 'boss');
 }
 
-function dealDamage(rawAtk, targetDef, critChance) {
+function dealDamage(rawAtk, targetDef, critChance, critMult = 2) {
   const variance = 0.9 + Math.random() * 0.2;
   let dmg = Math.max(1, Math.round((rawAtk - targetDef) * variance));
   const crit = Math.random() * 100 < critChance;
-  if (crit) dmg *= 2;
+  if (crit) dmg *= critMult;
   return { dmg, crit };
+}
+
+// Shared by melee/archery/magic: the monster may spend stamina to dodge entirely.
+function rollMonsterDodge(state) {
+  const m = state.monster;
+  if (m.stamina >= MONSTER_STAMINA_COST_PER_DODGE && Math.random() * 100 < m.dodge) {
+    m.stamina -= MONSTER_STAMINA_COST_PER_DODGE;
+    pushFx({ type: 'dodge', target: 'monster' });
+    addLog(state, `${m.name} dodges your attack!`, 'dim');
+    return true;
+  }
+  return false;
+}
+
+// Applies hit damage to the current monster; returns true if the kill was
+// handled (caller should stop attacking this tick — state.monster is gone).
+function applyDamageToMonster(state, dmg, crit) {
+  const m = state.monster;
+  m.hp -= dmg;
+  pushFx({ type: 'hit', target: 'monster', dmg, crit });
+  if (crit) addLog(state, `Critical hit! ${dmg} damage to ${m.name}.`, 'dim');
+  if (m.hp <= 0) {
+    pushFx({ type: 'kill', target: 'monster' });
+    onMonsterDeath(state);
+    spawnMonster(state);
+    return true;
+  }
+  return false;
+}
+
+// Devastating melee stance stacks a bleed on the monster: each new stack adds
+// its own damage-per-tick and refreshes the whole effect's remaining duration
+// (rather than layering independent timers), capped at BLEED_MAX_STACKS.
+function applyBleed(state, heroAtk) {
+  const m = state.monster;
+  if (!m.bleed) m.bleed = { stacks: 0, dmgPerStack: 0, remaining: 0, timer: 0 };
+  m.bleed.stacks = Math.min(BLEED_MAX_STACKS, m.bleed.stacks + 1);
+  m.bleed.dmgPerStack = Math.max(1, Math.round(heroAtk * BLEED_DAMAGE_PER_STACK_PCT));
+  m.bleed.remaining = BLEED_DURATION_SECONDS;
+}
+
+// Ticks any active bleed on the current monster once per BLEED_TICK_SECONDS.
+// Returns true if the kill was handled (caller should stop this tick).
+function tickBleed(state, dt) {
+  const m = state.monster;
+  if (!m || !m.bleed || m.bleed.stacks <= 0) return false;
+  m.bleed.timer += dt;
+  while (m.bleed.timer >= BLEED_TICK_SECONDS) {
+    m.bleed.timer -= BLEED_TICK_SECONDS;
+    const dmg = m.bleed.stacks * m.bleed.dmgPerStack;
+    m.hp -= dmg;
+    pushFx({ type: 'hit', target: 'monster', dmg, crit: false });
+    addLog(state, `${m.name} bleeds for ${dmg}.`, 'dim');
+    m.bleed.remaining -= BLEED_TICK_SECONDS;
+    if (m.bleed.remaining <= 0) m.bleed.stacks = 0;
+    if (m.hp <= 0) {
+      pushFx({ type: 'kill', target: 'monster' });
+      onMonsterDeath(state);
+      spawnMonster(state);
+      return true;
+    }
+  }
+  return false;
 }
 
 // Rolls the hero's defensive layers in order — Dodge (always available), Block
@@ -99,23 +171,24 @@ function dealDamage(rawAtk, targetDef, critChance) {
 // stamina to spend; running out of stamina mid-swing just means the remaining
 // layers are skipped. Returns the layer name that avoided the hit, or null —
 // Resistance is NOT part of this chain; see the mitigation step in tickCombat.
-function tryDefend(state) {
+function tryDefend(state, stats) {
   const h = state.hero;
   const hasShield = !!state.equipment.shield;
   const weapon = state.equipment.weapon;
   const hasMeleeWeapon = !!(weapon && MELEE_WEAPON_BASE_TYPES.includes(weapon.baseType));
 
   const layers = [
-    ['dodge', 'Dodge', true],
-    ['block', 'Block', hasShield],
-    ['parry', 'Parry', hasMeleeWeapon],
+    ['dodge', 'Dodge', true, stats.dodgeBonus],
+    ['block', 'Block', hasShield, stats.blockBonus],
+    ['parry', 'Parry', hasMeleeWeapon, stats.parryBonus],
   ];
-  for (const [key, name, eligible] of layers) {
+  for (const [key, name, eligible, bonus] of layers) {
     if (!eligible) continue;
     const skill = h.skills[key];
     trainSkill(state, skill, name, COMBAT_SKILL_XP);
     if (h.stamina < HERO_STAMINA_COST_PER_DEFEND) continue;
-    if (Math.random() * 100 < defensiveChance(skill.rank)) {
+    const chance = Math.min(95, defensiveChance(skill.rank) + bonus);
+    if (Math.random() * 100 < chance) {
       h.stamina -= HERO_STAMINA_COST_PER_DEFEND;
       return name;
     }
@@ -192,6 +265,22 @@ function tickTutorialJourney(state, dt) {
   }
 }
 
+// The current attack bar's target interval (or cast time) for whichever
+// combat mode is active — shared by the UI (fill %) and tickCombat itself.
+export function activeAttackInterval(state, stats) {
+  const h = state.hero;
+  const mode = h.combat.mode;
+  if (mode === 'archery') {
+    const stance = ARCHERY_STANCES[h.combat.archeryStance];
+    return stance.interval ?? 1 / stats.spd;
+  }
+  if (mode === 'magic') {
+    return MAGIC_SPELLS[h.combat.magicSpell].castTime;
+  }
+  const stance = MELEE_STANCES[h.combat.meleeStance];
+  return stance.interval ?? 1 / stats.spd;
+}
+
 // One game tick. dt in seconds.
 export function tickCombat(state, dt) {
   tickRecallCooldown(state, dt);
@@ -226,39 +315,74 @@ export function tickCombat(state, dt) {
 
   state.progress.timeInPoi += dt;
   if (!state.monster) spawnMonster(state);
+
+  if (tickBleed(state, dt)) return;
   const m = state.monster;
 
-  // Hero attacks (the monster may dodge, spending its stamina to do so)
-  h.attackTimer += dt;
-  const attackInterval = 1 / stats.spd;
-  while (h.attackTimer >= attackInterval) {
-    h.attackTimer -= attackInterval;
+  // Hero attacks (the monster may dodge, spending its stamina to do so). Which
+  // block runs depends on the chosen combat mode; each picks its own attack
+  // bar timing (stance interval / spell cast time) instead of a flat 1/spd.
+  const mode = h.combat.mode;
 
-    if (m.stamina >= MONSTER_STAMINA_COST_PER_DODGE && Math.random() * 100 < m.dodge) {
-      m.stamina -= MONSTER_STAMINA_COST_PER_DODGE;
-      pushFx({ type: 'dodge', target: 'monster' });
-      addLog(state, `${m.name} dodges your attack!`, 'dim');
-      continue;
+  if (mode === 'archery') {
+    const stance = ARCHERY_STANCES[h.combat.archeryStance];
+    const attackInterval = stance.interval ?? 1 / stats.spd;
+    h.attackTimer += dt;
+    while (h.attackTimer >= attackInterval) {
+      h.attackTimer -= attackInterval;
+      if (rollMonsterDodge(state)) continue;
+
+      const weaponSkill = activeWeaponSkill(state);
+      trainSkill(state, weaponSkill.skill, weaponSkill.label, COMBAT_SKILL_XP);
+      const chance = Math.min(95, Math.max(0, hitChance(weaponSkill.skill.rank) + stance.accuracyMod));
+      if (Math.random() * 100 >= chance) {
+        addLog(state, `Your shot goes wide of ${m.name}.`, 'dim');
+        continue;
+      }
+
+      const { dmg, crit } = dealDamage(stats.atk, m.def, stats.critChance);
+      if (applyDamageToMonster(state, dmg, crit)) return;
     }
+  } else if (mode === 'magic') {
+    const spell = MAGIC_SPELLS[h.combat.magicSpell];
+    h.attackTimer += dt;
+    while (h.attackTimer >= spell.castTime) {
+      h.attackTimer -= spell.castTime;
+      if (h.mana < spell.manaCost) continue; // not enough mana to cast yet; wait for regen
 
-    const weaponSkill = activeWeaponSkill(state);
-    trainSkill(state, weaponSkill.skill, weaponSkill.label, COMBAT_SKILL_XP);
-    if (Math.random() * 100 >= hitChance(weaponSkill.skill.rank)) {
-      addLog(state, `You swing and miss ${m.name}.`, 'dim');
-      continue;
+      h.mana -= spell.manaCost;
+      if (rollMonsterDodge(state)) continue;
+
+      const warSkill = h.skills.offense.war;
+      trainSkill(state, warSkill, 'War Magic', COMBAT_SKILL_XP);
+      if (Math.random() * 100 >= hitChance(warSkill.rank)) {
+        addLog(state, `Your ${spell.label} fizzles past ${m.name}.`, 'dim');
+        continue;
+      }
+
+      const { dmg, crit } = dealDamage(stats.magicAtk * spell.dmgMult, m.def, stats.critChance, spell.critMult);
+      if (applyDamageToMonster(state, dmg, crit)) return;
     }
+  } else {
+    const stance = MELEE_STANCES[h.combat.meleeStance];
+    const attackInterval = stance.interval ?? 1 / stats.spd;
+    h.attackTimer += dt;
+    while (h.attackTimer >= attackInterval) {
+      h.attackTimer -= attackInterval;
+      if (rollMonsterDodge(state)) continue;
 
-    const { dmg, crit } = dealDamage(stats.atk, m.def, stats.critChance);
-    m.hp -= dmg;
-    pushFx({ type: 'hit', target: 'monster', dmg, crit });
-    if (crit) addLog(state, `Critical hit! ${dmg} damage to ${m.name}.`, 'dim');
-    if (m.hp <= 0) {
-      pushFx({ type: 'kill', target: 'monster' });
-      onMonsterDeath(state);
-      spawnMonster(state);
+      const weaponSkill = activeWeaponSkill(state);
+      trainSkill(state, weaponSkill.skill, weaponSkill.label, COMBAT_SKILL_XP);
+      if (Math.random() * 100 >= hitChance(weaponSkill.skill.rank)) {
+        addLog(state, `You swing and miss ${m.name}.`, 'dim');
+        continue;
+      }
+
+      const { dmg, crit } = dealDamage(stats.atk * stance.dmgMult, m.def, stats.critChance);
+      if (stance.bleed) applyBleed(state, stats.atk);
       // No heal on kill — the Lifestone (respawn) is how you recover. Skills (Healing,
       // Cooking, Life Magic) will add in-fight recovery later.
-      return;
+      if (applyDamageToMonster(state, dmg, crit)) return;
     }
   }
 
@@ -268,7 +392,7 @@ export function tickCombat(state, dt) {
   while (h.monsterTimer >= MONSTER_ATTACK_INTERVAL) {
     h.monsterTimer -= MONSTER_ATTACK_INTERVAL;
 
-    const avoidedBy = tryDefend(state);
+    const avoidedBy = tryDefend(state, stats);
     if (avoidedBy) {
       pushFx({ type: 'dodge', target: 'hero' });
       addLog(state, `${avoidedBy}! You avoid ${m.name}'s attack.`, 'dim');
@@ -278,7 +402,7 @@ export function tickCombat(state, dt) {
     const resistSkill = h.skills.resistance[m.dmgType];
     const resistName = `${m.dmgType[0].toUpperCase()}${m.dmgType.slice(1)} Resistance`;
     trainSkill(state, resistSkill, resistName, COMBAT_SKILL_XP);
-    const mitigation = resistanceMitigationPct(resistSkill.rank);
+    const mitigation = Math.min(95, resistanceMitigationPct(resistSkill.rank) + (stats.resistanceBonus[m.dmgType] || 0));
 
     const { dmg: rawDmg } = dealDamage(m.atk, stats.def, 0);
     const dmg = Math.max(1, Math.round(rawDmg * (1 - mitigation / 100)));

@@ -53,7 +53,7 @@ test('derivedStats scale with base stats', () => {
 test('equipment raises derived stats', () => {
   const s = createInitialState();
   const before = derivedStats(s);
-  s.equipment.weapon = { slot: 'weapon', power: 10, affixes: [{ id: 'atkPct', value: 10 }] };
+  s.equipment.weapon = { slot: 'weapon', power: 10, spells: [{ id: 'atkPct', value: 10 }] };
   const after = derivedStats(s);
   assert.ok(after.atk > before.atk);
 });

@@ -1,16 +1,21 @@
 // Loot: drop rolls, item generation, rarity rolls, inventory/equip helpers.
 
-import { SLOTS, RARITIES, AFFIXES, BASE_NAMES, PREFIXES, poiItemPower } from '../data/items.js';
+import { SLOTS, RARITIES, BASE_NAMES, PREFIXES, poiItemPower } from '../data/items.js';
 import { materialsForSlot, SALVAGE_YIELD } from '../data/materials.js';
-import { getPoiById } from '../data/regions.js';
+import { getPoiById, regionIndex } from '../data/regions.js';
 import { monsterStatsForLevel } from '../data/monsterScaling.js';
-import { pick, pickWeighted, randInt, chance } from '../engine/rng.js';
+import { rollSpell, spellLevelCeiling, rollSpellLevel } from '../data/spells.js';
+import { pick, pickWeighted, chance } from '../engine/rng.js';
 import { derivedStats } from './hero.js';
 
 let nextItemId = 1;
 
 // Gear is semi-rare: most kills come up empty.
 export const DROP_CHANCE = 0.05;
+
+// Chance EACH available spell slot on an item actually holds a spell — this is
+// what makes "having any spell at all" uncommon on early Common drops.
+const SPELL_PRESENCE_CHANCE = { Common: 0.25, Uncommon: 0.45, Rare: 0.65, Epic: 0.85, Legendary: 1.0 };
 
 export function rollRarity(luckPct = 0) {
   // luck shifts weight from Common toward higher tiers
@@ -22,7 +27,7 @@ export function rollRarity(luckPct = 0) {
   return pickWeighted(table);
 }
 
-export function generateItem(powerLevel, { luckPct = 0, rarityBoost = 0, forceSlot = null, forceBaseType = null } = {}) {
+export function generateItem(powerLevel, { luckPct = 0, rarityBoost = 0, forceSlot = null, forceBaseType = null, depth = 0, regionIdx = 0 } = {}) {
   let rarity = rollRarity(luckPct);
   if (rarityBoost > 0) {
     // bosses: bump rarity up by rarityBoost tiers (capped at Legendary)
@@ -34,13 +39,15 @@ export function generateItem(powerLevel, { luckPct = 0, rarityBoost = 0, forceSl
   const jitter = 0.9 + Math.random() * 0.2;
   const power = Math.max(1, Math.round(powerLevel * rarity.powerMult * jitter));
 
-  const affixes = [];
-  const pool = [...AFFIXES];
-  for (let i = 0; i < rarity.affixes; i++) {
-    if (pool.length === 0) break;
-    const idx = randInt(0, pool.length - 1);
-    const affixDef = pool.splice(idx, 1)[0];
-    affixes.push({ id: affixDef.id, value: randInt(affixDef.min, affixDef.max), label: '' });
+  const maxSpellSlots = rarity.affixes; // reuse the rarity table's existing slot-count numbers
+  const presenceChance = SPELL_PRESENCE_CHANCE[rarity.name] ?? 0.5;
+  const ceiling = spellLevelCeiling(depth, regionIdx);
+  const spells = [];
+  for (let i = 0; i < maxSpellSlots; i++) {
+    if (Math.random() >= presenceChance) continue;
+    const level = rollSpellLevel(ceiling);
+    const spell = rollSpell(slot, level);
+    if (spell) spells.push(spell);
   }
 
   const base = forceSlot === 'weapon' && forceBaseType
@@ -53,15 +60,11 @@ export function generateItem(powerLevel, { luckPct = 0, rarityBoost = 0, forceSl
     slot,
     rarity: rarity.name,
     power,
-    affixes,
+    spells,
     name: `${prefix} ${base}`,
     baseType: slot === 'weapon' ? base.toLowerCase() : undefined,
     material: materialPool.length ? pick(materialPool).id : undefined,
   };
-  for (const a of item.affixes) {
-    const def = AFFIXES.find((d) => d.id === a.id);
-    a.label = def.label(a.value);
-  }
   return item;
 }
 
@@ -77,19 +80,20 @@ export function rollDrop(state, isBoss) {
   const luck = derivedStats(state).luckPct;
   const poi = getPoiById(state.location.poiId);
   const depth = state.progress.poiDepth || 0;
+  const regionIdx = Math.max(0, regionIndex(state.location.regionId));
   const avgAtk = poi.monsters.reduce((s, m) => s + monsterStatsForLevel(m.level).atk, 0) / poi.monsters.length;
   const powerLevel = Math.round(poiItemPower(avgAtk) * (1 + depth));
   const rarityBoost = depthRarityBoost(depth) + (isBoss ? 1 : 0);
-  if (isBoss) return generateItem(powerLevel, { luckPct: luck, rarityBoost });
+  if (isBoss) return generateItem(powerLevel, { luckPct: luck, rarityBoost, depth, regionIdx });
   if (!chance(DROP_CHANCE)) return null;
-  return generateItem(powerLevel, { luckPct: luck, rarityBoost });
+  return generateItem(powerLevel, { luckPct: luck, rarityBoost, depth, regionIdx });
 }
 
 // Rough item "score" for auto-equip and comparison.
 export function itemScore(item) {
   if (!item) return 0;
   let score = item.power;
-  for (const a of item.affixes) score += a.value * 0.5;
+  for (const s of item.spells) score += s.value * 0.5;
   return score;
 }
 

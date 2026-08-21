@@ -33,7 +33,7 @@ test('rebirth resets the run but keeps souls and upgrades', () => {
   s.progress.unlockedRegions = ['holtburg', 'glenden-wood'];
   s.hero.level = 25;
   s.pyreals = 5000;
-  s.inventory.push({ id: 1, slot: 'weapon', power: 5, affixes: [], rarity: 'Common', name: 'x' });
+  s.inventory.push({ id: 1, slot: 'weapon', power: 5, spells: [], rarity: 'Common', name: 'x' });
   assert.ok(canRebirth(s));
 
   const gained = performRebirth(s);

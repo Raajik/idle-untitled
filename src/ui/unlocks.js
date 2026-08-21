@@ -6,17 +6,23 @@
 
 import { canRebirth } from '../game/prestige.js';
 
+// Owning any gear at all — via a kill-drop, a shop purchase, or the tutorial's
+// auto-equips — not just having ever gotten a monster drop specifically.
+function ownsAnyGear(s) {
+  return s.inventory.length > 0 || Object.values(s.equipment).some(Boolean);
+}
+
 export const UNLOCKS = [
   { id: 'battle', kind: 'tab', label: '⚔ Battle', when: () => true },
   {
     id: 'hero',
     kind: 'category',
     label: (s) => `🧙 ${s.hero.name || 'Hero'}`,
-    when: (s) => s.hero.level >= 2 || s.progress.visitedPois.length > 0 || s.progress.totalDrops >= 1,
+    when: (s) => s.hero.level >= 2 || s.progress.visitedPois.length > 0 || ownsAnyGear(s),
   },
   { id: 'attributes', kind: 'tab', parent: 'hero', label: 'Attributes', when: (s) => s.hero.level >= 2, toast: '🧙 Attributes unlocked — allocate your stat points!' },
   { id: 'skills', kind: 'tab', parent: 'hero', label: 'Skills', when: (s) => s.progress.visitedPois.length > 0 || s.travel !== null || s.progress.unlockedRegions.length > 0, toast: '🏃 Skills unlocked — Athletics trains as you walk!' },
-  { id: 'inventory', kind: 'tab', parent: 'hero', label: 'Inventory', when: (s) => s.progress.totalDrops >= 1, toast: '🎒 Inventory unlocked — monsters can drop loot!' },
+  { id: 'inventory', kind: 'tab', parent: 'hero', label: 'Inventory', when: (s) => ownsAnyGear(s), toast: '🎒 Inventory unlocked — check your gear anytime!' },
   {
     id: 'tinkering',
     kind: 'tab',

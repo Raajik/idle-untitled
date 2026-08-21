@@ -6,7 +6,7 @@ import { SALVAGE_YIELD } from '../src/data/materials.js';
 
 test('salvaging an inventory item removes it and grants a rarity-scaled quantity of its material', () => {
   const s = createInitialState();
-  const item = { id: 42, slot: 'weapon', power: 10, affixes: [], rarity: 'Rare', name: 'Runed Sword', material: 'iron' };
+  const item = { id: 42, slot: 'weapon', power: 10, spells: [], rarity: 'Rare', name: 'Runed Sword', material: 'iron' };
   s.inventory.push(item);
 
   const result = salvageItem(s, 42);

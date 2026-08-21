@@ -14,7 +14,8 @@ import {
   GATHERING_SKILLS,
   MAX_SKILL_RANK,
 } from '../game/skills.js';
-import { computeDepth } from '../game/combat.js';
+import { computeDepth, activeAttackInterval } from '../game/combat.js';
+import { MELEE_STANCES, ARCHERY_STANCES, MAGIC_SPELLS } from '../data/combatStances.js';
 import { canRecall } from '../game/lifestone.js';
 import { availableShortcutsFrom, canJump } from '../game/shortcuts.js';
 import { nodesForRegion } from '../data/gatherNodes.js';
@@ -25,7 +26,7 @@ import { buyPrice, sellPrice, healCost } from '../game/shop.js';
 import { TRAINING_TRACKS, trainingCost } from '../game/training.js';
 import { soulsAvailable, canRebirth, REBIRTH_UPGRADES } from '../game/prestige.js';
 import { itemScore } from '../game/loot.js';
-import { STARTING_SLOTS, AETHERIA_SLOTS } from '../data/items.js';
+import { STARTING_SLOTS, AETHERIA_SLOTS, RARITIES } from '../data/items.js';
 import { UNLOCKS } from './unlocks.js';
 import { fmt, formatDuration } from '../engine/format.js';
 
@@ -82,6 +83,54 @@ function onboardingHtml(state) {
   </div>`;
 }
 
+// AC-style attack bar: a mode switcher (Melee/Archery/Magic — Archery needs a
+// bow/crossbow equipped) plus, per mode, a row of stance/spell picks and a
+// "reverse" bar that fills toward the chosen stance's interval or cast time.
+function attackBarHtml(state, d) {
+  const h = state.hero;
+  const weapon = state.equipment.weapon;
+  const isRanged = !!(weapon && (weapon.baseType === 'bow' || weapon.baseType === 'crossbow'));
+  const mode = h.combat.mode;
+  const interval = activeAttackInterval(state, d);
+  const pct = (h.attackTimer / interval) * 100;
+
+  const modeBtn = (id, label, disabled) => {
+    const active = mode === id ? ' active' : '';
+    return `<button class="btn small${active}"${disabled ? ' disabled' : ''} data-action="set-combat-mode" data-arg="${id}">${label}</button>`;
+  };
+
+  let stanceHtml;
+  if (mode === 'archery') {
+    stanceHtml = ARCHERY_STANCES.map(
+      (s, i) =>
+        `<button class="stance-seg${h.combat.archeryStance === i ? ' active' : ''}" data-action="set-archery-stance" data-arg="${i}">${esc(s.label)}</button>`
+    ).join('');
+  } else if (mode === 'magic') {
+    stanceHtml = Object.entries(MAGIC_SPELLS)
+      .map(
+        ([id, s]) =>
+          `<button class="stance-seg${h.combat.magicSpell === id ? ' active' : ''}" data-action="set-magic-spell" data-arg="${id}">${esc(s.label)}</button>`
+      )
+      .join('');
+  } else {
+    stanceHtml = MELEE_STANCES.map(
+      (s, i) =>
+        `<button class="stance-seg${h.combat.meleeStance === i ? ' active' : ''}" data-action="set-melee-stance" data-arg="${i}" title="${s.bleed ? 'Applies a stacking Bleed' : ''}">${esc(s.label)}</button>`
+    ).join('');
+  }
+
+  return `
+    <div class="attack-bar-panel">
+      <div class="combat-mode-row">
+        ${modeBtn('melee', 'Melee', false)}
+        ${modeBtn('archery', 'Archery', !isRanged)}
+        ${modeBtn('magic', 'Magic', false)}
+      </div>
+      <div class="stance-row">${stanceHtml}</div>
+      ${bar('attack', pct, mode === 'magic' ? 'Casting...' : 'Winding up...', 'atk-bar')}
+    </div>`;
+}
+
 // Shared monster/hero combat display used by both real POI fights and the tutorial
 // road — `extraHtml` slots in anything extra (e.g. a Flee button during the tutorial).
 function combatDisplayHtml(state, headerHtml, extraHtml = '') {
@@ -99,12 +148,13 @@ function combatDisplayHtml(state, headerHtml, extraHtml = '') {
       <div id="m-meta" class="muted">${m ? `ATK ${m.atk} · DEF ${m.def} · ${esc(m.dmgType)}` : ''}</div>
       ${extraHtml}
       <h2 style="margin-top:14px">You — Level ${h.level}</h2>
-      ${bar('xp', (xpProgress / xpForLevel(h.level)) * 100, `XP ${fmt(xpProgress)} / ${fmt(xpForLevel(h.level))}`, 'h-xp')}
       <div class="vitals-row">
         ${bar('hp', (h.hp / d.maxHp) * 100, h.dead ? 'Dead... reviving' : `${Math.ceil(h.hp)} / ${d.maxHp} HP`, 'h-hp', 'hero')}
         ${bar('stamina', (h.stamina / d.maxStamina) * 100, `${Math.ceil(h.stamina)} / ${d.maxStamina} Stamina`, 'h-sta')}
         ${bar('mana', (h.mana / d.maxMana) * 100, `${Math.ceil(h.mana)} / ${d.maxMana} Mana`, 'h-mana')}
       </div>
+      ${bar('xp', (xpProgress / xpForLevel(h.level)) * 100, `XP ${fmt(xpProgress)} / ${fmt(xpForLevel(h.level))}`, 'h-xp')}
+      ${attackBarHtml(state, d)}
       <div id="h-attack-line" class="muted">${attackLine}, ${esc(aw.label)} (Rank ${aw.skill.rank}).</div>
       <div id="h-stats" class="muted">ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s · Crit ${d.critChance.toFixed(1)}% · ${fmt(state.pyreals)} pyreals</div>
     </div>`;
@@ -131,10 +181,10 @@ function shopPanelHtml(state) {
     ? stock
         .map((item, i) => {
           const price = buyPrice(item);
-          const affixes = item.affixes.map((a) => a.label).join(', ');
+          const spells = item.spells.map((s) => s.label).join(', ');
           return `<div class="item">
             <div class="name rarity-${item.rarity}">${esc(item.name)} <span class="muted">[${item.rarity} ${item.slot}]</span></div>
-            <div class="stats">${item.power} power${affixes ? ' · ' + esc(affixes) : ''}</div>
+            <div class="stats">${item.power} power${spells ? ' · ' + esc(spells) : ''}</div>
             <div class="actions"><button class="btn" data-action="buy-item" data-arg="${shopId}:${i}" ${state.pyreals >= price ? '' : 'disabled'}>Buy — ${fmt(price)}p</button></div>
           </div>`;
         })
@@ -418,8 +468,23 @@ export function tinkeringTab(state) {
 }
 
 // --- Inventory ---
+const SPELL_ID_LABELS = {
+  armor: 'Aegis (Armor)',
+  flatDamage: 'Brutality (+ATK)',
+  atkPct: 'Fury (+% ATK)',
+  defensiveBoost: 'Defensive Boost',
+  pyrealsPct: 'Fortune (+% Pyreals)',
+  xpPct: 'Wisdom (+% XP)',
+  critPct: 'Precision (+% Crit)',
+  maxManaFlat: 'Clarity (+Max Mana)',
+};
+
+function filterBtn(key, value, label, current) {
+  return `<button class="btn small${current === value ? ' active' : ''}" data-action="set-inventory-filter" data-arg="${key}:${value}">${esc(label)}</button>`;
+}
+
 function itemHtml(state, item, equipped) {
-  const affixes = item.affixes.map((a) => a.label).join(', ');
+  const spells = item.spells.map((s) => s.label).join(', ');
   const base =
     item.slot === 'weapon'
       ? `${item.power} ATK`
@@ -442,7 +507,7 @@ function itemHtml(state, item, equipped) {
       </div>`;
   return `<div class="item">
     <div class="name rarity-${item.rarity}">${esc(item.name)} <span class="muted">[${item.rarity} ${item.slot}]</span> ${cmp}</div>
-    <div class="stats">${base}${affixes ? ' · ' + esc(affixes) : ''}</div>
+    <div class="stats">${base}${spells ? ' · ' + esc(spells) : ''}</div>
     ${action}</div>`;
 }
 
@@ -456,8 +521,25 @@ export function inventoryTab(state) {
     })
     .join('');
 
+  const filter = state.ui.inventoryFilter;
+  const filtered = state.inventory.filter((it) => {
+    if (filter.slot !== 'all' && it.slot !== filter.slot) return false;
+    if (filter.rarity !== 'all' && it.rarity !== filter.rarity) return false;
+    if (filter.spellId !== 'all' && !it.spells.some((s) => s.id === filter.spellId)) return false;
+    return true;
+  });
+
+  const presentSpellIds = [...new Set(state.inventory.flatMap((it) => it.spells.map((s) => s.id)))];
+  const filterRowHtml = `<div class="filter-row">
+    <div class="filter-group">${['all', ...STARTING_SLOTS].map((s) => filterBtn('slot', s, s === 'all' ? 'All slots' : s, filter.slot)).join('')}</div>
+    <div class="filter-group">${['all', ...RARITIES.map((r) => r.name)].map((r) => filterBtn('rarity', r, r === 'all' ? 'All rarities' : r, filter.rarity)).join('')}</div>
+    ${presentSpellIds.length ? `<div class="filter-group">${['all', ...presentSpellIds].map((id) => filterBtn('spellId', id, id === 'all' ? 'All spells' : SPELL_ID_LABELS[id] || id, filter.spellId)).join('')}</div>` : ''}
+  </div>`;
+
   const inv = state.inventory.length
-    ? state.inventory.map((it) => itemHtml(state, it, false)).join('')
+    ? filtered.length
+      ? filtered.map((it) => itemHtml(state, it, false)).join('')
+      : '<div class="muted">No items match the current filters.</div>'
     : '<div class="muted">No loot yet. Monsters drop equipment as you fight.</div>';
 
   const heldMaterials = Object.entries(state.materials)
@@ -473,6 +555,7 @@ export function inventoryTab(state) {
     <div class="panel">
       <h2>Inventory (${state.inventory.length})</h2>
       <div style="margin-bottom:8px"><button class="btn" data-action="toggle-autoequip">Auto-equip: ${state.settings.autoEquip ? 'ON' : 'OFF'}</button></div>
+      ${filterRowHtml}
       ${inv}
     </div>
     <div class="panel"><h2>Materials</h2>${heldMaterials || '<p class="muted">None gathered or salvaged yet.</p>'}</div>`;

@@ -13,7 +13,7 @@ import { performRebirth, buyUpgrade } from '../game/prestige.js';
 import { exportSave, importSave, hardReset, saveGame, suppressSave } from '../save.js';
 import { drainFx } from '../engine/fx.js';
 import { fmt, formatDuration } from '../engine/format.js';
-import { computeDepth, fleeTutorialEncounter } from '../game/combat.js';
+import { computeDepth, fleeTutorialEncounter, activeAttackInterval } from '../game/combat.js';
 import { activeWeaponSkill } from '../game/skills.js';
 import { setHeroName, answerSeenLifestone, acknowledgeAlcottIntro } from '../game/onboarding.js';
 import { recallTo } from '../game/lifestone.js';
@@ -235,6 +235,10 @@ export function createRenderer(state, { onImport }) {
     const aw = activeWeaponSkill(state);
     setText('h-attack-line', `${aw.weaponName ? `Attacking with ${aw.weaponName}` : 'Fighting unarmed'}, ${aw.label} (Rank ${aw.skill.rank}).`);
 
+    const atkInterval = activeAttackInterval(state, d);
+    const atkLabel = h.combat.mode === 'magic' ? 'Casting...' : 'Winding up...';
+    setBar('atk-bar', (h.attackTimer / atkInterval) * 100, atkLabel);
+
     const ovLine = document.getElementById('ov-hero-line');
     if (ovLine) ovLine.innerHTML = `Level ${h.level} · <span class="gold">${fmt(state.pyreals)} pyreals</span> · <span class="soul">${state.rebirth.souls} souls</span>`;
     if (state.location.poiId) {
@@ -341,6 +345,24 @@ export function createRenderer(state, { onImport }) {
       }
       case 'sell-item': sellItem(state, Number(arg)); break;
       case 'heal-service': healService(state); break;
+      case 'set-combat-mode': {
+        if (arg === 'archery') {
+          const weapon = state.equipment.weapon;
+          const isRanged = !!(weapon && (weapon.baseType === 'bow' || weapon.baseType === 'crossbow'));
+          if (!isRanged) break;
+        }
+        state.hero.combat.mode = arg;
+        state.hero.attackTimer = 0;
+        break;
+      }
+      case 'set-melee-stance': state.hero.combat.meleeStance = Number(arg); break;
+      case 'set-archery-stance': state.hero.combat.archeryStance = Number(arg); break;
+      case 'set-magic-spell': state.hero.combat.magicSpell = arg; break;
+      case 'set-inventory-filter': {
+        const [key, value] = arg.split(':');
+        state.ui.inventoryFilter[key] = value;
+        break;
+      }
       case 'apply-tinker': {
         const sel = document.getElementById(`tinker-material-${arg}`);
         if (sel) applyTinkering(state, arg, sel.value);

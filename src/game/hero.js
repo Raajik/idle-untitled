@@ -6,6 +6,7 @@
 // Character level is derived from total XP earned this run, using AC's cubic curve.
 
 import { REBIRTH_UPGRADES } from '../data/rebirth.js';
+import { spellBonusKey } from '../data/spells.js';
 
 export const ATTRIBUTES = [
   { id: 'str', name: 'Strength', short: 'STR', desc: '+1.5 ATK each' },
@@ -52,9 +53,13 @@ export function raiseAttribute(state, attr) {
   return true;
 }
 
-// Aggregate all percentage/flat bonuses from equipment affixes, training, and rebirth upgrades.
+// Aggregate all percentage/flat bonuses from item spells, training, and rebirth upgrades.
 export function getBonuses(state) {
-  const b = { atkPct: 0, hpFlat: 0, hpPct: 0, pyrealsPct: 0, xpPct: 0, critPct: 0, luckPct: 0, weaponAtk: 0, armorDef: 0, startStats: 0 };
+  const b = {
+    atkPct: 0, atkFlat: 0, hpFlat: 0, hpPct: 0, pyrealsPct: 0, xpPct: 0, critPct: 0, luckPct: 0,
+    weaponAtk: 0, armorDef: 0, armorFlat: 0, maxManaFlat: 0, startStats: 0,
+    dodgeBonus: 0, blockBonus: 0, parryBonus: 0, resistanceBonus: {},
+  };
 
   for (const slot of Object.keys(state.equipment)) {
     const item = state.equipment[slot];
@@ -65,8 +70,14 @@ export function getBonuses(state) {
       b.hpFlat += item.power * 2;
     }
     if (slot === 'shield') b.armorDef += Math.floor(item.power * 0.5);
-    for (const affix of item.affixes) {
-      b[affix.id] = (b[affix.id] || 0) + affix.value;
+    for (const spell of item.spells) {
+      const key = spellBonusKey(spell);
+      if (key.includes('.')) {
+        const [outer, inner] = key.split('.');
+        b[outer][inner] = (b[outer][inner] || 0) + spell.value;
+      } else {
+        b[key] = (b[key] || 0) + spell.value;
+      }
     }
   }
 
@@ -89,15 +100,17 @@ export function derivedStats(state) {
   const h = state.hero;
   const b = getBonuses(state);
   const maxHp = Math.floor((20 + h.end * 5 + b.hpFlat) * (1 + b.hpPct / 100));
-  const atk = Math.floor((3 + h.str * 1.5 + b.weaponAtk) * (1 + b.atkPct / 100));
-  const def = Math.floor(h.end * 0.5 + b.armorDef);
+  const atk = Math.floor((3 + h.str * 1.5 + b.weaponAtk + b.atkFlat) * (1 + b.atkPct / 100));
+  const magicAtk = Math.floor(3 + h.focus * 1.5); // Magic's own damage baseline, off Focus not Strength
+  const def = Math.floor(h.end * 0.5 + b.armorDef + b.armorFlat);
   const spd = 1 + h.quick * 0.04; // attacks per second
   const critChance = 5 + h.coord * 0.2 + b.critPct; // percent
   const maxStamina = Math.floor(20 + h.end * 2 + h.quick * 2);
-  const maxMana = Math.floor(20 + h.self * 4);
+  const maxMana = Math.floor(20 + h.self * 4 + b.maxManaFlat);
   return {
     maxHp,
     atk,
+    magicAtk,
     def,
     spd,
     critChance,
@@ -106,6 +119,10 @@ export function derivedStats(state) {
     xpPct: b.xpPct,
     pyrealsPct: b.pyrealsPct,
     luckPct: b.luckPct,
+    dodgeBonus: b.dodgeBonus,
+    blockBonus: b.blockBonus,
+    parryBonus: b.parryBonus,
+    resistanceBonus: b.resistanceBonus,
   };
 }
 

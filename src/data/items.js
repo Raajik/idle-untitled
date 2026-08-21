@@ -8,20 +8,15 @@ export const STARTING_SLOTS = ['weapon', 'armor', 'shield', 'amulet', 'ring'];
 // Hidden until progress.aetheriaSlots unlocks them — nothing drops these yet.
 export const AETHERIA_SLOTS = ['aetheria1', 'aetheria2', 'aetheria3'];
 
+// `affixes` here means "max spell slots" — items roll spells now (see
+// data/spells.js), not flat stat affixes, but the slot-count-by-rarity shape
+// is unchanged.
 export const RARITIES = [
   { name: 'Common', weight: 100, powerMult: 1.0, affixes: 0 },
   { name: 'Uncommon', weight: 45, powerMult: 1.25, affixes: 1 },
   { name: 'Rare', weight: 18, powerMult: 1.6, affixes: 2 },
   { name: 'Epic', weight: 6, powerMult: 2.1, affixes: 3 },
   { name: 'Legendary', weight: 1.5, powerMult: 2.8, affixes: 3 },
-];
-
-export const AFFIXES = [
-  { id: 'atkPct', label: (v) => `+${v}% ATK`, min: 4, max: 12 },
-  { id: 'hpFlat', label: (v) => `+${v} Max HP`, min: 4, max: 16 },
-  { id: 'pyrealsPct', label: (v) => `+${v}% Pyreals`, min: 5, max: 15 },
-  { id: 'xpPct', label: (v) => `+${v}% XP`, min: 5, max: 15 },
-  { id: 'critPct', label: (v) => `+${v}% Crit`, min: 2, max: 6 },
 ];
 
 // Weapon base names double as their offensive skill key (lowercased) — see skills.js.

@@ -59,7 +59,7 @@ test('Parry trains once a melee weapon is equipped', () => {
   s.progress.unlockedRegions = ['holtburg'];
   s.location = { regionId: 'holtburg', poiId: 'virindi-citadel' };
   s.hero.end = 1;
-  s.equipment.weapon = { slot: 'weapon', power: 5, affixes: [], rarity: 'Common', name: 'Worn Sword', baseType: 'sword' };
+  s.equipment.weapon = { slot: 'weapon', power: 5, spells: [], rarity: 'Common', name: 'Worn Sword', baseType: 'sword' };
   for (let i = 0; i < 40; i++) tickCombat(s, 0.25);
   assert.ok(s.hero.skills.parry.xp > 0 || s.hero.skills.parry.rank > 0);
 });

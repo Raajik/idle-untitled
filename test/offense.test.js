@@ -21,7 +21,7 @@ test('activeWeaponSkill falls back to Unarmed with no weapon equipped', () => {
 
 test('activeWeaponSkill follows the equipped weapon baseType', () => {
   const s = createInitialState();
-  s.equipment.weapon = { slot: 'weapon', power: 5, affixes: [], rarity: 'Common', name: 'Worn Axe', baseType: 'axe' };
+  s.equipment.weapon = { slot: 'weapon', power: 5, spells: [], rarity: 'Common', name: 'Worn Axe', baseType: 'axe' };
   const aw = activeWeaponSkill(s);
   assert.equal(aw.key, 'axe');
   assert.equal(aw.weaponName, 'Worn Axe');

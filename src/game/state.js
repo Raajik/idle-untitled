@@ -58,6 +58,12 @@ export function createInitialState() {
       monsterTimer: 0,
       respawnTimer: 0,
       dead: false,
+      combat: {
+        mode: 'melee', // 'melee' | 'archery' | 'magic'
+        meleeStance: 0, // 0-4: fastest/lightest to the 4s heavy bleed swing
+        archeryStance: 0, // 0-4: fastest/least accurate to slowest/most accurate
+        magicSpell: 'arc', // 'arc' | 'volley' | 'streak'
+      },
       skills: {
         athletics: freshSkill(), // renamed from run; also powers Jump/shortcuts
         dodge: freshSkill(),
@@ -110,6 +116,7 @@ export function createInitialState() {
       seenUnlocks: [], // ids the player has been toasted about
       activeTab: 'battle',
       activeShop: null, // which shop panel is expanded in the Battle tab's town view
+      inventoryFilter: { slot: 'all', rarity: 'all', spellId: 'all' },
     },
     lastSeen: Date.now(),
   };

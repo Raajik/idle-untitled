@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { tickCombat, spawnMonster, computeDepth } from '../src/game/combat.js';
 import { createInitialState } from '../src/game/state.js';
 import { getPoiById } from '../src/data/regions.js';
+import { derivedStats } from '../src/game/hero.js';
 
 function atPoi(poiId) {
   const s = createInitialState();
@@ -73,4 +74,44 @@ test('hero death triggers respawn cycle without progress loss', () => {
   }
   assert.ok(died);
   assert.ok(revived);
+});
+
+test('the Devastating melee stance applies a stacking bleed that ticks damage over time', () => {
+  const s = atPoi('holtburg-meeting-hall');
+  s.hero.combat.meleeStance = 4; // Devastating: 4s swing, applies Bleed
+  s.hero.str = 30;
+  s.hero.end = 30;
+  spawnMonster(s);
+  s.monster.hp = 100000;
+  s.monster.maxHp = 100000;
+  s.monster.def = 0;
+  s.monster.dodge = 0;
+
+  for (let i = 0; i < 30 && !s.monster.bleed; i++) tickCombat(s, 4.1);
+  assert.ok(s.monster.bleed);
+  assert.ok(s.monster.bleed.stacks >= 1);
+
+  const hpBefore = s.monster.hp;
+  for (let i = 0; i < 6; i++) tickCombat(s, 1.1);
+  assert.ok(s.monster.hp < hpBefore);
+});
+
+test('magic casting drains mana, trains War Magic, and deals damage', () => {
+  const s = atPoi('holtburg-meeting-hall');
+  s.hero.combat.mode = 'magic';
+  s.hero.combat.magicSpell = 'streak'; // fast and cheap, easy to land several casts
+  s.hero.focus = 30;
+  spawnMonster(s);
+  s.monster.hp = 100000;
+  s.monster.maxHp = 100000;
+  s.monster.def = 0;
+  s.monster.dodge = 0;
+
+  const rankBefore = s.hero.skills.offense.war.rank;
+  const xpBefore = s.hero.skills.offense.war.xp;
+  for (let i = 0; i < 20; i++) tickCombat(s, 0.6);
+
+  assert.ok(s.hero.skills.offense.war.xp > xpBefore || s.hero.skills.offense.war.rank > rankBefore);
+  assert.ok(s.monster.hp < 100000);
+  assert.ok(s.hero.mana < derivedStats(s).maxMana);
 });
