@@ -39,7 +39,7 @@ function onboardingHtml(state) {
     return `<div class="panel intro-panel">
       <p>You feel as if you've just woken up from a very long and uncomfortable sleep. Your entire body is sore.</p>
       <p style="margin-top:8px">A voice, unfamiliar, asks: <em>"...first time?"</em></p>
-      <p class="muted" style="margin-top:12px">What's your name, newbie?</p>
+      <p class="npc-speech" style="margin-top:12px">"What's your name, newbie?"</p>
       <div style="display:flex; gap:8px; margin-top:8px">
         <input type="text" id="name-input" class="text-input" maxlength="24" placeholder="Enter your name" />
         <button class="btn primary" data-action="submit-name">Continue</button>
@@ -49,7 +49,7 @@ function onboardingHtml(state) {
 
   if (step === 'seen-lifestone') {
     return `<div class="panel intro-panel">
-      <p>The stranger looks you over. "Have you ever seen a Lifestone before, ${name}?"</p>
+      <p class="npc-speech">"Have you ever seen a <span class="lifestone-glow">Lifestone</span> before, ${name}?"</p>
       <div style="display:flex; gap:8px; margin-top:10px">
         <button class="btn primary" data-action="answer-lifestone" data-arg="yes">Yes</button>
         <button class="btn" data-action="answer-lifestone" data-arg="no">No</button>
