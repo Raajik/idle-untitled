@@ -175,7 +175,12 @@ body {
 #battle-dock.hidden { display: none !important; }
 .dock-where { color: var(--text-dim); white-space: nowrap; }
 .dock-monster { flex: 1; min-width: 160px; }
-.dock-hero { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 2px; }
+.dock-hero { flex: 1; min-width: 260px; display: flex; gap: 6px; }
+.dock-hero .bar { flex: 1; margin: 0; }
+
+/* Vitals row (Battle tab): HP / Stamina / Mana share one row, 1/3 width each */
+.vitals-row { display: flex; gap: 8px; }
+.vitals-row .bar { flex: 1; }
 
 /* Combat log */
 .log {

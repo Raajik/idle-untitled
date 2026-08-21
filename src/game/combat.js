@@ -13,7 +13,7 @@ import { derivedStats, grantXp } from './hero.js';
 import { rollDrop, maybeAutoEquip } from './loot.js';
 import { addLog } from './state.js';
 import { tickTravel } from './travel.js';
-import { trainSkill, defensiveChance, COMBAT_SKILL_XP } from './skills.js';
+import { trainSkill, defensiveChance, hitChance, activeWeaponSkill, COMBAT_SKILL_XP } from './skills.js';
 
 const MONSTER_ATTACK_INTERVAL = 1.2; // seconds
 const RESPAWN_DELAY = 3.0;
@@ -177,6 +177,13 @@ export function tickCombat(state, dt) {
       m.stamina -= MONSTER_STAMINA_COST_PER_DODGE;
       pushFx({ type: 'dodge', target: 'monster' });
       addLog(state, `${m.name} dodges your attack!`, 'dim');
+      continue;
+    }
+
+    const weaponSkill = activeWeaponSkill(state);
+    trainSkill(state, weaponSkill.skill, weaponSkill.label, COMBAT_SKILL_XP);
+    if (Math.random() * 100 >= hitChance(weaponSkill.skill.rank)) {
+      addLog(state, `You swing and miss ${m.name}.`, 'dim');
       continue;
     }
 

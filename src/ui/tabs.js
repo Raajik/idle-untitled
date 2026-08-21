@@ -2,7 +2,7 @@
 
 import { REGIONS, getRegion, getPoiById, DAMAGE_TYPES } from '../data/regions.js';
 import { derivedStats, xpForLevel, totalXpForLevel, attributeCost, ATTRIBUTES } from '../game/hero.js';
-import { xpToNextRank, defensiveChance, MAX_SKILL_RANK } from '../game/skills.js';
+import { xpToNextRank, defensiveChance, hitChance, activeWeaponSkill, OFFENSE_SKILLS, MAX_SKILL_RANK } from '../game/skills.js';
 import { computeDepth } from '../game/combat.js';
 import { TRAINING_TRACKS, trainingCost } from '../game/training.js';
 import { soulsAvailable, canRebirth, REBIRTH_UPGRADES } from '../game/prestige.js';
@@ -37,17 +37,16 @@ export function battleTab(state) {
   const p = state.progress;
   const travel = state.travel;
 
-  const regionTiles = REGIONS.filter((r) => p.visibleRegions.includes(r.id))
-    .map((r, i) => {
+  const regionTiles = REGIONS.map((r) => {
       const arrived = p.unlockedRegions.includes(r.id);
       const travelling = travel && travel.kind === 'region' && travel.id === r.id;
-      const cls = ['tile', 'region-tile', arrived ? 'arrived' : '', travelling ? 'travelling' : '', i > 0 ? 'fade-in' : ''].join(' ');
-      let sub;
-      if (travelling) sub = `<span class="travel-timer">${formatDuration(travel.remaining)}</span>`;
-      else if (arrived) sub = '<span class="sub">arrived</span>';
-      else sub = '<span class="sub">Travel</span>';
-      const disabled = arrived || (travel && !travelling) ? 'disabled' : '';
-      return `<button class="${cls}" title="Travel" data-action="travel-region" data-arg="${r.id}" ${disabled}>${esc(r.name)}${sub}</button>`;
+      const cls = ['tile', 'region-tile', arrived ? 'arrived' : '', travelling ? 'travelling' : ''].join(' ');
+      const sub = travelling
+        ? `<span class="travel-timer" id="region-timer-${r.id}">${formatDuration(travel.remaining)}</span>`
+        : arrived
+        ? '<span class="sub">arrived</span>'
+        : `<span class="sub">Travel (${formatDuration(r.walkSeconds)})</span>`;
+      return `<button class="${cls}" id="region-tile-${r.id}" title="Travel" data-action="travel-region" data-arg="${r.id}">${esc(r.name)}${sub}</button>`;
     })
     .join('');
 
@@ -59,12 +58,12 @@ export function battleTab(state) {
         const here = state.location.poiId === poi.id;
         const travelling = travel && travel.kind === 'poi' && travel.id === poi.id;
         const cls = ['tile', 'poi-tile', here ? 'current' : '', travelling ? 'travelling' : ''].join(' ');
-        let sub;
-        if (travelling) sub = `<span class="travel-timer">${formatDuration(travel.remaining)}</span>`;
-        else if (here) sub = '<span class="sub">here</span>';
-        else sub = '<span class="sub">Travel</span>';
-        const disabled = here || (travel && !travelling) ? 'disabled' : '';
-        return `<button class="${cls}" title="Travel" data-action="travel-poi" data-arg="${poi.id}" ${disabled}>${esc(poi.name)}${sub}</button>`;
+        const sub = travelling
+          ? `<span class="travel-timer" id="poi-timer-${poi.id}">${formatDuration(travel.remaining)}</span>`
+          : here
+          ? '<span class="sub">here</span>'
+          : `<span class="sub">Travel (${formatDuration(poi.walkSeconds)})</span>`;
+        return `<button class="${cls}" id="poi-tile-${poi.id}" title="Travel" data-action="travel-poi" data-arg="${poi.id}">${esc(poi.name)}${sub}</button>`;
       })
       .join('');
     poiSection = `<div class="panel"><h2>Points of Interest — ${esc(region.name)}</h2><div class="tile-list">${poiTiles}</div></div>`;
@@ -74,7 +73,7 @@ export function battleTab(state) {
   if (travel) {
     const label = travel.kind === 'region' ? getRegion(travel.id).name : getPoiById(travel.id).name;
     combatPanel = `<div class="panel"><h2>On the Road</h2>
-      <p class="muted">Walking to ${esc(label)}... ${formatDuration(travel.remaining)} remaining.</p></div>`;
+      <p class="muted">Walking to ${esc(label)}... <span id="travel-remaining">${formatDuration(travel.remaining)}</span> remaining.</p></div>`;
   } else if (!state.location.poiId) {
     combatPanel = `<div class="panel"><h2>Town</h2><p class="muted">Pick a point of interest to start hunting.</p></div>`;
   } else {
@@ -82,6 +81,8 @@ export function battleTab(state) {
     const depth = computeDepth(p);
     const xpProgress = state.progress.totalXpEarned - totalXpForLevel(h.level);
     const bossNote = depth >= 0.75 ? ` · boss may appear` : '';
+    const aw = activeWeaponSkill(state);
+    const attackLine = aw.weaponName ? `Attacking with ${esc(aw.weaponName)}` : 'Fighting unarmed';
     combatPanel = `
     <div class="panel">
       <h2>${esc(poi.name)} <span class="muted" style="font-size:0.7em">+${Math.round(depth * 100)}% difficulty${bossNote}</span></h2>
@@ -89,11 +90,14 @@ export function battleTab(state) {
       ${bar('hp', m ? (m.hp / m.maxHp) * 100 : 0, m ? `${Math.max(0, Math.ceil(m.hp))} / ${m.maxHp}` : '...', 'm-hp', 'monster')}
       <div id="m-meta" class="muted">${m ? `ATK ${m.atk} · DEF ${m.def} · ${esc(m.dmgType)}` : ''}</div>
       <h2 style="margin-top:14px">You — Level ${h.level}</h2>
-      ${bar('hp', (h.hp / d.maxHp) * 100, h.dead ? 'Dead... reviving' : `${Math.ceil(h.hp)} / ${d.maxHp} HP`, 'h-hp', 'hero')}
       ${bar('xp', (xpProgress / xpForLevel(h.level)) * 100, `XP ${fmt(xpProgress)} / ${fmt(xpForLevel(h.level))}`, 'h-xp')}
-      ${bar('stamina', (h.stamina / d.maxStamina) * 100, `${Math.ceil(h.stamina)} / ${d.maxStamina} Stamina`, 'h-sta')}
-      ${bar('mana', (h.mana / d.maxMana) * 100, `${Math.ceil(h.mana)} / ${d.maxMana} Mana`, 'h-mana')}
-      <div id="h-stats" class="muted">ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s · Dodge ${d.dodge.toFixed(0)}% · Crit ${d.critChance.toFixed(1)}% · ${fmt(state.pyreals)} pyreals</div>
+      <div class="vitals-row">
+        ${bar('hp', (h.hp / d.maxHp) * 100, h.dead ? 'Dead... reviving' : `${Math.ceil(h.hp)} / ${d.maxHp} HP`, 'h-hp', 'hero')}
+        ${bar('stamina', (h.stamina / d.maxStamina) * 100, `${Math.ceil(h.stamina)} / ${d.maxStamina} Stamina`, 'h-sta')}
+        ${bar('mana', (h.mana / d.maxMana) * 100, `${Math.ceil(h.mana)} / ${d.maxMana} Mana`, 'h-mana')}
+      </div>
+      <div id="h-attack-line" class="muted">${attackLine}, ${esc(aw.label)} (Rank ${aw.skill.rank}).</div>
+      <div id="h-stats" class="muted">ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s · Crit ${d.critChance.toFixed(1)}% · ${fmt(state.pyreals)} pyreals</div>
     </div>`;
   }
 
@@ -132,7 +136,6 @@ export function attributesTab(state) {
       <div class="stat-row"><span class="k">ATK</span><span class="v">${d.atk}</span></div>
       <div class="stat-row"><span class="k">DEF</span><span class="v">${d.def}</span></div>
       <div class="stat-row"><span class="k">Attack speed</span><span class="v">${d.spd.toFixed(2)}/s</span></div>
-      <div class="stat-row"><span class="k">Dodge</span><span class="v">${d.dodge.toFixed(1)}%</span></div>
       <div class="stat-row"><span class="k">Crit chance</span><span class="v">${d.critChance.toFixed(1)}%</span></div>
       <div class="stat-row"><span class="k">XP bonus</span><span class="v">+${d.xpPct}%</span></div>
       <div class="stat-row"><span class="k">Pyreals bonus</span><span class="v">+${d.pyrealsPct}%</span></div>
@@ -153,7 +156,7 @@ function skillRow(name, skill, chanceLabel) {
 export function skillsTab(state) {
   const skills = state.hero.skills;
   const run = skills.run;
-  const speedPct = Math.round(100 - (100 * 100) / (100 + run.rank * 4));
+  const speedPct = Math.round(100 - (100 * 100) / (100 + run.rank * 9));
 
   const defensiveRows = [
     ['Dodge', skills.dodge],
@@ -169,6 +172,25 @@ export function skillsTab(state) {
     return skillRow(label, skill, `${defensiveChance(skill.rank).toFixed(1)}% avoid`);
   }).join('');
 
+  const offenseByCategory = {};
+  for (const meta of OFFENSE_SKILLS) {
+    (offenseByCategory[meta.category] ||= []).push(meta);
+  }
+  const offenseSections = Object.entries(offenseByCategory)
+    .map(([category, metas]) => {
+      const rows = metas
+        .map((meta) => {
+          const skill = skills.offense[meta.key];
+          if (meta.comingSoon) {
+            return `<div class="skill-row"><div class="skill-head"><b>${esc(meta.label)}</b> <span class="muted teaser">(soon)</span></div></div>`;
+          }
+          return skillRow(meta.label, skill, `${hitChance(skill.rank).toFixed(1)}% to hit`);
+        })
+        .join('');
+      return `<div class="panel"><h2>${esc(category)}</h2>${rows}</div>`;
+    })
+    .join('');
+
   return `
     <div class="panel">
       ${skillRow('Run', run, `${speedPct}% faster travel`)}
@@ -182,7 +204,9 @@ export function skillsTab(state) {
     <div class="panel">
       <h2>Resistance — by damage type</h2>
       ${resistRows}
-    </div>`;
+    </div>
+    <div class="panel"><h2>Offense</h2><p class="muted">Whichever weapon you have equipped (or bare fists) trains its own skill and governs how often your attacks connect, from even odds untrained up to 95% at rank 100.</p></div>
+    ${offenseSections}`;
 }
 
 // --- Inventory ---

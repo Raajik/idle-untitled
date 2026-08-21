@@ -36,6 +36,7 @@ function migrate(raw) {
   const rawSkills = (raw.hero && raw.hero.skills) || {};
   state.hero.skills = { ...fresh.hero.skills, ...rawSkills };
   state.hero.skills.resistance = { ...fresh.hero.skills.resistance, ...(rawSkills.resistance || {}) };
+  state.hero.skills.offense = { ...fresh.hero.skills.offense, ...(rawSkills.offense || {}) };
   state.progress = { ...fresh.progress, ...(raw.progress || {}) };
   state.location = { ...fresh.location, ...(raw.location || {}) };
   state.travel = raw.travel !== undefined ? raw.travel : fresh.travel;

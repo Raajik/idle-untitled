@@ -50,6 +50,7 @@ export function generateItem(powerLevel, { luckPct = 0, rarityBoost = 0 } = {}) 
     power,
     affixes,
     name: `${prefix} ${base}`,
+    baseType: slot === 'weapon' ? base.toLowerCase() : undefined,
   };
   for (const a of item.affixes) {
     const def = AFFIXES.find((d) => d.id === a.id);

@@ -24,8 +24,9 @@ export const AFFIXES = [
   { id: 'critPct', label: (v) => `+${v}% Crit`, min: 2, max: 6 },
 ];
 
+// Weapon base names double as their offensive skill key (lowercased) — see skills.js.
 export const BASE_NAMES = {
-  weapon: ['Sword', 'Axe', 'Mace', 'Spear', 'Dagger', 'Staff', 'Bow', 'Crossbow'],
+  weapon: ['Sword', 'Axe', 'Mace', 'Spear', 'Bow', 'Crossbow'],
   armor: ['Leather Armor', 'Studded Leather', 'Chainmail', 'Plate Armor', 'Covenant Armor'],
   amulet: ['Amulet', 'Necklace', 'Pendant', 'Talisman'],
   ring: ['Ring', 'Band', 'Signet', 'Loop'],

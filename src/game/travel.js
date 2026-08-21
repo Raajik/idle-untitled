@@ -1,12 +1,12 @@
 // Travel: walking to a region or a POI. Combat is suspended while `state.travel`
-// is set; arriving unlocks the region (and staggers in the next hidden one) or
-// moves the hero to the POI, resetting that POI's difficulty depth.
+// is set; arriving unlocks the region or moves the hero to the POI, resetting that
+// POI's difficulty depth. Every region and POI is visible and clickable from the
+// very start — distance is expressed purely through `walkSeconds`, not gating.
+// Clicking a new destination redirects travel immediately, even mid-walk.
 
-import { REGIONS, getRegion, getPoiById, regionIndex } from '../data/regions.js';
+import { getRegion, getPoiById } from '../data/regions.js';
 import { modifiedWalkTime, grantRunXp } from './skills.js';
 import { addLog } from './state.js';
-
-const REGION_REVEAL_DELAY = 10; // seconds between each newly-visible region fading in
 
 function resetPoiProgress(state) {
   state.progress.poiDepth = 0;
@@ -18,11 +18,9 @@ function resetPoiProgress(state) {
 }
 
 export function startTravelToRegion(state, regionId) {
-  if (state.travel) return false;
   const region = getRegion(regionId);
   if (!region) return false;
-  if (!state.progress.visibleRegions.includes(regionId)) return false;
-  if (state.progress.unlockedRegions.includes(regionId)) return false; // already there
+  if (!state.travel && state.progress.unlockedRegions.includes(regionId)) return false; // already there, not redirecting
 
   const duration = modifiedWalkTime(region.walkSeconds, state.hero.skills.run.rank);
   state.travel = { kind: 'region', id: regionId, remaining: duration, duration };
@@ -33,10 +31,9 @@ export function startTravelToRegion(state, regionId) {
 }
 
 export function startTravelToPoi(state, poiId) {
-  if (state.travel) return false;
   const poi = getPoiById(poiId);
   if (!poi) return false;
-  if (!state.progress.unlockedRegions.includes(poi.regionId)) return false;
+  if (!state.travel && state.location.poiId === poiId) return false; // already there, not redirecting
 
   const duration = modifiedWalkTime(poi.walkSeconds, state.hero.skills.run.rank);
   state.travel = { kind: 'poi', id: poiId, remaining: duration, duration };
@@ -44,17 +41,6 @@ export function startTravelToPoi(state, poiId) {
   state.monster = null;
   addLog(state, `Walking to ${poi.name}...`, 'dim');
   return true;
-}
-
-function revealNextRegion(state) {
-  const hidden = REGIONS.find((r) => !state.progress.visibleRegions.includes(r.id));
-  if (!hidden) {
-    state.progress.revealTimer = 0;
-    return;
-  }
-  state.progress.visibleRegions.push(hidden.id);
-  const stillHidden = REGIONS.some((r) => !state.progress.visibleRegions.includes(r.id));
-  state.progress.revealTimer = stillHidden ? REGION_REVEAL_DELAY : 0;
 }
 
 export function arrive(state) {
@@ -66,10 +52,6 @@ export function arrive(state) {
     }
     state.location = { regionId: t.id, poiId: null };
     addLog(state, `You arrive at ${region.name}.`, 'good');
-    if (regionIndex(t.id) === 0) {
-      // First arrival at Holtburg starts staggering in the rest of the map.
-      state.progress.revealTimer = REGION_REVEAL_DELAY;
-    }
   } else {
     const poi = getPoiById(t.id);
     state.location = { regionId: poi.regionId, poiId: t.id };
@@ -80,13 +62,8 @@ export function arrive(state) {
   state.travel = null;
 }
 
-// Called every combat tick. Handles both active travel and the staggered region reveal.
+// Called every combat tick while travelling.
 export function tickTravel(state, dt) {
-  if (state.progress.revealTimer > 0) {
-    state.progress.revealTimer -= dt;
-    if (state.progress.revealTimer <= 0) revealNextRegion(state);
-  }
-
   if (!state.travel) return false;
   state.travel.remaining -= dt;
   grantRunXp(state, dt);

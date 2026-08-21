@@ -143,7 +143,7 @@ export const REGIONS = [
   {
     id: 'glenden-wood',
     name: 'Glenden Wood',
-    walkSeconds: 480,
+    walkSeconds: 3600, // 1 hour at rank-0 Run; ~6 min once Run is maxed
     pois: [
       {
         id: 'banderling-plains', name: 'Banderling Plains', coords: '—', quest: 'None', walkSeconds: 20,
@@ -168,7 +168,7 @@ export const REGIONS = [
   {
     id: 'eastham',
     name: 'Eastham',
-    walkSeconds: 1500,
+    walkSeconds: 28800, // 8 hours at rank-0 Run; ~48 min once Run is maxed
     pois: [
       {
         id: 'olthoi-nest', name: 'Olthoi Nest', coords: '—', quest: 'None', walkSeconds: 20,
@@ -184,7 +184,7 @@ export const REGIONS = [
   {
     id: 'direlands',
     name: 'Direlands',
-    walkSeconds: 7200,
+    walkSeconds: 86400, // 24 hours at rank-0 Run; ~2.4 hours once Run is maxed
     pois: [
       {
         id: 'golem-caverns', name: 'Golem Caverns', coords: '—', quest: 'None', walkSeconds: 20,

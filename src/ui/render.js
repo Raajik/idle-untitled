@@ -12,8 +12,9 @@ import { buyTraining } from '../game/training.js';
 import { performRebirth, buyUpgrade } from '../game/prestige.js';
 import { exportSave, importSave, hardReset, saveGame, suppressSave } from '../save.js';
 import { drainFx } from '../engine/fx.js';
-import { fmt } from '../engine/format.js';
+import { fmt, formatDuration } from '../engine/format.js';
 import { computeDepth } from '../game/combat.js';
+import { activeWeaponSkill } from '../game/skills.js';
 
 const TAB_RENDERERS = {
   battle: battleTab,
@@ -25,7 +26,15 @@ const TAB_RENDERERS = {
   overview: overviewTab,
   settings: settingsTab,
 };
-const LIVE_TABS = new Set(['battle', 'overview']);
+
+// A compact key describing the Battle tab's current "shape" — which panels exist
+// (Town / On the Road / at a POI) and which tile is highlighted as current/travelling.
+// Changing shape needs a full rebuild; anything else (just the countdown ticking,
+// or combat) can be patched in place so buttons never get torn out from under a click.
+function battleStructureKey(state) {
+  const t = state.travel;
+  return `${t ? t.kind + ':' + t.id : ''}|${state.location.regionId}|${state.location.poiId}`;
+}
 
 function toast(text) {
   const el = document.createElement('div');
@@ -44,6 +53,7 @@ export function createRenderer(state, { onImport }) {
 
   let lastLogLen = 0;
   let menuRenderFrames = 0;
+  let lastBattleKey = null;
 
   function updateSummary() {
     const d = derivedStats(state);
@@ -99,6 +109,7 @@ export function createRenderer(state, { onImport }) {
     updateDock();
     lastLogLen = state.log.length;
     menuRenderFrames = 0;
+    lastBattleKey = battleStructureKey(state);
 
     const log = document.getElementById('combat-log');
     if (log) log.scrollTop = log.scrollHeight;
@@ -205,7 +216,9 @@ export function createRenderer(state, { onImport }) {
     setBar('h-xp', (xpProgress / xpForLevel(h.level)) * 100, `XP ${fmt(xpProgress)} / ${fmt(xpForLevel(h.level))}`);
     setBar('h-sta', (h.stamina / d.maxStamina) * 100, `${Math.ceil(h.stamina)} / ${d.maxStamina} Stamina`);
     setBar('h-mana', (h.mana / d.maxMana) * 100, `${Math.ceil(h.mana)} / ${d.maxMana} Mana`);
-    setText('h-stats', `ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s · Dodge ${d.dodge.toFixed(0)}% · Crit ${d.critChance.toFixed(1)}% · ${fmt(state.pyreals)} pyreals`);
+    setText('h-stats', `ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s · Crit ${d.critChance.toFixed(1)}% · ${fmt(state.pyreals)} pyreals`);
+    const aw = activeWeaponSkill(state);
+    setText('h-attack-line', `${aw.weaponName ? `Attacking with ${aw.weaponName}` : 'Fighting unarmed'}, ${aw.label} (Rank ${aw.skill.rank}).`);
 
     const ovLine = document.getElementById('ov-hero-line');
     if (ovLine) ovLine.innerHTML = `Level ${h.level} · <span class="gold">${fmt(state.pyreals)} pyreals</span> · <span class="soul">${state.rebirth.souls} souls</span>`;
@@ -214,6 +227,14 @@ export function createRenderer(state, { onImport }) {
     }
 
     appendLog();
+  }
+
+  function updateTravelCountdown() {
+    const t = state.travel;
+    if (!t) return;
+    const text = formatDuration(t.remaining);
+    setText('travel-remaining', text);
+    setText(t.kind === 'region' ? `region-timer-${t.id}` : `poi-timer-${t.id}`, text);
   }
 
   function frame() {
@@ -226,14 +247,21 @@ export function createRenderer(state, { onImport }) {
     }
     if (state.ui.activeTab !== 'battle') updateDock(); // dock is hidden on Battle itself
 
-    if (LIVE_TABS.has(state.ui.activeTab)) {
-      // Travel/town screens have countdown tiles and swap panels entirely on arrival,
-      // which is easiest to keep correct with a full rebuild rather than patching DOM.
-      if (state.ui.activeTab === 'battle' && (state.travel || !state.location.poiId)) {
+    if (state.ui.activeTab === 'battle') {
+      const key = battleStructureKey(state);
+      if (key !== lastBattleKey) {
+        // Travel started/finished, or arrived somewhere new: the set of panels and
+        // tiles actually changed shape, so rebuild rather than patch.
+        lastBattleKey = key;
         render();
-      } else {
+      } else if (state.travel) {
+        updateTravelCountdown();
+      } else if (state.location.poiId) {
         updateLive();
       }
+      // else: standing in town with nothing travelling — nothing to patch this frame.
+    } else if (state.ui.activeTab === 'overview') {
+      updateLive();
     } else {
       // menu tabs: refresh periodically so gold/level stay current
       menuRenderFrames += 1;

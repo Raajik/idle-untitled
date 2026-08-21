@@ -14,6 +14,16 @@ function freshResistance() {
   return r;
 }
 
+// Keys match skills.js OFFENSE_SKILLS; duplicated here (rather than imported) to
+// avoid a state.js <-> skills.js import cycle (skills.js needs addLog from here).
+const OFFENSE_SKILL_KEYS = ['unarmed', 'sword', 'spear', 'axe', 'mace', 'life', 'war', 'void', 'bow', 'crossbow'];
+
+function freshOffense() {
+  const o = {};
+  for (const k of OFFENSE_SKILL_KEYS) o[k] = freshSkill();
+  return o;
+}
+
 export function createInitialState() {
   return {
     version: SAVE_VERSION,
@@ -41,15 +51,14 @@ export function createInitialState() {
         block: freshSkill(),
         parry: freshSkill(),
         resistance: freshResistance(),
+        offense: freshOffense(),
       },
     },
     location: { regionId: null, poiId: null }, // null,null = still on the road to Holtburg
     travel: null, // { kind: 'region'|'poi', id, remaining, duration }
     progress: {
       unlockedRegions: [], // arrived at
-      visibleRegions: ['holtburg'], // shown on the map at all
       visitedPois: [],
-      revealTimer: 0, // seconds until the next hidden region fades in
       poiDepth: 0, // current POI's difficulty multiplier (resets on travel away)
       timeInPoi: 0,
       killsInPoi: 0,

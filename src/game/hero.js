@@ -10,7 +10,7 @@ import { REBIRTH_UPGRADES } from '../data/rebirth.js';
 export const ATTRIBUTES = [
   { id: 'str', name: 'Strength', short: 'STR', desc: '+1.5 ATK each' },
   { id: 'end', name: 'Endurance', short: 'END', desc: '+5 Max HP, +0.5 DEF, +2 Max Stamina each' },
-  { id: 'coord', name: 'Coordination', short: 'COORD', desc: '+0.5% dodge, +0.2% crit each' },
+  { id: 'coord', name: 'Coordination', short: 'COORD', desc: '+0.2% crit each' },
   { id: 'quick', name: 'Quickness', short: 'QUICK', desc: '+4% attack speed, +2 Max Stamina each' },
   { id: 'focus', name: 'Focus', short: 'FOCUS', desc: 'Life Magic (coming soon)' },
   { id: 'self', name: 'Self', short: 'SELF', desc: '+4 Max Mana each' },
@@ -91,7 +91,6 @@ export function derivedStats(state) {
   const atk = Math.floor((3 + h.str * 1.5 + b.weaponAtk) * (1 + b.atkPct / 100));
   const def = Math.floor(h.end * 0.5 + b.armorDef);
   const spd = 1 + h.quick * 0.04; // attacks per second
-  const dodge = h.coord * 0.5; // percent chance to avoid a monster hit
   const critChance = 5 + h.coord * 0.2 + b.critPct; // percent
   const maxStamina = Math.floor(20 + h.end * 2 + h.quick * 2);
   const maxMana = Math.floor(20 + h.self * 4);
@@ -100,7 +99,6 @@ export function derivedStats(state) {
     atk,
     def,
     spd,
-    dodge,
     critChance,
     maxStamina,
     maxMana,
