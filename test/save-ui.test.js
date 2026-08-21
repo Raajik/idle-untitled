@@ -18,14 +18,14 @@ test('offline progress grants kills, pyreals and xp proportional to time away', 
   assert.ok(s.hero.level > 1);
 });
 
-test('offline progress finishes an in-progress walk and trains Run', () => {
+test('offline progress finishes an in-progress walk and trains Athletics', () => {
   const s = createInitialState();
   s.travel = { kind: 'region', id: 'holtburg', remaining: 10, duration: 30 };
   s.lastSeen = Date.now() - 120 * 1000; // 2 minutes ago, plenty to finish a 10s walk
   applyOfflineProgress(s);
   assert.equal(s.travel, null);
   assert.equal(s.location.regionId, 'holtburg');
-  assert.ok(s.hero.skills.run.xp > 0 || s.hero.skills.run.rank > 0);
+  assert.ok(s.hero.skills.athletics.xp > 0 || s.hero.skills.athletics.rank > 0);
 });
 
 test('offline progress ignores short absences', () => {

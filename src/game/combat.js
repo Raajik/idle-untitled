@@ -15,7 +15,19 @@ import { rollDrop, maybeAutoEquip } from './loot.js';
 import { addLog } from './state.js';
 import { tickTravel, arrive } from './travel.js';
 import { tickRecallCooldown } from './lifestone.js';
-import { trainSkill, defensiveChance, hitChance, activeWeaponSkill, grantRunXp, RECALL_XP_ON_DEATH, COMBAT_SKILL_XP } from './skills.js';
+import { tickJumpCooldown } from './shortcuts.js';
+import { tickGathering } from './gathering.js';
+import {
+  trainSkill,
+  defensiveChance,
+  resistanceMitigationPct,
+  hitChance,
+  activeWeaponSkill,
+  grantAthleticsXp,
+  MELEE_WEAPON_BASE_TYPES,
+  RECALL_XP_ON_DEATH,
+  COMBAT_SKILL_XP,
+} from './skills.js';
 
 const MONSTER_ATTACK_INTERVAL = 1.2; // seconds
 const RESPAWN_DELAY = 3.0;
@@ -28,12 +40,6 @@ const MIN_TRASH_AFTER_BOSS = 3;
 
 const HERO_STAMINA_COST_PER_DEFEND = 4;
 const MONSTER_STAMINA_COST_PER_DODGE = 3;
-
-const DEFEND_LAYERS = [
-  ['dodge', 'Dodge'],
-  ['block', 'Block'],
-  ['parry', 'Parry'],
-];
 
 // Difficulty multiplier for the current POI: rises with time spent and kills,
 // capped so a POI can't scale forever.
@@ -87,16 +93,26 @@ function dealDamage(rawAtk, targetDef, critChance) {
   return { dmg, crit };
 }
 
-// Rolls the hero's defensive layers (Dodge, Block, Parry, then Resistance for the
-// attack's damage type) in order. Each layer only trains and can only succeed while
-// the hero has stamina to spend; running out of stamina mid-swing just means the
-// remaining layers are skipped. Returns the layer name that avoided the hit, or null.
-function tryDefend(state, dmgType) {
+// Rolls the hero's defensive layers in order — Dodge (always available), Block
+// (only with a shield equipped), Parry (only with a melee weapon equipped).
+// Each eligible layer only trains and can only succeed while the hero has
+// stamina to spend; running out of stamina mid-swing just means the remaining
+// layers are skipped. Returns the layer name that avoided the hit, or null —
+// Resistance is NOT part of this chain; see the mitigation step in tickCombat.
+function tryDefend(state) {
   const h = state.hero;
-  const layers = [...DEFEND_LAYERS, ['resistance', null]];
-  for (const [key, label] of layers) {
-    const skill = key === 'resistance' ? h.skills.resistance[dmgType] : h.skills[key];
-    const name = label || `${dmgType[0].toUpperCase()}${dmgType.slice(1)} Resistance`;
+  const hasShield = !!state.equipment.shield;
+  const weapon = state.equipment.weapon;
+  const hasMeleeWeapon = !!(weapon && MELEE_WEAPON_BASE_TYPES.includes(weapon.baseType));
+
+  const layers = [
+    ['dodge', 'Dodge', true],
+    ['block', 'Block', hasShield],
+    ['parry', 'Parry', hasMeleeWeapon],
+  ];
+  for (const [key, name, eligible] of layers) {
+    if (!eligible) continue;
+    const skill = h.skills[key];
     trainSkill(state, skill, name, COMBAT_SKILL_XP);
     if (h.stamina < HERO_STAMINA_COST_PER_DEFEND) continue;
     if (Math.random() * 100 < defensiveChance(skill.rank)) {
@@ -168,7 +184,7 @@ function handleHeroDeath(state) {
 // against the tutorial road's weak monster pool, rather than being suspended.
 function tickTutorialJourney(state, dt) {
   state.travel.remaining -= dt;
-  grantRunXp(state, dt);
+  grantAthleticsXp(state, dt);
   if (state.travel.remaining <= 0) {
     state.monster = null;
     arrive(state);
@@ -179,12 +195,15 @@ function tickTutorialJourney(state, dt) {
 // One game tick. dt in seconds.
 export function tickCombat(state, dt) {
   tickRecallCooldown(state, dt);
+  tickJumpCooldown(state, dt);
 
   if (state.travel && state.travel.tutorial) {
     tickTutorialJourney(state, dt);
   } else if (tickTravel(state, dt)) {
-    return; // travelling: no combat, Run trains instead
+    return; // travelling: no combat, Athletics trains instead
   }
+
+  if (tickGathering(state, dt)) return; // gathering: no combat this tick
 
   const h = state.hero;
   if (!state.location.poiId) return; // in town: nothing to fight
@@ -243,19 +262,26 @@ export function tickCombat(state, dt) {
     }
   }
 
-  // Monster attacks (hero may Dodge/Block/Parry/Resist based on its damage type)
+  // Monster attacks (hero may Dodge/Block/Parry to avoid entirely; otherwise
+  // Resistance for the attack's damage type reduces how much gets through)
   h.monsterTimer += dt;
   while (h.monsterTimer >= MONSTER_ATTACK_INTERVAL) {
     h.monsterTimer -= MONSTER_ATTACK_INTERVAL;
 
-    const avoidedBy = tryDefend(state, m.dmgType);
+    const avoidedBy = tryDefend(state);
     if (avoidedBy) {
       pushFx({ type: 'dodge', target: 'hero' });
       addLog(state, `${avoidedBy}! You avoid ${m.name}'s attack.`, 'dim');
       continue;
     }
 
-    const { dmg } = dealDamage(m.atk, stats.def, 0);
+    const resistSkill = h.skills.resistance[m.dmgType];
+    const resistName = `${m.dmgType[0].toUpperCase()}${m.dmgType.slice(1)} Resistance`;
+    trainSkill(state, resistSkill, resistName, COMBAT_SKILL_XP);
+    const mitigation = resistanceMitigationPct(resistSkill.rank);
+
+    const { dmg: rawDmg } = dealDamage(m.atk, stats.def, 0);
+    const dmg = Math.max(1, Math.round(rawDmg * (1 - mitigation / 100)));
     h.hp -= dmg;
     pushFx({ type: 'hit', target: 'hero', dmg });
     if (h.hp <= 0) {
@@ -287,6 +313,6 @@ export function fleeTutorialEncounter(state) {
   if (!(state.travel && state.travel.tutorial) || !state.monster) return false;
   addLog(state, `You break away and keep moving, leaving the ${state.monster.name} behind.`, 'dim');
   state.monster = null;
-  grantRunXp(state, 8);
+  grantAthleticsXp(state, 8);
   return true;
 }

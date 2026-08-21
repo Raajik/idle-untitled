@@ -15,8 +15,16 @@ export const UNLOCKS = [
     when: (s) => s.hero.level >= 2 || s.progress.visitedPois.length > 0 || s.progress.totalDrops >= 1,
   },
   { id: 'attributes', kind: 'tab', parent: 'hero', label: 'Attributes', when: (s) => s.hero.level >= 2, toast: '🧙 Attributes unlocked — allocate your stat points!' },
-  { id: 'skills', kind: 'tab', parent: 'hero', label: 'Skills', when: (s) => s.progress.visitedPois.length > 0 || s.travel !== null || s.progress.unlockedRegions.length > 0, toast: '🏃 Skills unlocked — Run trains as you walk!' },
+  { id: 'skills', kind: 'tab', parent: 'hero', label: 'Skills', when: (s) => s.progress.visitedPois.length > 0 || s.travel !== null || s.progress.unlockedRegions.length > 0, toast: '🏃 Skills unlocked — Athletics trains as you walk!' },
   { id: 'inventory', kind: 'tab', parent: 'hero', label: 'Inventory', when: (s) => s.progress.totalDrops >= 1, toast: '🎒 Inventory unlocked — monsters can drop loot!' },
+  {
+    id: 'tinkering',
+    kind: 'tab',
+    parent: 'hero',
+    label: 'Tinkering',
+    when: (s) => Object.values(s.materials).some((c) => c > 0),
+    toast: '🔧 Tinkering unlocked — use gathered/salvaged materials to improve your gear!',
+  },
   {
     id: 'lifestone',
     kind: 'category',

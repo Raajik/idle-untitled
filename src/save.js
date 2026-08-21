@@ -38,6 +38,12 @@ function migrate(raw) {
   state.hero.skills = { ...fresh.hero.skills, ...rawSkills };
   state.hero.skills.resistance = { ...fresh.hero.skills.resistance, ...(rawSkills.resistance || {}) };
   state.hero.skills.offense = { ...fresh.hero.skills.offense, ...(rawSkills.offense || {}) };
+  state.hero.skills.gathering = { ...fresh.hero.skills.gathering, ...(rawSkills.gathering || {}) };
+  // Run was renamed to Athletics — carry an old save's progress over rather than losing it.
+  if (rawSkills.run && !rawSkills.athletics) {
+    state.hero.skills.athletics = { ...rawSkills.run };
+  }
+  delete state.hero.skills.run;
   state.progress = { ...fresh.progress, ...(raw.progress || {}) };
   state.location = { ...fresh.location, ...(raw.location || {}) };
   state.travel = raw.travel !== undefined ? raw.travel : fresh.travel;

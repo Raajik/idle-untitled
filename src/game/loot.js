@@ -1,6 +1,7 @@
 // Loot: drop rolls, item generation, rarity rolls, inventory/equip helpers.
 
 import { SLOTS, RARITIES, AFFIXES, BASE_NAMES, PREFIXES, poiItemPower } from '../data/items.js';
+import { materialsForSlot, SALVAGE_YIELD } from '../data/materials.js';
 import { getPoiById } from '../data/regions.js';
 import { monsterStatsForLevel } from '../data/monsterScaling.js';
 import { pick, pickWeighted, randInt, chance } from '../engine/rng.js';
@@ -8,7 +9,8 @@ import { derivedStats } from './hero.js';
 
 let nextItemId = 1;
 
-export const DROP_CHANCE = 0.15;
+// Gear is semi-rare: most kills come up empty.
+export const DROP_CHANCE = 0.05;
 
 export function rollRarity(luckPct = 0) {
   // luck shifts weight from Common toward higher tiers
@@ -20,7 +22,7 @@ export function rollRarity(luckPct = 0) {
   return pickWeighted(table);
 }
 
-export function generateItem(powerLevel, { luckPct = 0, rarityBoost = 0 } = {}) {
+export function generateItem(powerLevel, { luckPct = 0, rarityBoost = 0, forceSlot = null, forceBaseType = null } = {}) {
   let rarity = rollRarity(luckPct);
   if (rarityBoost > 0) {
     // bosses: bump rarity up by rarityBoost tiers (capped at Legendary)
@@ -28,7 +30,7 @@ export function generateItem(powerLevel, { luckPct = 0, rarityBoost = 0 } = {}) 
     rarity = RARITIES[idx];
   }
 
-  const slot = pick(SLOTS);
+  const slot = forceSlot || pick(SLOTS);
   const jitter = 0.9 + Math.random() * 0.2;
   const power = Math.max(1, Math.round(powerLevel * rarity.powerMult * jitter));
 
@@ -41,8 +43,11 @@ export function generateItem(powerLevel, { luckPct = 0, rarityBoost = 0 } = {}) 
     affixes.push({ id: affixDef.id, value: randInt(affixDef.min, affixDef.max), label: '' });
   }
 
-  const base = pick(BASE_NAMES[slot]);
+  const base = forceSlot === 'weapon' && forceBaseType
+    ? BASE_NAMES.weapon.find((b) => b.toLowerCase() === forceBaseType) || pick(BASE_NAMES.weapon)
+    : pick(BASE_NAMES[slot]);
   const prefix = pick(PREFIXES[rarity.name]);
+  const materialPool = materialsForSlot(slot);
   const item = {
     id: nextItemId++,
     slot,
@@ -51,6 +56,7 @@ export function generateItem(powerLevel, { luckPct = 0, rarityBoost = 0 } = {}) 
     affixes,
     name: `${prefix} ${base}`,
     baseType: slot === 'weapon' ? base.toLowerCase() : undefined,
+    material: materialPool.length ? pick(materialPool).id : undefined,
   };
   for (const a of item.affixes) {
     const def = AFFIXES.find((d) => d.id === a.id);
@@ -107,4 +113,19 @@ export function maybeAutoEquip(state, item) {
     return true;
   }
   return false;
+}
+
+// Destroys an unequipped item for a flat, rarity-scaled quantity of the raw
+// material it's made from. No workmanship/success roll — always succeeds.
+// Returns { name, material, amount } on success (for the caller to log), or
+// null if the item isn't in the inventory.
+export function salvageItem(state, itemId) {
+  const idx = state.inventory.findIndex((it) => it.id === itemId);
+  if (idx === -1) return null;
+  const item = state.inventory[idx];
+  if (!item.material) return null;
+  const amount = SALVAGE_YIELD[item.rarity] || 1;
+  state.inventory.splice(idx, 1);
+  state.materials[item.material] = (state.materials[item.material] || 0) + amount;
+  return { name: item.name, material: item.material, amount };
 }

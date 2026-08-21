@@ -4,10 +4,10 @@
 //   - frame():  per-animation-frame in-place updates for live combat + fx
 
 import { topLevelEntries, childTabs, drainNewUnlocks, UNLOCKS } from './unlocks.js';
-import { battleTab, attributesTab, skillsTab, inventoryTab, trainingTab, rebirthTab, recallTab, overviewTab, settingsTab, battleDockHtml } from './tabs.js';
+import { battleTab, attributesTab, skillsTab, inventoryTab, trainingTab, rebirthTab, recallTab, tinkeringTab, overviewTab, settingsTab, battleDockHtml } from './tabs.js';
 import { startTravelToRegion, startTravelToPoi } from '../game/travel.js';
 import { raiseAttribute, derivedStats, xpForLevel, totalXpForLevel } from '../game/hero.js';
-import { equipItem } from '../game/loot.js';
+import { equipItem, salvageItem } from '../game/loot.js';
 import { buyTraining } from '../game/training.js';
 import { performRebirth, buyUpgrade } from '../game/prestige.js';
 import { exportSave, importSave, hardReset, saveGame, suppressSave } from '../save.js';
@@ -17,6 +17,12 @@ import { computeDepth, fleeTutorialEncounter } from '../game/combat.js';
 import { activeWeaponSkill } from '../game/skills.js';
 import { setHeroName, answerSeenLifestone, acknowledgeAlcottIntro } from '../game/onboarding.js';
 import { recallTo } from '../game/lifestone.js';
+import { jumpTo } from '../game/shortcuts.js';
+import { startGathering } from '../game/gathering.js';
+import { applyTinkering } from '../game/tinkering.js';
+import { buyItem, sellItem, healService } from '../game/shop.js';
+import { getMaterial } from '../data/materials.js';
+import { addLog } from '../game/state.js';
 
 const TAB_RENDERERS = {
   battle: battleTab,
@@ -26,6 +32,7 @@ const TAB_RENDERERS = {
   training: trainingTab,
   rebirth: rebirthTab,
   recall: recallTab,
+  tinkering: tinkeringTab,
   overview: overviewTab,
   settings: settingsTab,
 };
@@ -38,7 +45,8 @@ const TAB_RENDERERS = {
 function battleStructureKey(state) {
   const t = state.travel;
   const tutorialMonster = t && t.tutorial ? (state.monster ? 'm' : 'nm') : '';
-  return `${state.onboarding.step}|${t ? t.kind + ':' + t.id : ''}|${state.location.regionId}|${state.location.poiId}|${tutorialMonster}`;
+  const gatherKey = state.gathering ? state.gathering.nodeId : '';
+  return `${state.onboarding.step}|${t ? t.kind + ':' + t.id : ''}|${state.location.regionId}|${state.location.poiId}|${tutorialMonster}|${gatherKey}|${state.ui.activeShop || ''}`;
 }
 
 function toast(text) {
@@ -244,6 +252,12 @@ export function createRenderer(state, { onImport }) {
     setText(t.kind === 'region' ? `region-timer-${t.id}` : `poi-timer-${t.id}`, text);
   }
 
+  function updateGatherCountdown() {
+    const g = state.gathering;
+    if (!g) return;
+    setText(`gather-timer-${g.nodeId}`, formatDuration(g.remaining));
+  }
+
   function frame() {
     applyFx();
     const fresh = drainNewUnlocks(state);
@@ -266,8 +280,10 @@ export function createRenderer(state, { onImport }) {
         if (state.travel.tutorial) updateLive();
       } else if (state.location.poiId) {
         updateLive();
+      } else if (state.gathering) {
+        updateGatherCountdown();
       }
-      // else: standing in town with nothing travelling — nothing to patch this frame.
+      // else: standing in town with nothing travelling/gathering — nothing to patch this frame.
     } else if (state.ui.activeTab === 'overview') {
       updateLive();
     } else {
@@ -314,6 +330,30 @@ export function createRenderer(state, { onImport }) {
       case 'ack-intro': acknowledgeAlcottIntro(state); break;
       case 'flee-tutorial': fleeTutorialEncounter(state); break;
       case 'recall': recallTo(state, arg); break;
+      case 'jump-shortcut': jumpTo(state, arg); break;
+      case 'start-gather': startGathering(state, arg); break;
+      case 'open-shop': state.ui.activeShop = arg; break;
+      case 'close-shop': state.ui.activeShop = null; break;
+      case 'buy-item': {
+        const [shopId, idx] = arg.split(':');
+        buyItem(state, shopId, Number(idx));
+        break;
+      }
+      case 'sell-item': sellItem(state, Number(arg)); break;
+      case 'heal-service': healService(state); break;
+      case 'apply-tinker': {
+        const sel = document.getElementById(`tinker-material-${arg}`);
+        if (sel) applyTinkering(state, arg, sel.value);
+        break;
+      }
+      case 'salvage-item': {
+        const result = salvageItem(state, Number(arg));
+        if (result) {
+          const material = getMaterial(result.material);
+          addLog(state, `Salvaged ${result.name} into ${result.amount} ${material ? material.name : result.material}.`, 'dim');
+        }
+        break;
+      }
       case 'export': {
         const ta = document.getElementById('save-io');
         if (ta) ta.value = exportSave(state);

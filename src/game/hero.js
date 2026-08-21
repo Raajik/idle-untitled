@@ -64,6 +64,7 @@ export function getBonuses(state) {
       b.armorDef += Math.floor(item.power * 0.6);
       b.hpFlat += item.power * 2;
     }
+    if (slot === 'shield') b.armorDef += Math.floor(item.power * 0.5);
     for (const affix of item.affixes) {
       b[affix.id] = (b[affix.id] || 0) + affix.value;
     }

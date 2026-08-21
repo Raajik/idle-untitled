@@ -6,7 +6,7 @@
 
 import { getRegion, getPoiById } from '../data/regions.js';
 import { TUTORIAL_ROAD, TUTORIAL_JOURNEY_SECONDS } from '../data/tutorial.js';
-import { modifiedWalkTime, grantRunXp } from './skills.js';
+import { modifiedWalkTime, grantAthleticsXp } from './skills.js';
 import { addLog } from './state.js';
 
 function resetPoiProgress(state) {
@@ -33,7 +33,7 @@ export function startTravelToRegion(state, regionId) {
     return true;
   }
 
-  const duration = modifiedWalkTime(region.walkSeconds, state.hero.skills.run.rank);
+  const duration = modifiedWalkTime(region.walkSeconds, state.hero.skills.athletics.rank);
   state.travel = { kind: 'region', id: regionId, remaining: duration, duration };
   state.location = { regionId: null, poiId: null };
   state.monster = null;
@@ -46,7 +46,7 @@ export function startTravelToPoi(state, poiId) {
   if (!poi) return false;
   if (!state.travel && state.location.poiId === poiId) return false; // already there, not redirecting
 
-  const duration = modifiedWalkTime(poi.walkSeconds, state.hero.skills.run.rank);
+  const duration = modifiedWalkTime(poi.walkSeconds, state.hero.skills.athletics.rank);
   state.travel = { kind: 'poi', id: poiId, remaining: duration, duration };
   state.location = { regionId: poi.regionId, poiId: null };
   state.monster = null;
@@ -77,7 +77,7 @@ export function arrive(state) {
 export function tickTravel(state, dt) {
   if (!state.travel) return false;
   state.travel.remaining -= dt;
-  grantRunXp(state, dt);
+  grantAthleticsXp(state, dt);
   if (state.travel.remaining <= 0) arrive(state);
   return true;
 }
@@ -88,12 +88,12 @@ export function tickTravel(state, dt) {
 export function skipTravel(state, elapsedSec) {
   if (!state.travel) return elapsedSec;
   if (elapsedSec < state.travel.remaining) {
-    grantRunXp(state, elapsedSec);
+    grantAthleticsXp(state, elapsedSec);
     state.travel.remaining -= elapsedSec;
     return null;
   }
   const leftover = elapsedSec - state.travel.remaining;
-  grantRunXp(state, state.travel.remaining);
+  grantAthleticsXp(state, state.travel.remaining);
   arrive(state);
   return leftover;
 }

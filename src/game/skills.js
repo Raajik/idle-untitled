@@ -1,13 +1,17 @@
-// Skills: every skill (Run, the defensives, and the offensives) shares one rank/xp
-// shape and one xp curve, capped at rank 100. Run is trained by walking and shrinks
-// travel time; the defensives avoid an incoming hit (capped at 95% at rank 100); the
-// offensives govern how often the hero's own attacks connect (starting well below
-// even odds, capped at 95% at rank 100) — see `defensiveChance` / `hitChance`.
+// Skills: every skill (Athletics, the defensives, the offensives, gathering,
+// Tinkering) shares one rank/xp shape and one xp curve, capped at rank 100.
+// Athletics is trained by walking; it shrinks travel time and powers Jump
+// (instant shortcut relocation). The defensives avoid an incoming hit (capped
+// at 95% at rank 100) — except Resistance, which instead *mitigates* damage
+// by a percentage (same curve, different meaning). Offense skills govern how
+// often the hero's own attacks connect (starting well below even odds,
+// capped at 95% at rank 100) — see `defensiveChance` / `resistanceMitigationPct`
+// / `hitChance`.
 
 import { addLog } from './state.js';
 
 export const MAX_SKILL_RANK = 100;
-export const RUN_XP_PER_SECOND = 4;
+export const ATHLETICS_XP_PER_SECOND = 4;
 export const COMBAT_SKILL_XP = 1; // xp granted to a combat skill per attack faced/thrown
 
 // Melee weapons (and bare fists) train their own skill; Bow/Crossbow are Ranged;
@@ -25,22 +29,38 @@ export const OFFENSE_SKILLS = [
   { key: 'crossbow', label: 'Crossbow', category: 'Ranged' },
 ];
 
+export const MELEE_WEAPON_BASE_TYPES = ['sword', 'spear', 'axe', 'mace'];
 const WEAPON_BASE_TO_SKILL = { sword: 'sword', spear: 'spear', axe: 'axe', mace: 'mace', bow: 'bow', crossbow: 'crossbow' };
+
+// Gathering skills, in the order they're listed in the Skills tab.
+export const GATHERING_SKILLS = [
+  { key: 'mining', label: 'Mining' },
+  { key: 'foraging', label: 'Foraging' },
+  { key: 'woodcutting', label: 'Woodcutting' },
+  { key: 'fishing', label: 'Fishing' },
+  { key: 'skinning', label: 'Skinning' },
+];
 
 export function xpToNextRank(rank) {
   return Math.ceil(18 * Math.pow(rank + 1, 1.55));
 }
 
-// Base walk time shrinks toward ~10% of base as Run approaches rank 100.
-export function modifiedWalkTime(baseSeconds, runRank) {
-  return Math.max(3, (baseSeconds * 100) / (100 + runRank * 9));
+// Base walk time shrinks toward ~10% of base as Athletics approaches rank 100.
+export function modifiedWalkTime(baseSeconds, athleticsRank) {
+  return Math.max(3, (baseSeconds * 100) / (100 + athleticsRank * 9));
 }
 
-// Chance (%) a defensive skill fully avoids an attack. Concave: fast early gains,
-// long tail up to the 95% cap at rank 100.
+// Chance (%) a defensive skill (Dodge/Block/Parry) fully avoids an attack.
+// Concave: fast early gains, long tail up to the 95% cap at rank 100.
 export function defensiveChance(rank) {
   const r = Math.max(0, Math.min(MAX_SKILL_RANK, rank));
   return 95 * Math.pow(r / MAX_SKILL_RANK, 0.7);
+}
+
+// Resistance doesn't avoid a hit — it reduces the damage of one that connects,
+// by this percentage. Same curve shape/cap as defensiveChance, different job.
+export function resistanceMitigationPct(rank) {
+  return defensiveChance(rank);
 }
 
 // Chance (%) an attack connects at all, given the wielder's relevant offense skill.
@@ -72,8 +92,17 @@ export function trainSkill(state, skill, name, xp) {
   if (leveled) addLog(state, `${name} increased to ${skill.rank}.`, 'good');
 }
 
-export function grantRunXp(state, seconds) {
-  trainSkill(state, state.hero.skills.run, 'Run', seconds * RUN_XP_PER_SECOND);
+export function grantAthleticsXp(state, seconds) {
+  trainSkill(state, state.hero.skills.athletics, 'Athletics', seconds * ATHLETICS_XP_PER_SECOND);
+}
+
+// Jump (shortcuts): instant relocation between two linked POIs, gated by a
+// cooldown that shrinks from 1 hour toward 5 minutes as Athletics ranks up —
+// same shape as Recall's cooldown.
+export const JUMP_XP_ON_USE = 15;
+
+export function jumpCooldownSeconds(athleticsRank) {
+  return Math.max(300, (3600 * 100) / (100 + athleticsRank * 11));
 }
 
 // Lifestone Recall: instant travel to any unlocked Lifestone, gated by a cooldown

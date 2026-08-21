@@ -271,6 +271,14 @@ button.btn.primary { border-color: var(--accent); color: var(--accent); }
 }
 .upgrade-row .desc { font-size: 12px; color: var(--text-dim); }
 
+/* Jump / shortcut tiles */
+.jump-tile { border-color: var(--soul); color: var(--soul); }
+.jump-tile:hover:not(:disabled) { border-color: var(--soul); color: var(--soul); opacity: 0.8; }
+
+/* Shop panel (Nearby) */
+.shop-panel { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.shop-panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+
 /* Dashboard tiles */
 #overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; }
 

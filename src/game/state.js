@@ -1,8 +1,9 @@
 // Central game state. One object, mutated by game logic, read by the UI.
 
 import { DAMAGE_TYPES } from '../data/regions.js';
+import { rollShopStock } from '../data/shops.js';
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 function freshSkill() {
   return { rank: 0, xp: 0 };
@@ -17,11 +18,18 @@ function freshResistance() {
 // Keys match skills.js OFFENSE_SKILLS; duplicated here (rather than imported) to
 // avoid a state.js <-> skills.js import cycle (skills.js needs addLog from here).
 const OFFENSE_SKILL_KEYS = ['unarmed', 'sword', 'spear', 'axe', 'mace', 'life', 'war', 'void', 'bow', 'crossbow'];
+const GATHERING_SKILL_KEYS = ['mining', 'foraging', 'woodcutting', 'fishing', 'skinning'];
 
 function freshOffense() {
   const o = {};
   for (const k of OFFENSE_SKILL_KEYS) o[k] = freshSkill();
   return o;
+}
+
+function freshGathering() {
+  const g = {};
+  for (const k of GATHERING_SKILL_KEYS) g[k] = freshSkill();
+  return g;
 }
 
 export function createInitialState() {
@@ -51,17 +59,20 @@ export function createInitialState() {
       respawnTimer: 0,
       dead: false,
       skills: {
-        run: freshSkill(),
+        athletics: freshSkill(), // renamed from run; also powers Jump/shortcuts
         dodge: freshSkill(),
         block: freshSkill(),
         parry: freshSkill(),
         resistance: freshResistance(),
         offense: freshOffense(),
+        gathering: freshGathering(),
+        tinkering: freshSkill(),
         lifestone: { recall: freshSkill() },
       },
     },
     location: { regionId: null, poiId: null }, // null,null = still on the road to Holtburg
     travel: null, // { kind: 'region'|'poi', id, remaining, duration }
+    gathering: null, // { nodeId, remaining, duration } — suspends combat like travel does
     progress: {
       unlockedRegions: [], // arrived at
       visitedPois: [],
@@ -78,10 +89,13 @@ export function createInitialState() {
       firstDeathHandled: false, // whether Alcott's "death teaches lessons" beat has fired
       recallUnlocked: false,
       recallCooldown: 0, // seconds remaining until Recall can be used again
+      jumpCooldown: 0, // seconds remaining until a shortcut Jump can be used again
     },
     monster: null, // current monster instance { name, hp, maxHp, atk, def, xp, pyreals, isBoss }
-    equipment: { weapon: null, armor: null, amulet: null, ring: null },
+    equipment: { weapon: null, armor: null, shield: null, amulet: null, ring: null },
     inventory: [],
+    materials: {}, // materialId -> count, no cap
+    shops: rollShopStock(), // shopId -> stock array, rolled once at creation
     training: { atk: 0, hp: 0, pyreals: 0 },
     rebirth: {
       souls: 0,
@@ -95,6 +109,7 @@ export function createInitialState() {
     ui: {
       seenUnlocks: [], // ids the player has been toasted about
       activeTab: 'battle',
+      activeShop: null, // which shop panel is expanded in the Battle tab's town view
     },
     lastSeen: Date.now(),
   };
@@ -113,12 +128,15 @@ export function resetRun(state) {
   state.hero.skills.lifestone = recallSkill;
   state.location = fresh.location;
   state.travel = fresh.travel;
+  state.gathering = fresh.gathering;
   state.progress = fresh.progress;
   state.progress.recallUnlocked = recallUnlocked;
   state.progress.firstDeathHandled = firstDeathHandled;
   state.monster = null;
   state.equipment = fresh.equipment;
   state.inventory = fresh.inventory;
+  state.materials = fresh.materials;
+  state.shops = rollShopStock();
   state.training = fresh.training;
   state.log = fresh.log;
   // keep: rebirth, settings, ui.seenUnlocks, lastSeen, onboarding, hero.name, Recall skill/unlock

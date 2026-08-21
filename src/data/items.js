@@ -1,9 +1,9 @@
 // Item definitions: slots, rarities, affix tables, name generation. Pure data + helpers.
 
-export const SLOTS = ['weapon', 'armor', 'amulet', 'ring'];
+export const SLOTS = ['weapon', 'armor', 'shield', 'amulet', 'ring'];
 
 // Slots always shown once Inventory unlocks.
-export const STARTING_SLOTS = ['weapon', 'armor', 'amulet', 'ring'];
+export const STARTING_SLOTS = ['weapon', 'armor', 'shield', 'amulet', 'ring'];
 
 // Hidden until progress.aetheriaSlots unlocks them — nothing drops these yet.
 export const AETHERIA_SLOTS = ['aetheria1', 'aetheria2', 'aetheria3'];
@@ -28,6 +28,7 @@ export const AFFIXES = [
 export const BASE_NAMES = {
   weapon: ['Sword', 'Axe', 'Mace', 'Spear', 'Bow', 'Crossbow'],
   armor: ['Leather Armor', 'Studded Leather', 'Chainmail', 'Plate Armor', 'Covenant Armor'],
+  shield: ['Buckler', 'Round Shield', 'Kite Shield', 'Tower Shield'],
   amulet: ['Amulet', 'Necklace', 'Pendant', 'Talisman'],
   ring: ['Ring', 'Band', 'Signet', 'Loop'],
 };

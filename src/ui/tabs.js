@@ -2,9 +2,26 @@
 
 import { REGIONS, getRegion, getPoiById, DAMAGE_TYPES } from '../data/regions.js';
 import { derivedStats, xpForLevel, totalXpForLevel, attributeCost, ATTRIBUTES } from '../game/hero.js';
-import { xpToNextRank, defensiveChance, hitChance, activeWeaponSkill, recallCooldownSeconds, OFFENSE_SKILLS, MAX_SKILL_RANK } from '../game/skills.js';
+import {
+  xpToNextRank,
+  defensiveChance,
+  resistanceMitigationPct,
+  hitChance,
+  activeWeaponSkill,
+  recallCooldownSeconds,
+  jumpCooldownSeconds,
+  OFFENSE_SKILLS,
+  GATHERING_SKILLS,
+  MAX_SKILL_RANK,
+} from '../game/skills.js';
 import { computeDepth } from '../game/combat.js';
 import { canRecall } from '../game/lifestone.js';
+import { availableShortcutsFrom, canJump } from '../game/shortcuts.js';
+import { nodesForRegion } from '../data/gatherNodes.js';
+import { getMaterial, materialsForSlot } from '../data/materials.js';
+import { canTinker, TINKER_COST } from '../game/tinkering.js';
+import { SHOPS, getShop } from '../data/shops.js';
+import { buyPrice, sellPrice, healCost } from '../game/shop.js';
 import { TRAINING_TRACKS, trainingCost } from '../game/training.js';
 import { soulsAvailable, canRebirth, REBIRTH_UPGRADES } from '../game/prestige.js';
 import { itemScore } from '../game/loot.js';
@@ -93,6 +110,55 @@ function combatDisplayHtml(state, headerHtml, extraHtml = '') {
     </div>`;
 }
 
+// --- Nearby shops (rendered inside the Battle tab's Nearby panel) ---
+function shopPanelHtml(state) {
+  const shopId = state.ui.activeShop;
+  if (!shopId) return '';
+  const shop = getShop(shopId);
+  if (!shop) return '';
+
+  if (shopId === 'physician') {
+    const cost = healCost(state);
+    return `<div class="shop-panel">
+      <div class="shop-panel-head"><b>${esc(shop.name)}</b><button class="btn" data-action="close-shop">Close</button></div>
+      <p class="muted">Heal to full for pyreals.</p>
+      <button class="btn primary" data-action="heal-service" ${cost > 0 && state.pyreals >= cost ? '' : 'disabled'}>Heal — ${fmt(cost)}p</button>
+    </div>`;
+  }
+
+  const stock = state.shops[shopId] || [];
+  const stockHtml = stock.length
+    ? stock
+        .map((item, i) => {
+          const price = buyPrice(item);
+          const affixes = item.affixes.map((a) => a.label).join(', ');
+          return `<div class="item">
+            <div class="name rarity-${item.rarity}">${esc(item.name)} <span class="muted">[${item.rarity} ${item.slot}]</span></div>
+            <div class="stats">${item.power} power${affixes ? ' · ' + esc(affixes) : ''}</div>
+            <div class="actions"><button class="btn" data-action="buy-item" data-arg="${shopId}:${i}" ${state.pyreals >= price ? '' : 'disabled'}>Buy — ${fmt(price)}p</button></div>
+          </div>`;
+        })
+        .join('')
+    : '<p class="muted">Sold out for now.</p>';
+
+  const sellHtml = state.inventory.length
+    ? state.inventory
+        .map(
+          (item) => `<div class="item">
+        <div class="name rarity-${item.rarity}">${esc(item.name)}</div>
+        <div class="actions"><button class="btn" data-action="sell-item" data-arg="${item.id}">Sell — ${fmt(sellPrice(item))}p</button></div>
+      </div>`
+        )
+        .join('')
+    : '<p class="muted">Nothing in your inventory to sell.</p>';
+
+  return `<div class="shop-panel">
+    <div class="shop-panel-head"><b>${esc(shop.name)}</b><button class="btn" data-action="close-shop">Close</button></div>
+    <div class="muted" style="margin:6px 0 4px">For sale</div>${stockHtml}
+    <div class="muted" style="margin:10px 0 4px">Sell your gear</div>${sellHtml}
+  </div>`;
+}
+
 // --- Battle ---
 export function battleTab(state) {
   if (state.onboarding.step !== 'done') return onboardingHtml(state);
@@ -123,8 +189,17 @@ export function battleTab(state) {
     .join('');
 
   let poiSection = '';
+  let nearbySection = '';
+  let gatherSection = '';
   if (state.location.regionId) {
     const region = getRegion(state.location.regionId);
+    const jumpTargets = new Map();
+    if (!travel) {
+      for (const s of availableShortcutsFrom(state)) {
+        const destId = s.from === state.location.poiId ? s.to : s.from;
+        jumpTargets.set(destId, s);
+      }
+    }
     const poiTiles = region.pois
       .map((poi) => {
         const here = state.location.poiId === poi.id;
@@ -135,10 +210,37 @@ export function battleTab(state) {
           : here
           ? '<span class="sub">here</span>'
           : `<span class="sub">Travel (${formatDuration(poi.walkSeconds)})</span>`;
-        return `<button class="${cls}" id="poi-tile-${poi.id}" title="Travel" data-action="travel-poi" data-arg="${poi.id}">${esc(poi.name)}${sub}</button>`;
+        const travelBtn = `<button class="${cls}" id="poi-tile-${poi.id}" title="Travel" data-action="travel-poi" data-arg="${poi.id}">${esc(poi.name)}${sub}</button>`;
+        const shortcut = jumpTargets.get(poi.id);
+        const jumpBtn = shortcut
+          ? `<button class="tile poi-tile jump-tile" title="${esc(shortcut.name)}" data-action="jump-shortcut" data-arg="${shortcut.id}" ${canJump(state) ? '' : 'disabled'}>⚡ Jump${canJump(state) ? '' : ` (${formatDuration(state.progress.jumpCooldown)})`}</button>`
+          : '';
+        return travelBtn + jumpBtn;
       })
       .join('');
     poiSection = `<div class="panel"><h2>Points of Interest — ${esc(region.name)}</h2><div class="tile-list">${poiTiles}</div></div>`;
+
+    if (!state.location.poiId) {
+      const shopTiles = SHOPS.filter((s) => s.regionId === region.id)
+        .map((shop) => {
+          const cls = ['tile', 'shop-tile', state.ui.activeShop === shop.id ? 'current' : ''].join(' ');
+          return `<button class="${cls}" data-action="open-shop" data-arg="${shop.id}">${esc(shop.name)}</button>`;
+        })
+        .join('');
+      nearbySection = `<div class="panel"><h2>Nearby</h2><div class="tile-list">${shopTiles}</div>${shopPanelHtml(state)}</div>`;
+
+      const nodeTiles = nodesForRegion(region.id)
+        .map((node) => {
+          const gatheringHere = state.gathering && state.gathering.nodeId === node.id;
+          const label = GATHERING_SKILLS.find((g) => g.key === node.skill)?.label || node.skill;
+          const sub = gatheringHere
+            ? `<span class="travel-timer" id="gather-timer-${node.id}">${formatDuration(state.gathering.remaining)}</span>`
+            : `<span class="sub">${label} (${formatDuration(node.gatherSeconds)})</span>`;
+          return `<button class="tile" data-action="start-gather" data-arg="${node.id}" ${state.gathering || travel ? 'disabled' : ''}>${esc(node.name)}${sub}</button>`;
+        })
+        .join('');
+      gatherSection = `<div class="panel"><h2>Gathering</h2><div class="tile-list">${nodeTiles}</div></div>`;
+    }
   }
 
   let combatPanel = '';
@@ -159,6 +261,8 @@ export function battleTab(state) {
   return `
     <div class="panel"><h2>Regions</h2><div class="tile-list">${regionTiles}</div></div>
     ${poiSection}
+    ${nearbySection}
+    ${gatherSection}
     ${combatPanel}
     <div class="panel"><h2>Combat Log</h2><div class="log" id="combat-log">${logHtml(state)}</div></div>`;
 }
@@ -210,21 +314,27 @@ function skillRow(name, skill, chanceLabel) {
 
 export function skillsTab(state) {
   const skills = state.hero.skills;
-  const run = skills.run;
-  const speedPct = Math.round(100 - (100 * 100) / (100 + run.rank * 9));
+  const athletics = skills.athletics;
+  const speedPct = Math.round(100 - (100 * 100) / (100 + athletics.rank * 9));
+  const hasShield = !!state.equipment.shield;
+  const weapon = state.equipment.weapon;
+  const hasMeleeWeapon = !!(weapon && ['sword', 'spear', 'axe', 'mace'].includes(weapon.baseType));
 
   const defensiveRows = [
-    ['Dodge', skills.dodge],
-    ['Block', skills.block],
-    ['Parry', skills.parry],
+    ['Dodge', skills.dodge, true, ''],
+    ['Block', skills.block, hasShield, 'needs a shield equipped'],
+    ['Parry', skills.parry, hasMeleeWeapon, 'needs a melee weapon equipped'],
   ]
-    .map(([name, skill]) => skillRow(name, skill, `${defensiveChance(skill.rank).toFixed(1)}% avoid`))
+    .map(([name, skill, eligible, hint]) => {
+      const chance = `${defensiveChance(skill.rank).toFixed(1)}% avoid${eligible ? '' : ` (inactive — ${hint})`}`;
+      return skillRow(name, skill, chance);
+    })
     .join('');
 
   const resistRows = DAMAGE_TYPES.map((t) => {
     const skill = skills.resistance[t];
     const label = t[0].toUpperCase() + t.slice(1);
-    return skillRow(label, skill, `${defensiveChance(skill.rank).toFixed(1)}% avoid`);
+    return skillRow(label, skill, `${resistanceMitigationPct(skill.rank).toFixed(1)}% less damage taken`);
   }).join('');
 
   const offenseByCategory = {};
@@ -246,28 +356,78 @@ export function skillsTab(state) {
     })
     .join('');
 
+  const gatherRows = GATHERING_SKILLS.map((g) => skillRow(g.label, skills.gathering[g.key])).join('');
+
   return `
     <div class="panel">
-      ${skillRow('Run', run, `${speedPct}% faster travel`)}
-      <p class="muted" style="margin-top:4px">Trained only by walking.</p>
+      ${skillRow('Athletics', athletics, `${speedPct}% faster travel · ${formatDuration(jumpCooldownSeconds(athletics.rank))} Jump cooldown`)}
+      <p class="muted" style="margin-top:4px">Trained by walking (and by using Jump). Powers travel speed and shortcut Jumps.</p>
     </div>
     <div class="panel">
       <h2>Defensives</h2>
-      <p class="muted" style="margin-bottom:8px">Each defends against any attack in sequence — Dodge, then Block, then Parry, then Resistance for the attack's damage type. Trained by facing attacks in combat; each avoided hit costs Stamina, capping out at 95% avoidance at rank 100.</p>
+      <p class="muted" style="margin-bottom:8px">Each defends against any attack in sequence — Dodge, then Block (shield required), then Parry (melee weapon required). Each only trains while its gear requirement is met; an avoided hit costs Stamina, capping out at 95% avoidance at rank 100.</p>
       ${defensiveRows}
     </div>
     <div class="panel">
       <h2>Resistance — by damage type</h2>
+      <p class="muted" style="margin-bottom:8px">Doesn't avoid a hit — reduces its damage, once Dodge/Block/Parry have already failed. Trains on every hit of its type that connects, capping at 95% mitigation at rank 100.</p>
       ${resistRows}
     </div>
     <div class="panel"><h2>Offense</h2><p class="muted">Whichever weapon you have equipped (or bare fists) trains its own skill and governs how often your attacks connect, from even odds untrained up to 95% at rank 100.</p></div>
-    ${offenseSections}`;
+    ${offenseSections}
+    <div class="panel"><h2>Gathering</h2>${gatherRows}</div>
+    <div class="panel">
+      ${skillRow('Tinkering', skills.tinkering)}
+      <p class="muted" style="margin-top:4px">Consumes materials to add or boost an affix on equipped gear. See the Tinkering tab.</p>
+    </div>`;
+}
+
+// --- Tinkering ---
+export function tinkeringTab(state) {
+  const heldMaterials = Object.entries(state.materials)
+    .filter(([, count]) => count > 0)
+    .map(([id, count]) => {
+      const m = getMaterial(id);
+      return `<div class="stat-row"><span class="k">${esc(m ? m.name : id)}</span><span class="v">${count}</span></div>`;
+    })
+    .join('');
+
+  const slotRows = ['weapon', 'armor', 'shield', 'amulet', 'ring']
+    .map((slot) => {
+      const item = state.equipment[slot];
+      if (!item) return '';
+      const compatible = materialsForSlot(slot).filter((m) => (state.materials[m.id] || 0) >= TINKER_COST);
+      const body = compatible.length
+        ? `<select class="text-input" id="tinker-material-${slot}">${compatible.map((m) => `<option value="${m.id}">${esc(m.name)} (${state.materials[m.id]})</option>`).join('')}</select>
+           <button class="btn" data-action="apply-tinker" data-arg="${slot}">Apply (${TINKER_COST})</button>`
+        : `<span class="muted">No compatible materials (needs ${TINKER_COST}+ of a matching type)</span>`;
+      return `<div class="upgrade-row">
+        <div><b>${esc(item.name)}</b> <span class="muted">[${slot}]</span></div>
+        <div class="actions">${body}</div>
+      </div>`;
+    })
+    .join('');
+
+  return `
+    <div class="panel">
+      <h2>Tinkering</h2>
+      <p class="muted">Consumes materials to add or boost an affix on an equipped item. A material only fits the slot it matches — no risk, no workmanship, just raw materials.</p>
+    </div>
+    <div class="panel"><h2>Equipped Gear</h2>${slotRows || '<p class="muted">Nothing equipped yet.</p>'}</div>
+    <div class="panel"><h2>Materials</h2>${heldMaterials || '<p class="muted">None gathered or salvaged yet.</p>'}</div>`;
 }
 
 // --- Inventory ---
 function itemHtml(state, item, equipped) {
   const affixes = item.affixes.map((a) => a.label).join(', ');
-  const base = item.slot === 'weapon' ? `${item.power} ATK` : item.slot === 'armor' ? `${Math.floor(item.power * 0.6)} DEF, +${item.power * 2} HP` : `${item.power} power`;
+  const base =
+    item.slot === 'weapon'
+      ? `${item.power} ATK`
+      : item.slot === 'armor'
+      ? `${Math.floor(item.power * 0.6)} DEF, +${item.power * 2} HP`
+      : item.slot === 'shield'
+      ? `${Math.floor(item.power * 0.5)} DEF`
+      : `${item.power} power`;
   let cmp = '';
   if (!equipped) {
     const cur = state.equipment[item.slot];
@@ -276,7 +436,10 @@ function itemHtml(state, item, equipped) {
   }
   const action = equipped
     ? ''
-    : `<div class="actions"><button class="btn" data-action="equip" data-arg="${item.id}">Equip</button></div>`;
+    : `<div class="actions">
+        <button class="btn" data-action="equip" data-arg="${item.id}">Equip</button>
+        <button class="btn" data-action="salvage-item" data-arg="${item.id}">Salvage</button>
+      </div>`;
   return `<div class="item">
     <div class="name rarity-${item.rarity}">${esc(item.name)} <span class="muted">[${item.rarity} ${item.slot}]</span> ${cmp}</div>
     <div class="stats">${base}${affixes ? ' · ' + esc(affixes) : ''}</div>
@@ -297,13 +460,22 @@ export function inventoryTab(state) {
     ? state.inventory.map((it) => itemHtml(state, it, false)).join('')
     : '<div class="muted">No loot yet. Monsters drop equipment as you fight.</div>';
 
+  const heldMaterials = Object.entries(state.materials)
+    .filter(([, count]) => count > 0)
+    .map(([id, count]) => {
+      const m = getMaterial(id);
+      return `<div class="stat-row"><span class="k">${esc(m ? m.name : id)}</span><span class="v">${count}</span></div>`;
+    })
+    .join('');
+
   return `
     <div class="panel"><h2>Equipped</h2><div class="equip-grid">${equippedGrid}</div></div>
     <div class="panel">
       <h2>Inventory (${state.inventory.length})</h2>
       <div style="margin-bottom:8px"><button class="btn" data-action="toggle-autoequip">Auto-equip: ${state.settings.autoEquip ? 'ON' : 'OFF'}</button></div>
       ${inv}
-    </div>`;
+    </div>
+    <div class="panel"><h2>Materials</h2>${heldMaterials || '<p class="muted">None gathered or salvaged yet.</p>'}</div>`;
 }
 
 // --- Training ---
