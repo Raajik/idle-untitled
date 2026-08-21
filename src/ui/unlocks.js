@@ -8,10 +8,23 @@ import { canRebirth } from '../game/prestige.js';
 
 export const UNLOCKS = [
   { id: 'battle', kind: 'tab', label: '⚔ Battle', when: () => true },
-  { id: 'hero', kind: 'category', label: '🧙 Hero', when: (s) => s.hero.level >= 2 || s.progress.visitedPois.length > 0 || s.progress.totalDrops >= 1 },
+  {
+    id: 'hero',
+    kind: 'category',
+    label: (s) => `🧙 ${s.hero.name || 'Hero'}`,
+    when: (s) => s.hero.level >= 2 || s.progress.visitedPois.length > 0 || s.progress.totalDrops >= 1,
+  },
   { id: 'attributes', kind: 'tab', parent: 'hero', label: 'Attributes', when: (s) => s.hero.level >= 2, toast: '🧙 Attributes unlocked — allocate your stat points!' },
   { id: 'skills', kind: 'tab', parent: 'hero', label: 'Skills', when: (s) => s.progress.visitedPois.length > 0 || s.travel !== null || s.progress.unlockedRegions.length > 0, toast: '🏃 Skills unlocked — Run trains as you walk!' },
   { id: 'inventory', kind: 'tab', parent: 'hero', label: 'Inventory', when: (s) => s.progress.totalDrops >= 1, toast: '🎒 Inventory unlocked — monsters can drop loot!' },
+  {
+    id: 'lifestone',
+    kind: 'category',
+    label: '🪦 Lifestone',
+    when: (s) => s.progress.recallUnlocked,
+    toast: '🪦 Lifestone Recall unlocked — instant travel between Lifestones you\'ve bonded with!',
+  },
+  { id: 'recall', kind: 'tab', parent: 'lifestone', label: 'Recall', when: (s) => s.progress.recallUnlocked },
   { id: 'training', kind: 'tab', label: '💰 Training', when: (s) => s.progress.totalPyrealsEarned >= 200, toast: '💰 Training unlocked — spend pyreals on permanent % upgrades!' },
   { id: 'rebirth', kind: 'tab', label: '✦ Rebirth', when: (s) => s.progress.bossesKilled >= 1, toast: '✦ Rebirth unlocked — a greater power stirs...', teaser: (s) => !canRebirth(s) },
   { id: 'overview', kind: 'tab', label: '📊 Overview', when: (s) => s.rebirth.count >= 1, toast: '📊 Overview unlocked — monitor everything at once!' },

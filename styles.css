@@ -294,6 +294,20 @@ button.btn.primary { border-color: var(--accent); color: var(--accent); }
 .muted { color: var(--text-dim); }
 .gold { color: var(--gold); }
 .soul { color: var(--soul); }
+
+.text-input {
+  background: var(--bg-inset);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font: inherit;
+  padding: 6px 10px;
+}
+.text-input:focus { outline: none; border-color: var(--accent); }
+
+/* Onboarding / intro narrative */
+.intro-panel p { margin-bottom: 4px; line-height: 1.6; }
+.intro-panel em { color: var(--accent); font-style: italic; }
 textarea.save-io {
   width: 100%;
   height: 70px;

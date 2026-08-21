@@ -8,7 +8,9 @@ import { createRenderer } from './ui/render.js';
 
 let state = loadGame() || createInitialState();
 
-if (state.log.length === 0) {
+if (state.log.length === 0 && state.onboarding.step === 'done') {
+  // Only for saves that skip the intro entirely (migrated pre-onboarding saves
+  // with an empty log); fresh characters get the onboarding screen instead.
   addLog(state, 'You wake on the road into Holtburg, roughly 30 seconds out. Your blade moves on its own...', 'dim');
 }
 

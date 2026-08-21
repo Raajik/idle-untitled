@@ -2,8 +2,9 @@
 
 import { REGIONS, getRegion, getPoiById, DAMAGE_TYPES } from '../data/regions.js';
 import { derivedStats, xpForLevel, totalXpForLevel, attributeCost, ATTRIBUTES } from '../game/hero.js';
-import { xpToNextRank, defensiveChance, hitChance, activeWeaponSkill, OFFENSE_SKILLS, MAX_SKILL_RANK } from '../game/skills.js';
+import { xpToNextRank, defensiveChance, hitChance, activeWeaponSkill, recallCooldownSeconds, OFFENSE_SKILLS, MAX_SKILL_RANK } from '../game/skills.js';
 import { computeDepth } from '../game/combat.js';
+import { canRecall } from '../game/lifestone.js';
 import { TRAINING_TRACKS, trainingCost } from '../game/training.js';
 import { soulsAvailable, canRebirth, REBIRTH_UPGRADES } from '../game/prestige.js';
 import { itemScore } from '../game/loot.js';
@@ -29,13 +30,84 @@ function logHtml(state, limit = 40) {
   return lines.map((l) => `<div class="${l.cls}">${esc(l.text)}</div>`).join('');
 }
 
-// --- Battle ---
-export function battleTab(state) {
+// --- Onboarding: name, the Lifestone question, and (if "no") Alcott's intro ---
+function onboardingHtml(state) {
+  const step = state.onboarding.step;
+  const name = esc(state.hero.name || '');
+
+  if (step === 'name') {
+    return `<div class="panel intro-panel">
+      <p>You feel as if you've just woken up from a very long and uncomfortable sleep. Your entire body is sore.</p>
+      <p style="margin-top:8px">A voice, unfamiliar, asks: <em>"...first time?"</em></p>
+      <p class="muted" style="margin-top:12px">What's your name, newbie?</p>
+      <div style="display:flex; gap:8px; margin-top:8px">
+        <input type="text" id="name-input" class="text-input" maxlength="24" placeholder="Enter your name" />
+        <button class="btn primary" data-action="submit-name">Continue</button>
+      </div>
+    </div>`;
+  }
+
+  if (step === 'seen-lifestone') {
+    return `<div class="panel intro-panel">
+      <p>The stranger looks you over. "Have you ever seen a Lifestone before, ${name}?"</p>
+      <div style="display:flex; gap:8px; margin-top:10px">
+        <button class="btn primary" data-action="answer-lifestone" data-arg="yes">Yes</button>
+        <button class="btn" data-action="answer-lifestone" data-arg="no">No</button>
+      </div>
+    </div>`;
+  }
+
+  // step === 'alcott-explains'
+  return `<div class="panel intro-panel">
+    <p>"Name's Alcott. That glow behind you — that's a Lifestone. It'll keep you from dying for good, though it won't spare you the pain of it. Bond with enough of them and you'll be able to call on one to travel between them in an instant."</p>
+    <p style="margin-top:8px">He points toward a distant huddle of rooftops. "That's Holtburg. Stay sharp on the way — and if trouble finds you, my friend Thorolf there can help you get your bearings."</p>
+    <button class="btn primary" data-action="ack-intro" style="margin-top:10px">Set out for Holtburg</button>
+  </div>`;
+}
+
+// Shared monster/hero combat display used by both real POI fights and the tutorial
+// road — `extraHtml` slots in anything extra (e.g. a Flee button during the tutorial).
+function combatDisplayHtml(state, headerHtml, extraHtml = '') {
   const h = state.hero;
   const d = derivedStats(state);
   const m = state.monster;
+  const xpProgress = state.progress.totalXpEarned - totalXpForLevel(h.level);
+  const aw = activeWeaponSkill(state);
+  const attackLine = aw.weaponName ? `Attacking with ${esc(aw.weaponName)}` : 'Fighting unarmed';
+  return `
+    <div class="panel">
+      ${headerHtml}
+      <div><b id="m-name" class="${m && m.isBoss ? 'soul' : ''}">${m ? esc(m.name) + ` (Lv ${m.level})` + (m.isBoss ? ' ☠ BOSS' : '') : 'Searching...'}</b></div>
+      ${bar('hp', m ? (m.hp / m.maxHp) * 100 : 0, m ? `${Math.max(0, Math.ceil(m.hp))} / ${m.maxHp}` : '...', 'm-hp', 'monster')}
+      <div id="m-meta" class="muted">${m ? `ATK ${m.atk} · DEF ${m.def} · ${esc(m.dmgType)}` : ''}</div>
+      ${extraHtml}
+      <h2 style="margin-top:14px">You — Level ${h.level}</h2>
+      ${bar('xp', (xpProgress / xpForLevel(h.level)) * 100, `XP ${fmt(xpProgress)} / ${fmt(xpForLevel(h.level))}`, 'h-xp')}
+      <div class="vitals-row">
+        ${bar('hp', (h.hp / d.maxHp) * 100, h.dead ? 'Dead... reviving' : `${Math.ceil(h.hp)} / ${d.maxHp} HP`, 'h-hp', 'hero')}
+        ${bar('stamina', (h.stamina / d.maxStamina) * 100, `${Math.ceil(h.stamina)} / ${d.maxStamina} Stamina`, 'h-sta')}
+        ${bar('mana', (h.mana / d.maxMana) * 100, `${Math.ceil(h.mana)} / ${d.maxMana} Mana`, 'h-mana')}
+      </div>
+      <div id="h-attack-line" class="muted">${attackLine}, ${esc(aw.label)} (Rank ${aw.skill.rank}).</div>
+      <div id="h-stats" class="muted">ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s · Crit ${d.critChance.toFixed(1)}% · ${fmt(state.pyreals)} pyreals</div>
+    </div>`;
+}
+
+// --- Battle ---
+export function battleTab(state) {
+  if (state.onboarding.step !== 'done') return onboardingHtml(state);
+
   const p = state.progress;
   const travel = state.travel;
+
+  if (travel && travel.tutorial) {
+    const header = `<h2>The Road to Holtburg <span class="muted" style="font-size:0.7em">${formatDuration(travel.remaining)} remaining</span></h2>
+      <p class="muted" style="margin-bottom:8px">You're unarmed and alone out here. Fight if you must, or try to slip past.</p>`;
+    const fleeBtn = state.monster ? `<div class="actions" style="margin:8px 0"><button class="btn" data-action="flee-tutorial">Try to run away</button></div>` : '';
+    return `
+      ${combatDisplayHtml(state, header, fleeBtn)}
+      <div class="panel"><h2>Combat Log</h2><div class="log" id="combat-log">${logHtml(state)}</div></div>`;
+  }
 
   const regionTiles = REGIONS.map((r) => {
       const arrived = p.unlockedRegions.includes(r.id);
@@ -79,26 +151,9 @@ export function battleTab(state) {
   } else {
     const poi = getPoiById(state.location.poiId);
     const depth = computeDepth(p);
-    const xpProgress = state.progress.totalXpEarned - totalXpForLevel(h.level);
     const bossNote = depth >= 0.75 ? ` · boss may appear` : '';
-    const aw = activeWeaponSkill(state);
-    const attackLine = aw.weaponName ? `Attacking with ${esc(aw.weaponName)}` : 'Fighting unarmed';
-    combatPanel = `
-    <div class="panel">
-      <h2>${esc(poi.name)} <span class="muted" style="font-size:0.7em">+${Math.round(depth * 100)}% difficulty${bossNote}</span></h2>
-      <div><b id="m-name" class="${m && m.isBoss ? 'soul' : ''}">${m ? esc(m.name) + ` (Lv ${m.level})` + (m.isBoss ? ' ☠ BOSS' : '') : 'Searching...'}</b></div>
-      ${bar('hp', m ? (m.hp / m.maxHp) * 100 : 0, m ? `${Math.max(0, Math.ceil(m.hp))} / ${m.maxHp}` : '...', 'm-hp', 'monster')}
-      <div id="m-meta" class="muted">${m ? `ATK ${m.atk} · DEF ${m.def} · ${esc(m.dmgType)}` : ''}</div>
-      <h2 style="margin-top:14px">You — Level ${h.level}</h2>
-      ${bar('xp', (xpProgress / xpForLevel(h.level)) * 100, `XP ${fmt(xpProgress)} / ${fmt(xpForLevel(h.level))}`, 'h-xp')}
-      <div class="vitals-row">
-        ${bar('hp', (h.hp / d.maxHp) * 100, h.dead ? 'Dead... reviving' : `${Math.ceil(h.hp)} / ${d.maxHp} HP`, 'h-hp', 'hero')}
-        ${bar('stamina', (h.stamina / d.maxStamina) * 100, `${Math.ceil(h.stamina)} / ${d.maxStamina} Stamina`, 'h-sta')}
-        ${bar('mana', (h.mana / d.maxMana) * 100, `${Math.ceil(h.mana)} / ${d.maxMana} Mana`, 'h-mana')}
-      </div>
-      <div id="h-attack-line" class="muted">${attackLine}, ${esc(aw.label)} (Rank ${aw.skill.rank}).</div>
-      <div id="h-stats" class="muted">ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s · Crit ${d.critChance.toFixed(1)}% · ${fmt(state.pyreals)} pyreals</div>
-    </div>`;
+    const header = `<h2>${esc(poi.name)} <span class="muted" style="font-size:0.7em">+${Math.round(depth * 100)}% difficulty${bossNote}</span></h2>`;
+    combatPanel = combatDisplayHtml(state, header);
   }
 
   return `
@@ -318,6 +373,32 @@ export function overviewTab(state) {
   tiles.push(`<div class="panel"><h2>Log</h2><div class="log" style="height:180px" id="combat-log">${logHtml(state, 20)}</div></div>`);
 
   return `<div id="overview-grid">${tiles.join('')}</div>`;
+}
+
+// --- Lifestone Recall ---
+export function recallTab(state) {
+  const recall = state.hero.skills.lifestone.recall;
+  const need = recall.rank >= MAX_SKILL_RANK ? 1 : xpToNextRank(recall.rank);
+  const cooldown = state.progress.recallCooldown;
+  const ready = canRecall(state);
+
+  const destinations = REGIONS.filter((r) => state.progress.unlockedRegions.includes(r.id))
+    .map((r) => {
+      const here = state.location.regionId === r.id && !state.location.poiId && !state.travel;
+      return `<div class="upgrade-row">
+        <div><b>${esc(r.name)}</b>${here ? ' <span class="muted">(here)</span>' : ''}</div>
+        <button class="btn" data-action="recall" data-arg="${r.id}" ${ready && !here ? '' : 'disabled'}>Recall</button>
+      </div>`;
+    })
+    .join('');
+
+  return `
+    <div class="panel">
+      <h2>Lifestone Recall — rank ${recall.rank}/${MAX_SKILL_RANK}</h2>
+      ${bar('xp', recall.rank >= MAX_SKILL_RANK ? 100 : (recall.xp / need) * 100, recall.rank >= MAX_SKILL_RANK ? 'MAX' : `XP ${fmt(recall.xp)} / ${fmt(need)}`)}
+      <p class="muted" style="margin-top:8px">Instantly travel to any Lifestone you've bonded with. Cooldown: ${formatDuration(recallCooldownSeconds(recall.rank))} at this rank${cooldown > 0 ? ` — <span id="recall-cooldown">${formatDuration(cooldown)}</span> remaining` : ''}.</p>
+    </div>
+    <div class="panel"><h2>Bonded Lifestones</h2>${destinations || '<p class="muted">None yet — arrive somewhere new first.</p>'}</div>`;
 }
 
 // --- Persistent battle dock (shown on every tab except Battle itself) ---

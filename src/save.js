@@ -4,6 +4,7 @@ import { createInitialState, SAVE_VERSION, addLog } from './game/state.js';
 import { derivedStats, heroDps, grantXp } from './game/hero.js';
 import { getPoiById } from './data/regions.js';
 import { monsterStatsForLevel } from './data/monsterScaling.js';
+import { TUTORIAL_ROAD } from './data/tutorial.js';
 import { generateItem, maybeAutoEquip, DROP_CHANCE } from './game/loot.js';
 import { poiItemPower } from './data/items.js';
 import { fmt } from './engine/format.js';
@@ -44,6 +45,13 @@ function migrate(raw) {
   state.training = { ...fresh.training, ...(raw.training || {}) };
   state.settings = { ...fresh.settings, ...(raw.settings || {}) };
   state.ui = { ...fresh.ui, ...(raw.ui || {}) };
+  state.onboarding = { ...fresh.onboarding, ...(raw.onboarding || {}) };
+
+  // Saves from before the intro/naming existed belong to players already past all
+  // of that — never make an existing character re-live the "what's your name" beat.
+  if (raw.onboarding === undefined) {
+    state.onboarding = { step: 'done', tutorialPending: false };
+  }
 
   // Migrate pre-pyreals saves: gold -> pyreals (also the training track and progress counters).
   if (state.pyreals === undefined && raw.gold !== undefined) state.pyreals = raw.gold;
@@ -147,12 +155,15 @@ export function applyOfflineProgress(state) {
   const elapsedSec = Math.max(0, (now - (state.lastSeen || now)) / 1000);
   if (elapsedSec < 60) return null; // not worth reporting under a minute
 
+  state.progress.recallCooldown = Math.max(0, state.progress.recallCooldown - elapsedSec);
+
   // Finish an in-progress walk instantly if enough time passed; Run trains for the
   // skipped time either way. `null` means the walk still isn't done.
   const afterTravel = skipTravel(state, elapsedSec);
   const remaining = afterTravel === null ? 0 : afterTravel;
 
   if (!state.location.poiId) return null; // travelling or in town: nothing to simulate
+  if (state.location.poiId === TUTORIAL_ROAD.id) return null; // mid-tutorial: nothing to simulate
 
   const poi = getPoiById(state.location.poiId);
   const depth = state.progress.poiDepth || 0;

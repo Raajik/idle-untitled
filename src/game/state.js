@@ -28,7 +28,12 @@ export function createInitialState() {
   return {
     version: SAVE_VERSION,
     pyreals: 0,
+    onboarding: {
+      step: 'name', // 'name' -> 'seen-lifestone' -> ['alcott-explains' if 'no'] -> 'done'
+      tutorialPending: false, // set once Alcott points you at Holtburg; consumed on first arrival
+    },
     hero: {
+      name: '',
       level: 1,
       xp: 0,
       str: 5,
@@ -52,6 +57,7 @@ export function createInitialState() {
         parry: freshSkill(),
         resistance: freshResistance(),
         offense: freshOffense(),
+        lifestone: { recall: freshSkill() },
       },
     },
     location: { regionId: null, poiId: null }, // null,null = still on the road to Holtburg
@@ -69,6 +75,9 @@ export function createInitialState() {
       totalXpEarned: 0,
       totalDrops: 0,
       aetheriaSlots: 0,
+      firstDeathHandled: false, // whether Alcott's "death teaches lessons" beat has fired
+      recallUnlocked: false,
+      recallCooldown: 0, // seconds remaining until Recall can be used again
     },
     monster: null, // current monster instance { name, hp, maxHp, atk, def, xp, pyreals, isBoss }
     equipment: { weapon: null, armor: null, amulet: null, ring: null },
@@ -94,17 +103,25 @@ export function createInitialState() {
 // Reset everything a rebirth resets, keeping souls/upgrades/settings/unlock memory.
 export function resetRun(state) {
   const fresh = createInitialState();
+  const name = state.hero.name;
+  const recallSkill = state.hero.skills.lifestone;
+  const recallUnlocked = state.progress.recallUnlocked;
+  const firstDeathHandled = state.progress.firstDeathHandled;
   state.pyreals = fresh.pyreals;
   state.hero = fresh.hero;
+  state.hero.name = name;
+  state.hero.skills.lifestone = recallSkill;
   state.location = fresh.location;
   state.travel = fresh.travel;
   state.progress = fresh.progress;
+  state.progress.recallUnlocked = recallUnlocked;
+  state.progress.firstDeathHandled = firstDeathHandled;
   state.monster = null;
   state.equipment = fresh.equipment;
   state.inventory = fresh.inventory;
   state.training = fresh.training;
   state.log = fresh.log;
-  // keep: rebirth, settings, ui.seenUnlocks, lastSeen
+  // keep: rebirth, settings, ui.seenUnlocks, lastSeen, onboarding, hero.name, Recall skill/unlock
 }
 
 const MAX_LOG = 60;

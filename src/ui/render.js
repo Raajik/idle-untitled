@@ -4,7 +4,7 @@
 //   - frame():  per-animation-frame in-place updates for live combat + fx
 
 import { topLevelEntries, childTabs, drainNewUnlocks, UNLOCKS } from './unlocks.js';
-import { battleTab, attributesTab, skillsTab, inventoryTab, trainingTab, rebirthTab, overviewTab, settingsTab, battleDockHtml } from './tabs.js';
+import { battleTab, attributesTab, skillsTab, inventoryTab, trainingTab, rebirthTab, recallTab, overviewTab, settingsTab, battleDockHtml } from './tabs.js';
 import { startTravelToRegion, startTravelToPoi } from '../game/travel.js';
 import { raiseAttribute, derivedStats, xpForLevel, totalXpForLevel } from '../game/hero.js';
 import { equipItem } from '../game/loot.js';
@@ -13,8 +13,10 @@ import { performRebirth, buyUpgrade } from '../game/prestige.js';
 import { exportSave, importSave, hardReset, saveGame, suppressSave } from '../save.js';
 import { drainFx } from '../engine/fx.js';
 import { fmt, formatDuration } from '../engine/format.js';
-import { computeDepth } from '../game/combat.js';
+import { computeDepth, fleeTutorialEncounter } from '../game/combat.js';
 import { activeWeaponSkill } from '../game/skills.js';
+import { setHeroName, answerSeenLifestone, acknowledgeAlcottIntro } from '../game/onboarding.js';
+import { recallTo } from '../game/lifestone.js';
 
 const TAB_RENDERERS = {
   battle: battleTab,
@@ -23,17 +25,20 @@ const TAB_RENDERERS = {
   inventory: inventoryTab,
   training: trainingTab,
   rebirth: rebirthTab,
+  recall: recallTab,
   overview: overviewTab,
   settings: settingsTab,
 };
 
 // A compact key describing the Battle tab's current "shape" — which panels exist
-// (Town / On the Road / at a POI) and which tile is highlighted as current/travelling.
-// Changing shape needs a full rebuild; anything else (just the countdown ticking,
-// or combat) can be patched in place so buttons never get torn out from under a click.
+// (onboarding step / Town / On the Road / at a POI / tutorial encounter up or not)
+// and which tile is highlighted as current/travelling. Changing shape needs a full
+// rebuild; anything else (just the countdown ticking, or combat) can be patched in
+// place so buttons never get torn out from under a click.
 function battleStructureKey(state) {
   const t = state.travel;
-  return `${t ? t.kind + ':' + t.id : ''}|${state.location.regionId}|${state.location.poiId}`;
+  const tutorialMonster = t && t.tutorial ? (state.monster ? 'm' : 'nm') : '';
+  return `${state.onboarding.step}|${t ? t.kind + ':' + t.id : ''}|${state.location.regionId}|${state.location.poiId}|${tutorialMonster}`;
 }
 
 function toast(text) {
@@ -82,16 +87,18 @@ export function createRenderer(state, { onImport }) {
               return `<button class="tab-btn nav-child ${state.ui.activeTab === t.id ? 'active' : ''}" data-tab="${t.id}">${t.label}${teaser ? ' <span class="teaser">(soon)</span>' : ''}</button>`;
             })
             .join('');
-          return `<div class="nav-category"><div class="nav-category-label">${entry.label}</div>${kidBtns}</div>`;
+          const label = typeof entry.label === 'function' ? entry.label(state) : entry.label;
+          return `<div class="nav-category"><div class="nav-category-label">${label}</div>${kidBtns}</div>`;
         }
         const teaser = entry.teaser && entry.teaser(state);
-        return `<button class="tab-btn ${state.ui.activeTab === entry.id ? 'active' : ''}" data-tab="${entry.id}">${entry.label}${teaser ? ' <span class="teaser">(soon)</span>' : ''}</button>`;
+        const label = typeof entry.label === 'function' ? entry.label(state) : entry.label;
+        return `<button class="tab-btn ${state.ui.activeTab === entry.id ? 'active' : ''}" data-tab="${entry.id}">${label}${teaser ? ' <span class="teaser">(soon)</span>' : ''}</button>`;
       })
       .join('');
   }
 
   function updateDock() {
-    if (state.ui.activeTab === 'battle') {
+    if (state.ui.activeTab === 'battle' || state.onboarding.step !== 'done') {
       dock.classList.add('hidden');
     } else {
       dock.classList.remove('hidden');
@@ -256,6 +263,7 @@ export function createRenderer(state, { onImport }) {
         render();
       } else if (state.travel) {
         updateTravelCountdown();
+        if (state.travel.tutorial) updateLive();
       } else if (state.location.poiId) {
         updateLive();
       }
@@ -268,6 +276,13 @@ export function createRenderer(state, { onImport }) {
       if (menuRenderFrames >= 30) render();
     }
   }
+
+  // Enter submits the name field without needing to click Continue.
+  document.getElementById('app').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.id === 'name-input') {
+      if (setHeroName(state, e.target.value)) render();
+    }
+  });
 
   // Event delegation
   document.getElementById('app').addEventListener('click', (e) => {
@@ -290,6 +305,15 @@ export function createRenderer(state, { onImport }) {
       case 'train': buyTraining(state, arg); break;
       case 'rebirth': performRebirth(state); break;
       case 'buy-upgrade': buyUpgrade(state, arg); break;
+      case 'submit-name': {
+        const input = document.getElementById('name-input');
+        if (input) setHeroName(state, input.value);
+        break;
+      }
+      case 'answer-lifestone': answerSeenLifestone(state, arg === 'yes'); break;
+      case 'ack-intro': acknowledgeAlcottIntro(state); break;
+      case 'flee-tutorial': fleeTutorialEncounter(state); break;
+      case 'recall': recallTo(state, arg); break;
       case 'export': {
         const ta = document.getElementById('save-io');
         if (ta) ta.value = exportSave(state);

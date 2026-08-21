@@ -5,6 +5,7 @@
 // Clicking a new destination redirects travel immediately, even mid-walk.
 
 import { getRegion, getPoiById } from '../data/regions.js';
+import { TUTORIAL_ROAD, TUTORIAL_JOURNEY_SECONDS } from '../data/tutorial.js';
 import { modifiedWalkTime, grantRunXp } from './skills.js';
 import { addLog } from './state.js';
 
@@ -21,6 +22,16 @@ export function startTravelToRegion(state, regionId) {
   const region = getRegion(regionId);
   if (!region) return false;
   if (!state.travel && state.progress.unlockedRegions.includes(regionId)) return false; // already there, not redirecting
+
+  // Alcott pointed this newbie at Holtburg specifically — the first walk there is
+  // the scripted tutorial journey (weak roadside monsters, fixed 3-minute length).
+  if (regionId === 'holtburg' && state.onboarding.tutorialPending) {
+    state.travel = { kind: 'region', id: regionId, remaining: TUTORIAL_JOURNEY_SECONDS, duration: TUTORIAL_JOURNEY_SECONDS, tutorial: true };
+    state.location = { regionId: null, poiId: TUTORIAL_ROAD.id };
+    state.monster = null;
+    addLog(state, `You set out for Holtburg, alone on the open road...`, 'dim');
+    return true;
+  }
 
   const duration = modifiedWalkTime(region.walkSeconds, state.hero.skills.run.rank);
   state.travel = { kind: 'region', id: regionId, remaining: duration, duration };

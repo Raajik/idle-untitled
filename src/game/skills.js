@@ -75,3 +75,12 @@ export function trainSkill(state, skill, name, xp) {
 export function grantRunXp(state, seconds) {
   trainSkill(state, state.hero.skills.run, 'Run', seconds * RUN_XP_PER_SECOND);
 }
+
+// Lifestone Recall: instant travel to any unlocked Lifestone, gated by a cooldown
+// that shrinks from 1 hour toward 5 minutes as the skill ranks up.
+export const RECALL_XP_ON_USE = 40;
+export const RECALL_XP_ON_DEATH = 3;
+
+export function recallCooldownSeconds(rank) {
+  return Math.max(300, (3600 * 100) / (100 + rank * 11));
+}

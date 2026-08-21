@@ -6,14 +6,16 @@
 
 import { getPoiById } from '../data/regions.js';
 import { monsterStatsForLevel, bossStatsForLevel } from '../data/monsterScaling.js';
+import { TUTORIAL_ROAD } from '../data/tutorial.js';
 import { pick } from '../engine/rng.js';
 import { pushFx } from '../engine/fx.js';
 import { fmt } from '../engine/format.js';
 import { derivedStats, grantXp } from './hero.js';
 import { rollDrop, maybeAutoEquip } from './loot.js';
 import { addLog } from './state.js';
-import { tickTravel } from './travel.js';
-import { trainSkill, defensiveChance, hitChance, activeWeaponSkill, COMBAT_SKILL_XP } from './skills.js';
+import { tickTravel, arrive } from './travel.js';
+import { tickRecallCooldown } from './lifestone.js';
+import { trainSkill, defensiveChance, hitChance, activeWeaponSkill, grantRunXp, RECALL_XP_ON_DEATH, COMBAT_SKILL_XP } from './skills.js';
 
 const MONSTER_ATTACK_INTERVAL = 1.2; // seconds
 const RESPAWN_DELAY = 3.0;
@@ -45,8 +47,12 @@ function bossChance(depth) {
   return BOSS_CHANCE_AT_THRESHOLD + t * (BOSS_CHANCE_CAP - BOSS_CHANCE_AT_THRESHOLD);
 }
 
+function resolvePoi(state) {
+  return state.location.poiId === TUTORIAL_ROAD.id ? TUTORIAL_ROAD : getPoiById(state.location.poiId);
+}
+
 export function spawnMonster(state) {
-  const poi = getPoiById(state.location.poiId);
+  const poi = resolvePoi(state);
   const p = state.progress;
   const depth = computeDepth(p);
   p.poiDepth = depth;
@@ -128,6 +134,8 @@ function onMonsterDeath(state) {
     pushFx({ type: 'levelup' });
   }
 
+  if (state.location.poiId === TUTORIAL_ROAD.id) return; // roadside critters carry nothing to loot
+
   const drop = rollDrop(state, m.isBoss);
   if (drop) {
     p.totalDrops += 1;
@@ -140,9 +148,43 @@ function onMonsterDeath(state) {
   }
 }
 
+// Fires once, the first time the hero ever dies: Alcott's second beat, which
+// unlocks Lifestone Recall. Every death (not just the first) nudges Recall's xp.
+function handleHeroDeath(state) {
+  const p = state.progress;
+  trainSkill(state, state.hero.skills.lifestone.recall, 'Lifestone Recall', RECALL_XP_ON_DEATH);
+  if (p.firstDeathHandled) return;
+  p.firstDeathHandled = true;
+  p.recallUnlocked = true;
+  addLog(
+    state,
+    `"Death's a fine teacher, if a rude one," Alcott says as the world knits itself back together. "You'll feel that Lifestone's pull now, wherever you've bonded with one — call on it, and it'll carry you there in an instant."`,
+    'good'
+  );
+}
+
+// The scripted first walk to Holtburg: the countdown keeps ticking (and Run keeps
+// training) exactly like normal travel, but combat runs in parallel the whole time
+// against the tutorial road's weak monster pool, rather than being suspended.
+function tickTutorialJourney(state, dt) {
+  state.travel.remaining -= dt;
+  grantRunXp(state, dt);
+  if (state.travel.remaining <= 0) {
+    state.monster = null;
+    arrive(state);
+    state.onboarding.tutorialPending = false;
+  }
+}
+
 // One game tick. dt in seconds.
 export function tickCombat(state, dt) {
-  if (tickTravel(state, dt)) return; // travelling: no combat, Run trains instead
+  tickRecallCooldown(state, dt);
+
+  if (state.travel && state.travel.tutorial) {
+    tickTutorialJourney(state, dt);
+  } else if (tickTravel(state, dt)) {
+    return; // travelling: no combat, Run trains instead
+  }
 
   const h = state.hero;
   if (!state.location.poiId) return; // in town: nothing to fight
@@ -220,6 +262,7 @@ export function tickCombat(state, dt) {
       h.hp = 0;
       h.dead = true;
       h.respawnTimer = RESPAWN_DELAY;
+      handleHeroDeath(state);
       if (m.isBoss) {
         // Losing to the boss makes it retreat — depth is kept, so you can challenge
         // it again once you've clawed back the trash kills needed to re-roll it.
@@ -236,4 +279,14 @@ export function tickCombat(state, dt) {
   h.hp = Math.min(stats.maxHp, h.hp + stats.maxHp * 0.01 * dt);
   h.stamina = Math.min(stats.maxStamina, h.stamina + stats.maxStamina * 0.03 * dt);
   h.mana = Math.min(stats.maxMana, h.mana + stats.maxMana * 0.02 * dt);
+}
+
+// Bail on the current tutorial-road encounter instead of fighting it. Always
+// succeeds; trains Run a little for the trouble, same as any other travel time.
+export function fleeTutorialEncounter(state) {
+  if (!(state.travel && state.travel.tutorial) || !state.monster) return false;
+  addLog(state, `You break away and keep moving, leaving the ${state.monster.name} behind.`, 'dim');
+  state.monster = null;
+  grantRunXp(state, 8);
+  return true;
 }
