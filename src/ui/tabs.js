@@ -1,8 +1,8 @@
 // Tab views: each returns an HTML string. Events are delegated via data-action attributes.
 
-import { REGIONS, getRegion, getPoiById } from '../data/regions.js';
+import { REGIONS, getRegion, getPoiById, DAMAGE_TYPES } from '../data/regions.js';
 import { derivedStats, xpForLevel, totalXpForLevel, attributeCost, ATTRIBUTES } from '../game/hero.js';
-import { xpToNextRunRank } from '../game/skills.js';
+import { xpToNextRank, defensiveChance, MAX_SKILL_RANK } from '../game/skills.js';
 import { computeDepth } from '../game/combat.js';
 import { TRAINING_TRACKS, trainingCost } from '../game/training.js';
 import { soulsAvailable, canRebirth, REBIRTH_UPGRADES } from '../game/prestige.js';
@@ -85,12 +85,14 @@ export function battleTab(state) {
     combatPanel = `
     <div class="panel">
       <h2>${esc(poi.name)} <span class="muted" style="font-size:0.7em">+${Math.round(depth * 100)}% difficulty${bossNote}</span></h2>
-      <div><b id="m-name" class="${m && m.isBoss ? 'soul' : ''}">${m ? esc(m.name) + (m.isBoss ? ' ☠ BOSS' : '') : 'Searching...'}</b></div>
+      <div><b id="m-name" class="${m && m.isBoss ? 'soul' : ''}">${m ? esc(m.name) + ` (Lv ${m.level})` + (m.isBoss ? ' ☠ BOSS' : '') : 'Searching...'}</b></div>
       ${bar('hp', m ? (m.hp / m.maxHp) * 100 : 0, m ? `${Math.max(0, Math.ceil(m.hp))} / ${m.maxHp}` : '...', 'm-hp', 'monster')}
-      <div id="m-meta" class="muted">${m ? `ATK ${m.atk} · DEF ${m.def}` : ''}</div>
+      <div id="m-meta" class="muted">${m ? `ATK ${m.atk} · DEF ${m.def} · ${esc(m.dmgType)}` : ''}</div>
       <h2 style="margin-top:14px">You — Level ${h.level}</h2>
       ${bar('hp', (h.hp / d.maxHp) * 100, h.dead ? 'Dead... reviving' : `${Math.ceil(h.hp)} / ${d.maxHp} HP`, 'h-hp', 'hero')}
       ${bar('xp', (xpProgress / xpForLevel(h.level)) * 100, `XP ${fmt(xpProgress)} / ${fmt(xpForLevel(h.level))}`, 'h-xp')}
+      ${bar('stamina', (h.stamina / d.maxStamina) * 100, `${Math.ceil(h.stamina)} / ${d.maxStamina} Stamina`, 'h-sta')}
+      ${bar('mana', (h.mana / d.maxMana) * 100, `${Math.ceil(h.mana)} / ${d.maxMana} Mana`, 'h-mana')}
       <div id="h-stats" class="muted">ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s · Dodge ${d.dodge.toFixed(0)}% · Crit ${d.critChance.toFixed(1)}% · ${fmt(state.pyreals)} pyreals</div>
     </div>`;
   }
@@ -139,15 +141,47 @@ export function attributesTab(state) {
 }
 
 // --- Skills ---
+function skillRow(name, skill, chanceLabel) {
+  const maxed = skill.rank >= MAX_SKILL_RANK;
+  const need = maxed ? 1 : xpToNextRank(skill.rank);
+  return `<div class="skill-row">
+    <div class="skill-head"><b>${esc(name)}</b> <span class="muted">rank ${skill.rank}/${MAX_SKILL_RANK}${chanceLabel ? ' · ' + chanceLabel : ''}</span></div>
+    ${bar('xp', maxed ? 100 : (skill.xp / need) * 100, maxed ? 'MAX' : `XP ${fmt(skill.xp)} / ${fmt(need)}`)}
+  </div>`;
+}
+
 export function skillsTab(state) {
-  const run = state.hero.skills.run;
-  const need = xpToNextRunRank(run.rank);
+  const skills = state.hero.skills;
+  const run = skills.run;
   const speedPct = Math.round(100 - (100 * 100) / (100 + run.rank * 4));
+
+  const defensiveRows = [
+    ['Dodge', skills.dodge],
+    ['Block', skills.block],
+    ['Parry', skills.parry],
+  ]
+    .map(([name, skill]) => skillRow(name, skill, `${defensiveChance(skill.rank).toFixed(1)}% avoid`))
+    .join('');
+
+  const resistRows = DAMAGE_TYPES.map((t) => {
+    const skill = skills.resistance[t];
+    const label = t[0].toUpperCase() + t.slice(1);
+    return skillRow(label, skill, `${defensiveChance(skill.rank).toFixed(1)}% avoid`);
+  }).join('');
+
   return `
     <div class="panel">
-      <h2>Run — rank ${run.rank}</h2>
-      ${bar('xp', (run.xp / need) * 100, `XP ${fmt(run.xp)} / ${fmt(need)}`)}
-      <p class="muted" style="margin-top:8px">Trained only by walking. Currently cuts travel time by ${speedPct}%.</p>
+      ${skillRow('Run', run, `${speedPct}% faster travel`)}
+      <p class="muted" style="margin-top:4px">Trained only by walking.</p>
+    </div>
+    <div class="panel">
+      <h2>Defensives</h2>
+      <p class="muted" style="margin-bottom:8px">Each defends against any attack in sequence — Dodge, then Block, then Parry, then Resistance for the attack's damage type. Trained by facing attacks in combat; each avoided hit costs Stamina, capping out at 95% avoidance at rank 100.</p>
+      ${defensiveRows}
+    </div>
+    <div class="panel">
+      <h2>Resistance — by damage type</h2>
+      ${resistRows}
     </div>`;
 }
 
@@ -250,7 +284,7 @@ export function overviewTab(state) {
 
   const poi = state.location.poiId ? getPoiById(state.location.poiId) : null;
   tiles.push(`<div class="panel"><h2>Battle — ${poi ? esc(poi.name) : 'Town'}</h2>
-    <b id="m-name" class="${m && m.isBoss ? 'soul' : ''}">${m ? esc(m.name) + (m.isBoss ? ' ☠ BOSS' : '') : state.travel ? 'Travelling...' : 'Searching...'}</b>
+    <b id="m-name" class="${m && m.isBoss ? 'soul' : ''}">${m ? esc(m.name) + ` (Lv ${m.level})` + (m.isBoss ? ' ☠ BOSS' : '') : state.travel ? 'Travelling...' : 'Searching...'}</b>
     ${bar('hp', m ? (m.hp / m.maxHp) * 100 : 0, m ? `${Math.ceil(m.hp)} / ${m.maxHp}` : '...', 'm-hp', 'monster')}
     <div id="ov-kills" class="muted">${poi ? `+${Math.round(computeDepth(p) * 100)}% difficulty` : ''}</div></div>`);
 
@@ -260,6 +294,40 @@ export function overviewTab(state) {
   tiles.push(`<div class="panel"><h2>Log</h2><div class="log" style="height:180px" id="combat-log">${logHtml(state, 20)}</div></div>`);
 
   return `<div id="overview-grid">${tiles.join('')}</div>`;
+}
+
+// --- Persistent battle dock (shown on every tab except Battle itself) ---
+export function battleDockHtml(state) {
+  const h = state.hero;
+  const d = derivedStats(state);
+  const m = state.monster;
+  const travel = state.travel;
+
+  let where;
+  if (travel) {
+    const label = travel.kind === 'region' ? getRegion(travel.id).name : getPoiById(travel.id).name;
+    where = `Walking to ${esc(label)} — ${formatDuration(travel.remaining)}`;
+  } else if (!state.location.poiId) {
+    where = 'Town';
+  } else {
+    where = esc(getPoiById(state.location.poiId).name);
+  }
+
+  const monsterHtml = m
+    ? `<div class="dock-monster">
+        <b class="${m.isBoss ? 'soul' : ''}">${esc(m.name)} (Lv ${m.level})${m.isBoss ? ' ☠' : ''}</b>
+        ${bar('hp mini', (m.hp / m.maxHp) * 100, `${Math.max(0, Math.ceil(m.hp))}/${m.maxHp}`, 'dock-m-hp')}
+      </div>`
+    : `<div class="dock-monster muted">—</div>`;
+
+  return `
+    <div class="dock-where">${where}</div>
+    ${monsterHtml}
+    <div class="dock-hero">
+      ${bar('hp mini', (h.hp / d.maxHp) * 100, `${Math.ceil(h.hp)}/${d.maxHp}`, 'dock-h-hp')}
+      ${bar('stamina mini', (h.stamina / d.maxStamina) * 100, `${Math.ceil(h.stamina)}/${d.maxStamina}`, 'dock-h-sta')}
+      ${bar('mana mini', (h.mana / d.maxMana) * 100, `${Math.ceil(h.mana)}/${d.maxMana}`, 'dock-h-mana')}
+    </div>`;
 }
 
 // --- Settings ---

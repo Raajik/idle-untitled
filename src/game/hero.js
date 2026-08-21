@@ -9,25 +9,25 @@ import { REBIRTH_UPGRADES } from '../data/rebirth.js';
 
 export const ATTRIBUTES = [
   { id: 'str', name: 'Strength', short: 'STR', desc: '+1.5 ATK each' },
-  { id: 'end', name: 'Endurance', short: 'END', desc: '+5 Max HP, +0.5 DEF each' },
+  { id: 'end', name: 'Endurance', short: 'END', desc: '+5 Max HP, +0.5 DEF, +2 Max Stamina each' },
   { id: 'coord', name: 'Coordination', short: 'COORD', desc: '+0.5% dodge, +0.2% crit each' },
-  { id: 'quick', name: 'Quickness', short: 'QUICK', desc: '+4% attack speed each' },
+  { id: 'quick', name: 'Quickness', short: 'QUICK', desc: '+4% attack speed, +2 Max Stamina each' },
   { id: 'focus', name: 'Focus', short: 'FOCUS', desc: 'Life Magic (coming soon)' },
-  { id: 'self', name: 'Self', short: 'SELF', desc: 'Mana (coming soon)' },
+  { id: 'self', name: 'Self', short: 'SELF', desc: '+4 Max Mana each' },
 ];
 
-// --- Experience / level (AC cubic curve) ---
+// --- Experience / level (AC-flavored cubic curve, scaled down for small numbers) ---
 
-// XP required to advance from `level` to `level + 1` (AC: level^3 * 1000).
+// XP required to advance from `level` to `level + 1`.
 export function xpForLevel(level) {
-  return 1000 * level * level * level;
+  return 8 * level * level * level;
 }
 
 // Cumulative XP required to REACH `level` (sum of the per-level steps below it).
 export function totalXpForLevel(level) {
   const n = level - 1;
   const s = (n * (n + 1)) / 2; // 1 + 2 + ... + n
-  return Math.floor(1000 * s * s);
+  return Math.floor(8 * s * s);
 }
 
 // Character level derived from total XP earned this run.
@@ -40,7 +40,7 @@ export function levelFromTotalXp(xp) {
 // --- Attribute raising (AC-style: spend XP, escalating cost ~ value^2.5) ---
 
 export function attributeCost(value) {
-  return Math.ceil(3 * Math.pow(value, 2.5));
+  return Math.ceil(0.025 * Math.pow(value, 2.5));
 }
 
 export function raiseAttribute(state, attr) {
@@ -93,6 +93,8 @@ export function derivedStats(state) {
   const spd = 1 + h.quick * 0.04; // attacks per second
   const dodge = h.coord * 0.5; // percent chance to avoid a monster hit
   const critChance = 5 + h.coord * 0.2 + b.critPct; // percent
+  const maxStamina = Math.floor(20 + h.end * 2 + h.quick * 2);
+  const maxMana = Math.floor(20 + h.self * 4);
   return {
     maxHp,
     atk,
@@ -100,6 +102,8 @@ export function derivedStats(state) {
     spd,
     dodge,
     critChance,
+    maxStamina,
+    maxMana,
     xpPct: b.xpPct,
     pyrealsPct: b.pyrealsPct,
     luckPct: b.luckPct,

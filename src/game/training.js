@@ -1,9 +1,9 @@
 // Training: pyreals -> percentage-scaling upgrades. Costs grow exponentially per rank.
 
 export const TRAINING_TRACKS = [
-  { id: 'atk', name: 'Combat Drills', desc: '+6% ATK per rank', baseCost: 3000, growth: 1.9 },
-  { id: 'hp', name: 'Endurance Training', desc: '+8% Max HP per rank', baseCost: 3000, growth: 1.9 },
-  { id: 'pyreals', name: 'Treasure Sense', desc: '+5% Pyreals per rank', baseCost: 6000, growth: 2.0 },
+  { id: 'atk', name: 'Combat Drills', desc: '+6% ATK per rank', baseCost: 120, growth: 1.9 },
+  { id: 'hp', name: 'Endurance Training', desc: '+8% Max HP per rank', baseCost: 120, growth: 1.9 },
+  { id: 'pyreals', name: 'Treasure Sense', desc: '+5% Pyreals per rank', baseCost: 250, growth: 2.0 },
 ];
 
 export function trainingCost(trackId, currentRank) {

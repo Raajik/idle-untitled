@@ -15,6 +15,8 @@
   --rarity-rare: #5a8fd4;
   --rarity-epic: #a06ae0;
   --rarity-legendary: #e8963e;
+  --stamina: #d4a45a;
+  --mana: #5a8fd4;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -30,6 +32,7 @@ body {
 }
 
 #app { display: flex; height: 100vh; }
+#content-col { flex: 1; display: flex; flex-direction: column; min-width: 0; height: 100vh; }
 
 .hidden { display: none !important; }
 
@@ -47,11 +50,33 @@ body {
 }
 
 .logo {
-  font-size: 18px;
-  color: var(--accent);
-  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   border-bottom: 1px solid var(--border);
-  padding-bottom: 8px;
+  padding-bottom: 10px;
+}
+.logo-badge {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 0;
+}
+.logo-text {
+  display: flex;
+  flex-direction: column;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-dim);
+  text-align: left;
 }
 
 #tab-nav { display: flex; flex-direction: column; gap: 4px; }
@@ -116,6 +141,8 @@ body {
 .bar > .fill { height: 100%; transition: width 0.18s ease-out; will-change: width; border-radius: inherit; }
 .bar.hp > .fill { background: var(--hp); }
 .bar.xp > .fill { background: var(--xp); }
+.bar.stamina > .fill { background: var(--stamina); }
+.bar.mana > .fill { background: var(--mana); }
 .bar > .label {
   position: absolute;
   inset: 0;
@@ -127,6 +154,28 @@ body {
   text-shadow: 0 1px 2px #000;
   z-index: 2;
 }
+.bar.mini { height: 10px; margin: 2px 0; }
+.bar.mini > .label { font-size: 8px; }
+
+/* Skills */
+.skill-row { margin-bottom: 10px; }
+.skill-head { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; margin-bottom: 2px; }
+
+/* Persistent battle dock (bottom of window, shown on every tab but Battle) */
+#battle-dock {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 8px 20px;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+#battle-dock.hidden { display: none !important; }
+.dock-where { color: var(--text-dim); white-space: nowrap; }
+.dock-monster { flex: 1; min-width: 160px; }
+.dock-hero { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 2px; }
 
 /* Combat log */
 .log {

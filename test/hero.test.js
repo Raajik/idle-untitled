@@ -7,35 +7,35 @@ test('xpForLevel is strictly increasing (cubic AC curve)', () => {
   for (let lvl = 1; lvl < 50; lvl++) {
     assert.ok(xpForLevel(lvl + 1) > xpForLevel(lvl));
   }
-  assert.equal(xpForLevel(1), 1000);
-  assert.equal(xpForLevel(2), 8000);
+  assert.equal(xpForLevel(1), 8);
+  assert.equal(xpForLevel(2), 64);
 });
 
 test('level derives from total XP earned (cubic)', () => {
   assert.equal(levelFromTotalXp(0), 1);
-  assert.equal(levelFromTotalXp(999), 1);
-  assert.equal(levelFromTotalXp(1000), 2);
+  assert.equal(levelFromTotalXp(7), 1);
+  assert.equal(levelFromTotalXp(8), 2);
   assert.equal(levelFromTotalXp(totalXpForLevel(5)), 5);
 });
 
 test('grantXp adds spendable XP and derives level', () => {
   const s = createInitialState();
-  const levels = grantXp(s, 50000);
+  const levels = grantXp(s, 500);
   assert.ok(levels > 1);
   assert.ok(s.hero.level > 2);
-  assert.equal(s.hero.xp, 50000); // all XP is available to spend
-  assert.equal(s.progress.totalXpEarned, 50000);
+  assert.equal(s.hero.xp, 500); // all XP is available to spend
+  assert.equal(s.progress.totalXpEarned, 500);
 });
 
 test('raiseAttribute spends XP and rejects when too costly', () => {
   const s = createInitialState();
   assert.equal(raiseAttribute(s, 'str'), false); // no XP yet
-  s.hero.xp = 100000;
+  s.hero.xp = 1000;
   const before = s.hero.str;
   const cost = attributeCost(before);
   assert.equal(raiseAttribute(s, 'str'), true);
   assert.equal(s.hero.str, before + 1);
-  assert.equal(s.hero.xp, 100000 - cost);
+  assert.equal(s.hero.xp, 1000 - cost);
   assert.equal(raiseAttribute(s, 'nope'), false);
 });
 

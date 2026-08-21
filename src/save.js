@@ -3,6 +3,7 @@
 import { createInitialState, SAVE_VERSION, addLog } from './game/state.js';
 import { derivedStats, heroDps, grantXp } from './game/hero.js';
 import { getPoiById } from './data/regions.js';
+import { monsterStatsForLevel } from './data/monsterScaling.js';
 import { generateItem, maybeAutoEquip, DROP_CHANCE } from './game/loot.js';
 import { poiItemPower } from './data/items.js';
 import { fmt } from './engine/format.js';
@@ -32,7 +33,9 @@ function migrate(raw) {
   const state = { ...fresh, ...raw };
   // deep-merge critical nested objects so old saves gain new fields
   state.hero = { ...fresh.hero, ...(raw.hero || {}) };
-  state.hero.skills = { ...fresh.hero.skills, ...(raw.hero && raw.hero.skills) };
+  const rawSkills = (raw.hero && raw.hero.skills) || {};
+  state.hero.skills = { ...fresh.hero.skills, ...rawSkills };
+  state.hero.skills.resistance = { ...fresh.hero.skills.resistance, ...(rawSkills.resistance || {}) };
   state.progress = { ...fresh.progress, ...(raw.progress || {}) };
   state.location = { ...fresh.location, ...(raw.location || {}) };
   state.travel = raw.travel !== undefined ? raw.travel : fresh.travel;
@@ -51,6 +54,10 @@ function migrate(raw) {
     state.progress.totalPyrealsEarned = state.progress.totalGoldEarned;
     delete state.progress.totalGoldEarned;
   }
+
+  // Pre-level-rework saves may have a stale in-progress monster instance missing the
+  // newer fields (level, dmgType, stamina) — drop it so a fresh one spawns next tick.
+  if (state.monster && state.monster.level === undefined) state.monster = null;
 
   // Migrate pre-region saves (flat zone/poi index) into the Holtburg region + POI system.
   // These saves predate depth-based difficulty, so we drop them into Holtburg's town hub.
@@ -148,17 +155,19 @@ export function applyOfflineProgress(state) {
 
   const poi = getPoiById(state.location.poiId);
   const depth = state.progress.poiDepth || 0;
-  const avgMonsterHp = poi.monsters.reduce((s, m) => s + m.hp, 0) / poi.monsters.length * (1 + depth);
-  const avgDef = Math.round((poi.monsters.reduce((s, m) => s + m.def, 0) / poi.monsters.length) * (1 + depth));
+  const monsterStats = poi.monsters.map((m) => monsterStatsForLevel(m.level));
+  const avgOf = (key) => monsterStats.reduce((s, m) => s + m[key], 0) / monsterStats.length;
+  const avgMonsterHp = avgOf('hp') * (1 + depth);
+  const avgDef = Math.round(avgOf('def') * (1 + depth));
   const dps = heroDps(state, avgDef);
   if (dps <= 0) return null;
 
   const kills = Math.floor((remaining * dps) / avgMonsterHp);
   if (kills <= 0) return null;
 
-  const avgXp = poi.monsters.reduce((s, m) => s + m.xp, 0) / poi.monsters.length;
-  const avgPyreals = poi.monsters.reduce((s, m) => s + m.pyreals, 0) / poi.monsters.length;
-  const avgAtk = poi.monsters.reduce((s, m) => s + m.atk, 0) / poi.monsters.length;
+  const avgXp = avgOf('xp');
+  const avgPyreals = avgOf('pyreals');
+  const avgAtk = avgOf('atk');
 
   const stats = derivedStats(state);
   const pyrealsGain = Math.round(kills * avgPyreals * (1 + stats.pyrealsPct / 100));

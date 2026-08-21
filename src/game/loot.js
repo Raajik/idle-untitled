@@ -2,6 +2,7 @@
 
 import { SLOTS, RARITIES, AFFIXES, BASE_NAMES, PREFIXES, poiItemPower } from '../data/items.js';
 import { getPoiById } from '../data/regions.js';
+import { monsterStatsForLevel } from '../data/monsterScaling.js';
 import { pick, pickWeighted, randInt, chance } from '../engine/rng.js';
 import { derivedStats } from './hero.js';
 
@@ -69,7 +70,7 @@ export function rollDrop(state, isBoss) {
   const luck = derivedStats(state).luckPct;
   const poi = getPoiById(state.location.poiId);
   const depth = state.progress.poiDepth || 0;
-  const avgAtk = poi.monsters.reduce((s, m) => s + m.atk, 0) / poi.monsters.length;
+  const avgAtk = poi.monsters.reduce((s, m) => s + monsterStatsForLevel(m.level).atk, 0) / poi.monsters.length;
   const powerLevel = Math.round(poiItemPower(avgAtk) * (1 + depth));
   const rarityBoost = depthRarityBoost(depth) + (isBoss ? 1 : 0);
   if (isBoss) return generateItem(powerLevel, { luckPct: luck, rarityBoost });

@@ -5,13 +5,15 @@
 // one-time unlock.
 
 import { getPoiById } from '../data/regions.js';
-import { pick, rand } from '../engine/rng.js';
+import { monsterStatsForLevel, bossStatsForLevel } from '../data/monsterScaling.js';
+import { pick } from '../engine/rng.js';
 import { pushFx } from '../engine/fx.js';
 import { fmt } from '../engine/format.js';
 import { derivedStats, grantXp } from './hero.js';
 import { rollDrop, maybeAutoEquip } from './loot.js';
 import { addLog } from './state.js';
 import { tickTravel } from './travel.js';
+import { trainSkill, defensiveChance, COMBAT_SKILL_XP } from './skills.js';
 
 const MONSTER_ATTACK_INTERVAL = 1.2; // seconds
 const RESPAWN_DELAY = 3.0;
@@ -21,6 +23,15 @@ const BOSS_DEPTH_THRESHOLD = 0.75;
 const BOSS_CHANCE_AT_THRESHOLD = 0.075;
 const BOSS_CHANCE_CAP = 0.28;
 const MIN_TRASH_AFTER_BOSS = 3;
+
+const HERO_STAMINA_COST_PER_DEFEND = 4;
+const MONSTER_STAMINA_COST_PER_DODGE = 3;
+
+const DEFEND_LAYERS = [
+  ['dodge', 'Dodge'],
+  ['block', 'Block'],
+  ['parry', 'Parry'],
+];
 
 // Difficulty multiplier for the current POI: rises with time spent and kills,
 // capped so a POI can't scale forever.
@@ -42,16 +53,22 @@ export function spawnMonster(state) {
 
   const canRollBoss = p.killsSinceBoss >= MIN_TRASH_AFTER_BOSS && Math.random() < bossChance(depth);
   const def = canRollBoss ? poi.boss : pick(poi.monsters);
+  const base = canRollBoss ? bossStatsForLevel(def.level) : monsterStatsForLevel(def.level);
   const r = 1 + depth;
   state.monster = {
     name: def.name,
-    maxHp: Math.round(def.hp * r),
-    hp: Math.round(def.hp * r),
-    atk: Math.round(def.atk * r),
-    def: Math.round(def.def * r),
-    xp: def.xp,
-    pyreals: def.pyreals,
+    level: def.level,
+    dmgType: def.dmgType,
+    maxHp: Math.round(base.hp * r),
+    hp: Math.round(base.hp * r),
+    atk: Math.round(base.atk * r),
+    def: Math.round(base.def * r),
+    xp: base.xp,
+    pyreals: base.pyreals,
     isBoss: canRollBoss,
+    dodge: base.dodge,
+    maxStamina: Math.round(base.maxStamina * (1 + depth * 0.5)),
+    stamina: Math.round(base.maxStamina * (1 + depth * 0.5)),
   };
   if (canRollBoss) addLog(state, `☠ ${def.name} appears!`, 'boss');
 }
@@ -62,6 +79,26 @@ function dealDamage(rawAtk, targetDef, critChance) {
   const crit = Math.random() * 100 < critChance;
   if (crit) dmg *= 2;
   return { dmg, crit };
+}
+
+// Rolls the hero's defensive layers (Dodge, Block, Parry, then Resistance for the
+// attack's damage type) in order. Each layer only trains and can only succeed while
+// the hero has stamina to spend; running out of stamina mid-swing just means the
+// remaining layers are skipped. Returns the layer name that avoided the hit, or null.
+function tryDefend(state, dmgType) {
+  const h = state.hero;
+  const layers = [...DEFEND_LAYERS, ['resistance', null]];
+  for (const [key, label] of layers) {
+    const skill = key === 'resistance' ? h.skills.resistance[dmgType] : h.skills[key];
+    const name = label || `${dmgType[0].toUpperCase()}${dmgType.slice(1)} Resistance`;
+    trainSkill(state, skill, name, COMBAT_SKILL_XP);
+    if (h.stamina < HERO_STAMINA_COST_PER_DEFEND) continue;
+    if (Math.random() * 100 < defensiveChance(skill.rank)) {
+      h.stamina -= HERO_STAMINA_COST_PER_DEFEND;
+      return name;
+    }
+  }
+  return null;
 }
 
 function onMonsterDeath(state) {
@@ -113,6 +150,8 @@ export function tickCombat(state, dt) {
   const stats = derivedStats(state);
 
   if (h.hp === 0) h.hp = stats.maxHp; // initialize on first tick
+  if (h.stamina === 0) h.stamina = stats.maxStamina;
+  if (h.mana === 0) h.mana = stats.maxMana;
 
   if (h.dead) {
     h.respawnTimer -= dt;
@@ -128,11 +167,19 @@ export function tickCombat(state, dt) {
   if (!state.monster) spawnMonster(state);
   const m = state.monster;
 
-  // Hero attacks
+  // Hero attacks (the monster may dodge, spending its stamina to do so)
   h.attackTimer += dt;
   const attackInterval = 1 / stats.spd;
   while (h.attackTimer >= attackInterval) {
     h.attackTimer -= attackInterval;
+
+    if (m.stamina >= MONSTER_STAMINA_COST_PER_DODGE && Math.random() * 100 < m.dodge) {
+      m.stamina -= MONSTER_STAMINA_COST_PER_DODGE;
+      pushFx({ type: 'dodge', target: 'monster' });
+      addLog(state, `${m.name} dodges your attack!`, 'dim');
+      continue;
+    }
+
     const { dmg, crit } = dealDamage(stats.atk, m.def, stats.critChance);
     m.hp -= dmg;
     pushFx({ type: 'hit', target: 'monster', dmg, crit });
@@ -147,14 +194,18 @@ export function tickCombat(state, dt) {
     }
   }
 
-  // Monster attacks (hero may dodge based on Coordination)
+  // Monster attacks (hero may Dodge/Block/Parry/Resist based on its damage type)
   h.monsterTimer += dt;
   while (h.monsterTimer >= MONSTER_ATTACK_INTERVAL) {
     h.monsterTimer -= MONSTER_ATTACK_INTERVAL;
-    if (Math.random() * 100 < stats.dodge) {
+
+    const avoidedBy = tryDefend(state, m.dmgType);
+    if (avoidedBy) {
       pushFx({ type: 'dodge', target: 'hero' });
+      addLog(state, `${avoidedBy}! You avoid ${m.name}'s attack.`, 'dim');
       continue;
     }
+
     const { dmg } = dealDamage(m.atk, stats.def, 0);
     h.hp -= dmg;
     pushFx({ type: 'hit', target: 'hero', dmg });
@@ -174,6 +225,8 @@ export function tickCombat(state, dt) {
     }
   }
 
-  // Very slow passive regen (healing is a skill, not a given)
+  // Slow passive regen for all three vitals (healing/meditation are skills, not a given)
   h.hp = Math.min(stats.maxHp, h.hp + stats.maxHp * 0.01 * dt);
+  h.stamina = Math.min(stats.maxStamina, h.stamina + stats.maxStamina * 0.03 * dt);
+  h.mana = Math.min(stats.maxMana, h.mana + stats.maxMana * 0.02 * dt);
 }

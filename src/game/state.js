@@ -1,6 +1,18 @@
 // Central game state. One object, mutated by game logic, read by the UI.
 
-export const SAVE_VERSION = 2;
+import { DAMAGE_TYPES } from '../data/regions.js';
+
+export const SAVE_VERSION = 3;
+
+function freshSkill() {
+  return { rank: 0, xp: 0 };
+}
+
+function freshResistance() {
+  const r = {};
+  for (const t of DAMAGE_TYPES) r[t] = freshSkill();
+  return r;
+}
 
 export function createInitialState() {
   return {
@@ -16,13 +28,19 @@ export function createInitialState() {
       focus: 5,
       self: 5,
       hp: 0, // current HP; 0 = "initialize on first tick"
+      stamina: 0, // current Stamina; 0 = "initialize on first tick"
+      mana: 0, // current Mana; 0 = "initialize on first tick"
       // combat timers
       attackTimer: 0,
       monsterTimer: 0,
       respawnTimer: 0,
       dead: false,
       skills: {
-        run: { rank: 0, xp: 0 },
+        run: freshSkill(),
+        dodge: freshSkill(),
+        block: freshSkill(),
+        parry: freshSkill(),
+        resistance: freshResistance(),
       },
     },
     location: { regionId: null, poiId: null }, // null,null = still on the road to Holtburg

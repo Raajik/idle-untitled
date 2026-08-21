@@ -9,11 +9,17 @@
 <body>
   <div id="app">
     <aside id="sidebar" class="hidden">
-      <h1 class="logo">III<br /><span class="muted" style="font-size:11px;letter-spacing:0">Immortal Isparian<br />Incremental</span></h1>
+      <h1 class="logo">
+        <span class="logo-badge">III</span>
+        <span class="logo-text"><span>Immortal</span><span>Isparian</span><span>Incremental</span></span>
+      </h1>
       <nav id="tab-nav"></nav>
       <div id="hero-summary"></div>
     </aside>
-    <main id="main"></main>
+    <div id="content-col">
+      <main id="main"></main>
+      <div id="battle-dock"></div>
+    </div>
   </div>
   <div id="toasts"></div>
   <script type="module" src="src/main.js"></script>

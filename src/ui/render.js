@@ -4,7 +4,7 @@
 //   - frame():  per-animation-frame in-place updates for live combat + fx
 
 import { topLevelEntries, childTabs, drainNewUnlocks, UNLOCKS } from './unlocks.js';
-import { battleTab, attributesTab, skillsTab, inventoryTab, trainingTab, rebirthTab, overviewTab, settingsTab } from './tabs.js';
+import { battleTab, attributesTab, skillsTab, inventoryTab, trainingTab, rebirthTab, overviewTab, settingsTab, battleDockHtml } from './tabs.js';
 import { startTravelToRegion, startTravelToPoi } from '../game/travel.js';
 import { raiseAttribute, derivedStats, xpForLevel, totalXpForLevel } from '../game/hero.js';
 import { equipItem } from '../game/loot.js';
@@ -40,6 +40,7 @@ export function createRenderer(state, { onImport }) {
   const nav = document.getElementById('tab-nav');
   const summary = document.getElementById('hero-summary');
   const main = document.getElementById('main');
+  const dock = document.getElementById('battle-dock');
 
   let lastLogLen = 0;
   let menuRenderFrames = 0;
@@ -79,6 +80,15 @@ export function createRenderer(state, { onImport }) {
       .join('');
   }
 
+  function updateDock() {
+    if (state.ui.activeTab === 'battle') {
+      dock.classList.add('hidden');
+    } else {
+      dock.classList.remove('hidden');
+      dock.innerHTML = battleDockHtml(state);
+    }
+  }
+
   function render() {
     // Toasts for newly unlocked features
     for (const u of drainNewUnlocks(state)) toast(u.toast);
@@ -86,6 +96,7 @@ export function createRenderer(state, { onImport }) {
     renderNav();
     updateSummary();
     main.innerHTML = TAB_RENDERERS[state.ui.activeTab](state);
+    updateDock();
     lastLogLen = state.log.length;
     menuRenderFrames = 0;
 
@@ -182,16 +193,18 @@ export function createRenderer(state, { onImport }) {
     if (m) {
       const nameEl = document.getElementById('m-name');
       if (nameEl) {
-        nameEl.textContent = m.name + (m.isBoss ? ' ☠ BOSS' : '');
+        nameEl.textContent = `${m.name} (Lv ${m.level})` + (m.isBoss ? ' ☠ BOSS' : '');
         nameEl.className = m.isBoss ? 'soul' : '';
       }
       setBar('m-hp', (m.hp / m.maxHp) * 100, `${Math.max(0, Math.ceil(m.hp))} / ${m.maxHp}`);
-      setText('m-meta', `ATK ${m.atk} · DEF ${m.def}`);
+      setText('m-meta', `ATK ${m.atk} · DEF ${m.def} · ${m.dmgType}`);
     }
 
     setBar('h-hp', (h.hp / d.maxHp) * 100, h.dead ? 'Dead... reviving' : `${Math.ceil(h.hp)} / ${d.maxHp} HP`);
     const xpProgress = state.progress.totalXpEarned - totalXpForLevel(h.level);
     setBar('h-xp', (xpProgress / xpForLevel(h.level)) * 100, `XP ${fmt(xpProgress)} / ${fmt(xpForLevel(h.level))}`);
+    setBar('h-sta', (h.stamina / d.maxStamina) * 100, `${Math.ceil(h.stamina)} / ${d.maxStamina} Stamina`);
+    setBar('h-mana', (h.mana / d.maxMana) * 100, `${Math.ceil(h.mana)} / ${d.maxMana} Mana`);
     setText('h-stats', `ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s · Dodge ${d.dodge.toFixed(0)}% · Crit ${d.critChance.toFixed(1)}% · ${fmt(state.pyreals)} pyreals`);
 
     const ovLine = document.getElementById('ov-hero-line');
@@ -211,6 +224,8 @@ export function createRenderer(state, { onImport }) {
       render();
       return;
     }
+    if (state.ui.activeTab !== 'battle') updateDock(); // dock is hidden on Battle itself
+
     if (LIVE_TABS.has(state.ui.activeTab)) {
       // Travel/town screens have countdown tiles and swap panels entirely on arrival,
       // which is easiest to keep correct with a full rebuild rather than patching DOM.

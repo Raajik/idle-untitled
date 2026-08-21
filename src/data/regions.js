@@ -7,10 +7,13 @@
 // game/combat.js `computeDepth`), and each POI's boss is a rare random encounter
 // once depth is high enough, not a one-time gate.
 //
+// Monsters/bosses carry only a `level` (stats are derived — see monsterScaling.js)
+// and a `dmgType` (one of DAMAGE_TYPES, used by the Resistance skill).
+//
 // walkSeconds is the BASE travel time (before the Run skill's speed bonus) it
 // takes to reach a region from town, or a POI from its region's hub.
-//
-// Rewards are AC-scale (XP in hundreds/thousands, pyreals in hundreds).
+
+export const DAMAGE_TYPES = ['bludgeon', 'pierce', 'slash', 'acid', 'cold', 'fire', 'lightning', 'void'];
 
 export const REGIONS = [
   {
@@ -21,119 +24,119 @@ export const REGIONS = [
       {
         id: 'holtburg-meeting-hall', name: 'Holtburg Meeting Hall', coords: '42.2N, 33.9E', quest: 'None', walkSeconds: 6,
         monsters: [
-          { name: 'Militia Recruit', hp: 20, atk: 7, def: 1, xp: 500, pyreals: 250 },
-          { name: 'Training Dummy', hp: 30, atk: 4, def: 2, xp: 400, pyreals: 200 },
-          { name: 'Town Guard', hp: 26, atk: 9, def: 3, xp: 700, pyreals: 350 },
+          { name: 'Militia Recruit', level: 1, dmgType: 'bludgeon' },
+          { name: 'Training Dummy', level: 1, dmgType: 'bludgeon' },
+          { name: 'Town Guard', level: 2, dmgType: 'bludgeon' },
         ],
-        boss: { name: 'Militia Captain', hp: 80, atk: 11, def: 3, xp: 6500, pyreals: 4000 },
+        boss: { name: 'Militia Captain', level: 5, dmgType: 'bludgeon' },
       },
       {
         id: 'drudge-hideout', name: 'Drudge Hideout', coords: '41.4N, 33.3E', quest: "Alfrin's Stolen Supplies", walkSeconds: 12,
         monsters: [
-          { name: 'Drudge Skulker', hp: 22, atk: 8, def: 2, xp: 600, pyreals: 300 },
-          { name: 'Drudge', hp: 28, atk: 9, def: 2, xp: 800, pyreals: 400 },
-          { name: 'Shreth', hp: 34, atk: 8, def: 1, xp: 900, pyreals: 400 },
+          { name: 'Drudge Skulker', level: 2, dmgType: 'bludgeon' },
+          { name: 'Drudge', level: 2, dmgType: 'bludgeon' },
+          { name: 'Shreth', level: 3, dmgType: 'pierce' },
         ],
-        boss: { name: 'Drudge Warlord', hp: 85, atk: 11, def: 2, xp: 7000, pyreals: 4500 },
+        boss: { name: 'Drudge Warlord', level: 6, dmgType: 'bludgeon' },
       },
       {
         id: 'holtburg-redoubt', name: 'Holtburg Redoubt', coords: '40.4N, 34.4E', quest: "Worcer's Missing Heirlooms", walkSeconds: 14,
         monsters: [
-          { name: 'Banderling', hp: 36, atk: 12, def: 4, xp: 1050, pyreals: 550 },
-          { name: 'Banderling Guard', hp: 42, atk: 13, def: 5, xp: 1150, pyreals: 600 },
-          { name: 'Drudge Ravener', hp: 38, atk: 13, def: 4, xp: 1100, pyreals: 550 },
+          { name: 'Banderling', level: 3, dmgType: 'slash' },
+          { name: 'Banderling Guard', level: 3, dmgType: 'slash' },
+          { name: 'Drudge Ravener', level: 4, dmgType: 'bludgeon' },
         ],
-        boss: { name: 'Banderling Warlord', hp: 125, atk: 16, def: 5, xp: 11000, pyreals: 7000 },
+        boss: { name: 'Banderling Warlord', level: 7, dmgType: 'slash' },
       },
       {
         id: 'rat-nest', name: 'A Rat Nest', coords: '40.2N, 32.5E', quest: 'Rat Tails', walkSeconds: 16,
         monsters: [
-          { name: 'Brown Rat', hp: 14, atk: 6, def: 1, xp: 500, pyreals: 250 },
-          { name: 'Grey Rat', hp: 12, atk: 7, def: 0, xp: 450, pyreals: 250 },
-          { name: 'Sewer Rat', hp: 18, atk: 6, def: 1, xp: 550, pyreals: 300 },
+          { name: 'Brown Rat', level: 4, dmgType: 'pierce' },
+          { name: 'Grey Rat', level: 4, dmgType: 'pierce' },
+          { name: 'Sewer Rat', level: 5, dmgType: 'acid' },
         ],
-        boss: { name: 'Rat King', hp: 55, atk: 10, def: 2, xp: 6000, pyreals: 3500 },
+        boss: { name: 'Rat King', level: 8, dmgType: 'pierce' },
       },
       {
         id: 'cave-of-alabree', name: 'Cave of Alabree', coords: '41.8N, 32.1E', quest: "Brogord's Demise", walkSeconds: 18,
         monsters: [
-          { name: 'Drudge Skulker', hp: 22, atk: 8, def: 2, xp: 600, pyreals: 300 },
-          { name: 'Drudge Mystic', hp: 26, atk: 10, def: 2, xp: 800, pyreals: 400 },
-          { name: 'Shreth Cub', hp: 30, atk: 9, def: 1, xp: 700, pyreals: 350 },
+          { name: 'Drudge Skulker', level: 5, dmgType: 'bludgeon' },
+          { name: 'Drudge Mystic', level: 5, dmgType: 'lightning' },
+          { name: 'Shreth Cub', level: 6, dmgType: 'cold' },
         ],
-        boss: { name: 'Brogord the Axe', hp: 90, atk: 12, def: 3, xp: 7500, pyreals: 4500 },
+        boss: { name: 'Brogord the Axe', level: 9, dmgType: 'bludgeon' },
       },
       {
         id: 'holtburg-dungeon', name: 'Holtburg Dungeon', coords: '43.6N, 33.0E', quest: 'Sword of Lost Light Quest', walkSeconds: 20,
         monsters: [
-          { name: 'Dungeon Drudge', hp: 30, atk: 10, def: 3, xp: 900, pyreals: 450 },
-          { name: 'Skeleton Lord', hp: 38, atk: 12, def: 4, xp: 1100, pyreals: 550 },
-          { name: 'Undead Minion', hp: 34, atk: 11, def: 3, xp: 1000, pyreals: 500 },
+          { name: 'Dungeon Drudge', level: 6, dmgType: 'bludgeon' },
+          { name: 'Skeleton Lord', level: 6, dmgType: 'void' },
+          { name: 'Undead Minion', level: 7, dmgType: 'void' },
         ],
-        boss: { name: 'The Lost Light', hp: 120, atk: 15, def: 5, xp: 10500, pyreals: 6500 },
+        boss: { name: 'The Lost Light', level: 10, dmgType: 'void' },
       },
       {
         id: 'asuger-temple', name: 'Asuger Temple', coords: '45.1N, 30.4E', quest: "Elysa's Favor", walkSeconds: 22,
         monsters: [
-          { name: 'Temple Drudge', hp: 26, atk: 10, def: 2, xp: 800, pyreals: 400 },
-          { name: 'Skeleton', hp: 24, atk: 11, def: 3, xp: 850, pyreals: 400 },
-          { name: 'Lesser Lich', hp: 34, atk: 12, def: 3, xp: 950, pyreals: 500 },
+          { name: 'Temple Drudge', level: 7, dmgType: 'bludgeon' },
+          { name: 'Skeleton', level: 7, dmgType: 'void' },
+          { name: 'Lesser Lich', level: 8, dmgType: 'void' },
         ],
-        boss: { name: 'Asuger', hp: 90, atk: 13, def: 3, xp: 8000, pyreals: 5000 },
+        boss: { name: 'Asuger', level: 11, dmgType: 'void' },
       },
       {
         id: 'banderling-ruin', name: 'Banderling Ruin', coords: '36.1N, 39.6E', quest: 'Runed Chest', walkSeconds: 26,
         monsters: [
-          { name: 'Banderling Scout', hp: 30, atk: 11, def: 3, xp: 900, pyreals: 450 },
-          { name: 'Banderling Warrior', hp: 40, atk: 12, def: 4, xp: 1000, pyreals: 500 },
-          { name: 'Banderling Savage', hp: 34, atk: 13, def: 3, xp: 950, pyreals: 500 },
+          { name: 'Banderling Scout', level: 8, dmgType: 'slash' },
+          { name: 'Banderling Warrior', level: 8, dmgType: 'slash' },
+          { name: 'Banderling Savage', level: 9, dmgType: 'slash' },
         ],
-        boss: { name: 'Banderling Chieftain', hp: 100, atk: 14, def: 4, xp: 9000, pyreals: 5500 },
+        boss: { name: 'Banderling Chieftain', level: 12, dmgType: 'slash' },
       },
       {
         id: 'dungeon-fern', name: 'Dungeon Fern', coords: '43.3N, 37.2E', quest: 'Runed Chest', walkSeconds: 28,
         monsters: [
-          { name: 'Shreth', hp: 34, atk: 8, def: 1, xp: 900, pyreals: 400 },
-          { name: 'Shreth Elder', hp: 40, atk: 9, def: 2, xp: 1000, pyreals: 500 },
-          { name: 'Fern Gromnie', hp: 36, atk: 11, def: 3, xp: 1000, pyreals: 500 },
+          { name: 'Shreth', level: 9, dmgType: 'pierce' },
+          { name: 'Shreth Elder', level: 9, dmgType: 'pierce' },
+          { name: 'Fern Gromnie', level: 10, dmgType: 'acid' },
         ],
-        boss: { name: 'Fern Guardian', hp: 110, atk: 14, def: 4, xp: 9500, pyreals: 5800 },
+        boss: { name: 'Fern Guardian', level: 13, dmgType: 'acid' },
       },
       {
         id: 'mukkir-nest', name: 'Small Fledgling Mukkir Nest', coords: '43.5N, 36.1E', quest: 'Small Fledgling Mukkir Kill Task', walkSeconds: 30,
         monsters: [
-          { name: 'Fledgling Mukkir', hp: 42, atk: 14, def: 4, xp: 1150, pyreals: 600 },
-          { name: 'Mukkir Drone', hp: 48, atk: 14, def: 5, xp: 1200, pyreals: 650 },
-          { name: 'Mukkir Spawnling', hp: 38, atk: 15, def: 4, xp: 1150, pyreals: 600 },
+          { name: 'Fledgling Mukkir', level: 10, dmgType: 'acid' },
+          { name: 'Mukkir Drone', level: 10, dmgType: 'acid' },
+          { name: 'Mukkir Spawnling', level: 11, dmgType: 'acid' },
         ],
-        boss: { name: 'Mukkir Queen', hp: 135, atk: 17, def: 5, xp: 12000, pyreals: 7500 },
+        boss: { name: 'Mukkir Queen', level: 14, dmgType: 'acid' },
       },
       {
         id: 'hunters-leap', name: "Hunter's Leap", coords: '35.7N, 32.6E', quest: "Lilitha's Lost Bow", walkSeconds: 34,
         monsters: [
-          { name: 'Shreth', hp: 34, atk: 8, def: 1, xp: 900, pyreals: 400 },
-          { name: 'Shreth Hunter', hp: 40, atk: 10, def: 2, xp: 1000, pyreals: 500 },
-          { name: 'Ridgeback Shreth', hp: 46, atk: 11, def: 3, xp: 1100, pyreals: 550 },
+          { name: 'Shreth', level: 11, dmgType: 'pierce' },
+          { name: 'Shreth Hunter', level: 11, dmgType: 'pierce' },
+          { name: 'Ridgeback Shreth', level: 12, dmgType: 'pierce' },
         ],
-        boss: { name: 'Shreth Alpha', hp: 115, atk: 14, def: 4, xp: 10000, pyreals: 6200 },
+        boss: { name: 'Shreth Alpha', level: 15, dmgType: 'pierce' },
       },
       {
         id: 'daiklos', name: 'Daiklos', coords: '33.7N, 29.2E', quest: 'Runed Chest', walkSeconds: 38,
         monsters: [
-          { name: 'Skeleton', hp: 24, atk: 11, def: 3, xp: 850, pyreals: 400 },
-          { name: 'Zombie', hp: 30, atk: 10, def: 2, xp: 800, pyreals: 400 },
-          { name: 'Wight', hp: 34, atk: 12, def: 3, xp: 950, pyreals: 500 },
+          { name: 'Skeleton', level: 12, dmgType: 'void' },
+          { name: 'Zombie', level: 12, dmgType: 'acid' },
+          { name: 'Wight', level: 13, dmgType: 'void' },
         ],
-        boss: { name: 'Daiklos the Fallen', hp: 100, atk: 14, def: 4, xp: 8500, pyreals: 5200 },
+        boss: { name: 'Daiklos the Fallen', level: 16, dmgType: 'void' },
       },
       {
         id: 'heart-of-innocence', name: 'Heart of Innocence', coords: '34.0N, 39.0E (Approx.)', quest: 'Heart of Innocence Quest', walkSeconds: 40,
         monsters: [
-          { name: 'Lost Soul', hp: 36, atk: 12, def: 3, xp: 1000, pyreals: 500 },
-          { name: 'Wailing Banshee', hp: 32, atk: 13, def: 3, xp: 1050, pyreals: 550 },
-          { name: 'Tormented Spirit', hp: 40, atk: 12, def: 4, xp: 1100, pyreals: 550 },
+          { name: 'Lost Soul', level: 13, dmgType: 'void' },
+          { name: 'Wailing Banshee', level: 13, dmgType: 'cold' },
+          { name: 'Tormented Spirit', level: 14, dmgType: 'void' },
         ],
-        boss: { name: 'The Innocent One', hp: 115, atk: 15, def: 4, xp: 10000, pyreals: 6000 },
+        boss: { name: 'The Innocent One', level: 17, dmgType: 'void' },
       },
     ],
   },
@@ -145,20 +148,20 @@ export const REGIONS = [
       {
         id: 'banderling-plains', name: 'Banderling Plains', coords: '—', quest: 'None', walkSeconds: 20,
         monsters: [
-          { name: 'Banderling', hp: 60, atk: 16, def: 5, xp: 1800, pyreals: 900 },
-          { name: 'Mosswart', hp: 48, atk: 18, def: 4, xp: 2000, pyreals: 1100 },
-          { name: 'Banderling Guard', hp: 75, atk: 15, def: 6, xp: 1900, pyreals: 1000 },
+          { name: 'Banderling', level: 18, dmgType: 'slash' },
+          { name: 'Mosswart', level: 18, dmgType: 'acid' },
+          { name: 'Banderling Guard', level: 19, dmgType: 'slash' },
         ],
-        boss: { name: 'Banderling Chieftain', hp: 260, atk: 22, def: 6, xp: 18000, pyreals: 11500 },
+        boss: { name: 'Banderling Chieftain', level: 23, dmgType: 'slash' },
       },
       {
         id: 'mosswart-horde', name: 'Mosswart Horde', coords: '—', quest: 'None', walkSeconds: 30,
         monsters: [
-          { name: 'Mosswart Raider', hp: 140, atk: 30, def: 10, xp: 4200, pyreals: 2200 },
-          { name: 'Reedshark', hp: 175, atk: 34, def: 12, xp: 4800, pyreals: 2500 },
-          { name: 'Mosswart Shaman', hp: 115, atk: 36, def: 9, xp: 4500, pyreals: 2400 },
+          { name: 'Mosswart Raider', level: 24, dmgType: 'acid' },
+          { name: 'Reedshark', level: 25, dmgType: 'pierce' },
+          { name: 'Mosswart Shaman', level: 25, dmgType: 'fire' },
         ],
-        boss: { name: 'Mosswart Brood Mother', hp: 650, atk: 46, def: 14, xp: 42000, pyreals: 26000 },
+        boss: { name: 'Mosswart Brood Mother', level: 30, dmgType: 'acid' },
       },
     ],
   },
@@ -170,11 +173,11 @@ export const REGIONS = [
       {
         id: 'olthoi-nest', name: 'Olthoi Nest', coords: '—', quest: 'None', walkSeconds: 20,
         monsters: [
-          { name: 'Olthoi Nymph', hp: 360, atk: 58, def: 22, xp: 9500, pyreals: 5000 },
-          { name: 'Skeleton Lord', hp: 470, atk: 52, def: 30, xp: 11000, pyreals: 5500 },
-          { name: 'Olthoi Drone', hp: 310, atk: 62, def: 20, xp: 10000, pyreals: 5200 },
+          { name: 'Olthoi Nymph', level: 32, dmgType: 'acid' },
+          { name: 'Skeleton Lord', level: 33, dmgType: 'void' },
+          { name: 'Olthoi Drone', level: 34, dmgType: 'lightning' },
         ],
-        boss: { name: 'Olthoi Soldier', hp: 1600, atk: 80, def: 28, xp: 95000, pyreals: 58000 },
+        boss: { name: 'Olthoi Soldier', level: 40, dmgType: 'acid' },
       },
     ],
   },
@@ -186,20 +189,20 @@ export const REGIONS = [
       {
         id: 'golem-caverns', name: 'Golem Caverns', coords: '—', quest: 'None', walkSeconds: 20,
         monsters: [
-          { name: 'Sandstone Golem', hp: 900, atk: 100, def: 50, xp: 21000, pyreals: 11000 },
-          { name: 'Gromnie', hp: 700, atk: 112, def: 44, xp: 23000, pyreals: 12000 },
-          { name: 'Mud Golem', hp: 1050, atk: 94, def: 56, xp: 22000, pyreals: 11500 },
+          { name: 'Sandstone Golem', level: 45, dmgType: 'bludgeon' },
+          { name: 'Gromnie', level: 46, dmgType: 'bludgeon' },
+          { name: 'Mud Golem', level: 47, dmgType: 'cold' },
         ],
-        boss: { name: 'Magma Golem', hp: 3400, atk: 145, def: 55, xp: 210000, pyreals: 130000 },
+        boss: { name: 'Magma Golem', level: 55, dmgType: 'fire' },
       },
       {
         id: 'virindi-citadel', name: 'Virindi Citadel', coords: '—', quest: 'None', walkSeconds: 40,
         monsters: [
-          { name: 'Virindi', hp: 1500, atk: 180, def: 80, xp: 48000, pyreals: 26000 },
-          { name: 'Lugian Raider', hp: 1900, atk: 170, def: 95, xp: 52000, pyreals: 28000 },
-          { name: 'Virindi Consul', hp: 1350, atk: 195, def: 75, xp: 50000, pyreals: 27000 },
+          { name: 'Virindi', level: 58, dmgType: 'lightning' },
+          { name: 'Lugian Raider', level: 59, dmgType: 'bludgeon' },
+          { name: 'Virindi Consul', level: 60, dmgType: 'lightning' },
         ],
-        boss: { name: 'Virindi Executor', hp: 7400, atk: 255, def: 100, xp: 520000, pyreals: 320000 },
+        boss: { name: 'Virindi Executor', level: 68, dmgType: 'void' },
       },
     ],
   },
