@@ -6,7 +6,7 @@
 
 import { getMaterial, SLOT_MATERIAL_CATEGORY } from '../data/materials.js';
 import { rollSpell, MAX_SPELL_LEVEL } from '../data/spells.js';
-import { trainSkill } from './skills.js';
+import { trainSkill, trainAttribute, TINKER_ATTR_XP } from './skills.js';
 import { addLog } from './state.js';
 
 export const TINKER_COST = 3; // units of material consumed per application
@@ -62,6 +62,8 @@ export function applyTinkering(state, slot, materialId) {
   }
 
   trainSkill(state, tinkering, 'Tinkering', TINKER_XP);
+  trainAttribute(state, 'coord', TINKER_ATTR_XP.coord);
+  trainAttribute(state, 'focus', TINKER_ATTR_XP.focus);
   addLog(state, `You work ${material.name} into ${item.name}: ${resultLabel}.`, 'good');
   return true;
 }

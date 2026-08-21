@@ -4,7 +4,7 @@
 // you travel away, and gates the boss in as a random encounter rather than a
 // one-time unlock.
 
-import { getPoiById } from '../data/regions.js';
+import { getPoiById, isMagicDamageType } from '../data/regions.js';
 import { monsterStatsForLevel, bossStatsForLevel } from '../data/monsterScaling.js';
 import { TUTORIAL_ROAD } from '../data/tutorial.js';
 import {
@@ -28,6 +28,7 @@ import { tickJumpCooldown } from './shortcuts.js';
 import { tickGathering } from './gathering.js';
 import {
   trainSkill,
+  trainAttribute,
   defensiveChance,
   resistanceMitigationPct,
   hitChance,
@@ -36,6 +37,13 @@ import {
   MELEE_WEAPON_BASE_TYPES,
   RECALL_XP_ON_DEATH,
   COMBAT_SKILL_XP,
+  MELEE_ATTR_XP,
+  ARCHERY_COORD_XP,
+  MAGIC_ATTR_XP,
+  DEFEND_SUCCESS_ATTR_XP,
+  MAGIC_RESIST_ATTR_XP,
+  HIT_TAKEN_END_XP,
+  DEATH_END_XP,
 } from './skills.js';
 
 const MONSTER_ATTACK_INTERVAL = 1.2; // seconds
@@ -165,14 +173,38 @@ function tickBleed(state, dt) {
   return false;
 }
 
+// Attribute xp granted on a successful defensive layer, additive to that
+// layer's own skill training.
+const ATTR_ON_DEFEND_SUCCESS = {
+  dodge: [
+    ['coord', DEFEND_SUCCESS_ATTR_XP],
+    ['quick', DEFEND_SUCCESS_ATTR_XP],
+  ],
+  block: [
+    ['str', DEFEND_SUCCESS_ATTR_XP],
+    ['coord', DEFEND_SUCCESS_ATTR_XP],
+  ],
+  parry: [
+    ['str', DEFEND_SUCCESS_ATTR_XP],
+    ['coord', DEFEND_SUCCESS_ATTR_XP],
+  ],
+  magicResistance: [
+    ['focus', MAGIC_RESIST_ATTR_XP],
+    ['self', MAGIC_RESIST_ATTR_XP],
+  ],
+};
+
 // Rolls the hero's defensive layers in order — Dodge (always available), Block
-// (only with a shield equipped), Parry (only with a melee weapon equipped).
-// Each eligible layer only trains and can only succeed while the hero has
-// stamina to spend; running out of stamina mid-swing just means the remaining
-// layers are skipped. Returns the layer name that avoided the hit, or null —
-// Resistance is NOT part of this chain; see the mitigation step in tickCombat.
+// (only with a shield equipped), Parry (only with a melee weapon equipped),
+// Magic Resistance (no gear needed, but only eligible against a magic-based
+// attack — see isMagicDamageType). Each eligible layer only trains and can
+// only succeed while the hero has stamina to spend; running out of stamina
+// mid-swing just means the remaining layers are skipped. Returns the layer
+// name that avoided the hit, or null — Resistance is NOT part of this chain;
+// see the mitigation step in tickCombat.
 function tryDefend(state, stats) {
   const h = state.hero;
+  const m = state.monster;
   const hasShield = !!state.equipment.shield;
   const weapon = state.equipment.weapon;
   const hasMeleeWeapon = !!(weapon && MELEE_WEAPON_BASE_TYPES.includes(weapon.baseType));
@@ -181,6 +213,7 @@ function tryDefend(state, stats) {
     ['dodge', 'Dodge', true, stats.dodgeBonus],
     ['block', 'Block', hasShield, stats.blockBonus],
     ['parry', 'Parry', hasMeleeWeapon, stats.parryBonus],
+    ['magicResistance', 'Magic Resistance', isMagicDamageType(m.dmgType), stats.magicResistanceBonus],
   ];
   for (const [key, name, eligible, bonus] of layers) {
     if (!eligible) continue;
@@ -190,6 +223,7 @@ function tryDefend(state, stats) {
     const chance = Math.min(95, defensiveChance(skill.rank) + bonus);
     if (Math.random() * 100 < chance) {
       h.stamina -= HERO_STAMINA_COST_PER_DEFEND;
+      for (const [attr, xp] of ATTR_ON_DEFEND_SUCCESS[key]) trainAttribute(state, attr, xp);
       return name;
     }
   }
@@ -242,6 +276,7 @@ function onMonsterDeath(state) {
 function handleHeroDeath(state) {
   const p = state.progress;
   trainSkill(state, state.hero.skills.lifestone.recall, 'Lifestone Recall', RECALL_XP_ON_DEATH);
+  trainAttribute(state, 'end', DEATH_END_XP);
   if (p.firstDeathHandled) return;
   p.firstDeathHandled = true;
   p.recallUnlocked = true;
@@ -334,6 +369,7 @@ export function tickCombat(state, dt) {
 
       const weaponSkill = activeWeaponSkill(state);
       trainSkill(state, weaponSkill.skill, weaponSkill.label, COMBAT_SKILL_XP);
+      trainAttribute(state, 'coord', ARCHERY_COORD_XP);
       const chance = Math.min(95, Math.max(0, hitChance(weaponSkill.skill.rank) + stance.accuracyMod));
       if (Math.random() * 100 >= chance) {
         addLog(state, `Your shot goes wide of ${m.name}.`, 'dim');
@@ -355,6 +391,8 @@ export function tickCombat(state, dt) {
 
       const warSkill = h.skills.offense.war;
       trainSkill(state, warSkill, 'War Magic', COMBAT_SKILL_XP);
+      trainAttribute(state, 'focus', MAGIC_ATTR_XP);
+      trainAttribute(state, 'self', MAGIC_ATTR_XP);
       if (Math.random() * 100 >= hitChance(warSkill.rank)) {
         addLog(state, `Your ${spell.label} fizzles past ${m.name}.`, 'dim');
         continue;
@@ -373,6 +411,9 @@ export function tickCombat(state, dt) {
 
       const weaponSkill = activeWeaponSkill(state);
       trainSkill(state, weaponSkill.skill, weaponSkill.label, COMBAT_SKILL_XP);
+      trainAttribute(state, 'str', MELEE_ATTR_XP);
+      trainAttribute(state, 'coord', MELEE_ATTR_XP);
+      trainAttribute(state, 'quick', MELEE_ATTR_XP);
       if (Math.random() * 100 >= hitChance(weaponSkill.skill.rank)) {
         addLog(state, `You swing and miss ${m.name}.`, 'dim');
         continue;
@@ -407,6 +448,7 @@ export function tickCombat(state, dt) {
     const { dmg: rawDmg } = dealDamage(m.atk, stats.def, 0);
     const dmg = Math.max(1, Math.round(rawDmg * (1 - mitigation / 100)));
     h.hp -= dmg;
+    trainAttribute(state, 'end', HIT_TAKEN_END_XP);
     pushFx({ type: 'hit', target: 'hero', dmg });
     if (h.hp <= 0) {
       h.hp = 0;

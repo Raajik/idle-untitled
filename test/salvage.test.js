@@ -15,6 +15,9 @@ test('salvaging an inventory item removes it and grants a rarity-scaled quantity
   assert.equal(result.amount, SALVAGE_YIELD.Rare);
   assert.equal(s.materials['iron'], SALVAGE_YIELD.Rare);
   assert.equal(s.inventory.length, 0);
+  assert.ok(s.hero.attrXp.str > 0);
+  assert.ok(s.hero.attrXp.coord > 0);
+  assert.ok(s.hero.attrXp.focus > 0);
 });
 
 test('salvaging a non-existent item does nothing', () => {

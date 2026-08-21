@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { trainSkill, defensiveChance, resistanceMitigationPct, xpToNextRank, MAX_SKILL_RANK } from '../src/game/skills.js';
+import { trainSkill, trainAttribute, xpToNextAttrPoint, defensiveChance, resistanceMitigationPct, xpToNextRank, MAX_SKILL_RANK } from '../src/game/skills.js';
 import { monsterStatsForLevel, bossStatsForLevel } from '../src/data/monsterScaling.js';
 import { createInitialState } from '../src/game/state.js';
 import { tickCombat } from '../src/game/combat.js';
@@ -62,4 +62,23 @@ test('Parry trains once a melee weapon is equipped', () => {
   s.equipment.weapon = { slot: 'weapon', power: 5, spells: [], rarity: 'Common', name: 'Worn Sword', baseType: 'sword' };
   for (let i = 0; i < 40; i++) tickCombat(s, 0.25);
   assert.ok(s.hero.skills.parry.xp > 0 || s.hero.skills.parry.rank > 0);
+});
+
+test('xpToNextAttrPoint lines up with the skill curve at the attribute base value', () => {
+  assert.equal(xpToNextAttrPoint(5), xpToNextRank(0));
+  assert.equal(xpToNextAttrPoint(6), xpToNextRank(1));
+});
+
+test('trainAttribute logs the point gained', () => {
+  const s = createInitialState();
+  trainAttribute(s, 'str', xpToNextAttrPoint(s.hero.str) + 1);
+  assert.equal(s.hero.str, 6);
+  assert.ok(s.log.some((l) => l.text === 'Strength increased to 6.'));
+});
+
+test('trainAttribute has no cap, unlike trainSkill', () => {
+  const s = createInitialState();
+  // Drive it well past what would be skill-rank 200 on the shared curve — attributes have no cap.
+  for (let i = 0; i < 200; i++) trainAttribute(s, 'str', xpToNextAttrPoint(s.hero.str) + 1);
+  assert.ok(s.hero.str > 150);
 });

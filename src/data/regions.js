@@ -15,6 +15,14 @@
 
 export const DAMAGE_TYPES = ['bludgeon', 'pierce', 'slash', 'acid', 'cold', 'fire', 'lightning', 'void'];
 
+// Elemental/void damage reads as magic-based (what Magic Resistance defends against);
+// bludgeon/pierce/slash are physical weapon damage.
+export const MAGIC_DAMAGE_TYPES = ['acid', 'cold', 'fire', 'lightning', 'void'];
+
+export function isMagicDamageType(dmgType) {
+  return MAGIC_DAMAGE_TYPES.includes(dmgType);
+}
+
 export const REGIONS = [
   {
     id: 'holtburg',

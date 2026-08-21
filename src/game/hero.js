@@ -1,8 +1,9 @@
 // Hero stats: Asheron's Call six attributes -> derived combat stats.
-// Strength / Endurance / Coordination / Quickness drive melee combat;
-// Focus (Life Magic) and Self (mana) are latent until the skill system lands.
 //
-// Attributes are raised by spending XP (AC-style) with a power-2.5 cost curve.
+// Attributes level up naturally from actions (melee/archery/magic attacks,
+// dodging/blocking/parrying, salvaging, tinkering, taking hits, dying — see
+// trainAttribute in skills.js for the mechanism and combat.js/loot.js/
+// tinkering.js for the call sites), the same way skills already do.
 // Character level is derived from total XP earned this run, using AC's cubic curve.
 
 import { REBIRTH_UPGRADES } from '../data/rebirth.js';
@@ -38,27 +39,12 @@ export function levelFromTotalXp(xp) {
   return level;
 }
 
-// --- Attribute raising (AC-style: spend XP, escalating cost ~ value^2.5) ---
-
-export function attributeCost(value) {
-  return Math.ceil(0.025 * Math.pow(value, 2.5));
-}
-
-export function raiseAttribute(state, attr) {
-  if (!ATTRIBUTES.some((a) => a.id === attr)) return false;
-  const cost = attributeCost(state.hero[attr]);
-  if (state.hero.xp < cost) return false;
-  state.hero.xp -= cost;
-  state.hero[attr] += 1;
-  return true;
-}
-
 // Aggregate all percentage/flat bonuses from item spells, training, and rebirth upgrades.
 export function getBonuses(state) {
   const b = {
     atkPct: 0, atkFlat: 0, hpFlat: 0, hpPct: 0, pyrealsPct: 0, xpPct: 0, critPct: 0, luckPct: 0,
     weaponAtk: 0, armorDef: 0, armorFlat: 0, maxManaFlat: 0, startStats: 0,
-    dodgeBonus: 0, blockBonus: 0, parryBonus: 0, resistanceBonus: {},
+    dodgeBonus: 0, blockBonus: 0, parryBonus: 0, magicResistanceBonus: 0, resistanceBonus: {},
   };
 
   for (const slot of Object.keys(state.equipment)) {
@@ -122,16 +108,16 @@ export function derivedStats(state) {
     dodgeBonus: b.dodgeBonus,
     blockBonus: b.blockBonus,
     parryBonus: b.parryBonus,
+    magicResistanceBonus: b.magicResistanceBonus,
     resistanceBonus: b.resistanceBonus,
   };
 }
 
-// Grant XP: adds to the spendable pool AND the run's total (which drives level).
+// Grant XP: adds to the run's cumulative total, which drives character level.
 // Returns the number of levels gained.
 export function grantXp(state, amount) {
   const mult = 1 + derivedStats(state).xpPct / 100;
   const gained = Math.round(amount * mult);
-  state.hero.xp += gained;
   state.progress.totalXpEarned += gained;
   const newLevel = levelFromTotalXp(state.progress.totalXpEarned);
   const levels = newLevel - state.hero.level;

@@ -23,6 +23,8 @@ test('applyTinkering consumes materials and adds/boosts a spell on the item', ()
   assert.equal(s.materials['iron'], 0);
   assert.equal(s.equipment.weapon.spells.length, 1);
   assert.ok(s.hero.skills.tinkering.xp > 0 || s.hero.skills.tinkering.rank > 0);
+  assert.ok(s.hero.attrXp.coord > 0);
+  assert.ok(s.hero.attrXp.focus > 0);
 
   // Not enough material left for a second application.
   assert.equal(applyTinkering(s, 'weapon', 'iron'), false);

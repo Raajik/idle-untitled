@@ -49,18 +49,20 @@ const DEFS = {
   defensiveBoost: {
     name: null, // named per-roll below, since it depends on which skill it picked
     roll: (level) => {
-      const options = ['dodge', 'block', 'parry', 'resistance'];
+      const options = ['dodge', 'block', 'parry', 'magicResistance', 'resistance'];
       const skill = options[Math.floor(Math.random() * options.length)];
       const meta = skill === 'resistance' ? { skill, dmgType: DAMAGE_TYPES[Math.floor(Math.random() * DAMAGE_TYPES.length)] } : { skill };
       return { value: magnitude(level, 2), meta };
     },
     effectLabel: (v, meta) =>
-      meta.skill === 'resistance' ? `+${v}% ${cap(meta.dmgType)} Resistance` : `+${v}% ${cap(meta.skill)}`,
+      meta.skill === 'resistance'
+        ? `+${v}% ${cap(meta.dmgType)} Resistance`
+        : `+${v}% ${meta.skill === 'magicResistance' ? 'Magic Resistance' : cap(meta.skill)}`,
     bonusKey: (meta) => (meta.skill === 'resistance' ? `resistanceBonus.${meta.dmgType}` : `${meta.skill}Bonus`),
     displayName: (meta) =>
       meta.skill === 'resistance'
-        ? { dodge: 'Swiftness', block: 'Bulwark', parry: 'Riposte' }[meta.skill] || `${cap(meta.dmgType)} Ward`
-        : { dodge: 'Swiftness', block: 'Bulwark', parry: 'Riposte' }[meta.skill],
+        ? { dodge: 'Swiftness', block: 'Bulwark', parry: 'Riposte', magicResistance: 'Runeward' }[meta.skill] || `${cap(meta.dmgType)} Ward`
+        : { dodge: 'Swiftness', block: 'Bulwark', parry: 'Riposte', magicResistance: 'Runeward' }[meta.skill],
   },
   pyrealsPct: {
     name: 'Fortune',

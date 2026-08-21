@@ -9,10 +9,26 @@
 // / `hitChance`.
 
 import { addLog } from './state.js';
+import { ATTRIBUTES } from './hero.js';
 
 export const MAX_SKILL_RANK = 100;
 export const ATHLETICS_XP_PER_SECOND = 4;
 export const COMBAT_SKILL_XP = 1; // xp granted to a combat skill per attack faced/thrown
+
+// Attribute-xp grants: attributes level up from actions the same way skills do,
+// reusing xpToNextRank's curve (offset so a fresh hero's first point costs the
+// same as a skill's first rank-up). See trainAttribute below.
+export const MELEE_ATTR_XP = 1; // STR/COORD/QUICK per melee swing attempt
+export const ARCHERY_COORD_XP = 5; // COORD per archery attack attempt (much more than melee)
+export const MAGIC_ATTR_XP = 1; // FOCUS/SELF per cast attempt
+export const DEFEND_SUCCESS_ATTR_XP = 2; // Dodge/Block/Parry attribute grants
+export const MAGIC_RESIST_ATTR_XP = 3; // FOCUS/SELF per Magic Resistance proc
+export const HIT_TAKEN_END_XP = 1; // END per landed hit
+export const DEATH_END_XP = 15; // additional END on death, on top of the hit's own grant
+export const SALVAGE_ATTR_XP = { str: 3, coord: 2, focus: 2 };
+export const TINKER_ATTR_XP = { coord: 2, focus: 2 };
+export const QUICK_XP_PER_ATHLETICS_SECOND = 1; // scaled down from ATHLETICS_XP_PER_SECOND
+export const JUMP_QUICK_XP_ON_USE = 4; // scaled down from JUMP_XP_ON_USE, same ratio
 
 // Melee weapons (and bare fists) train their own skill; Bow/Crossbow are Ranged.
 // War Magic governs the Magic attack bar (Arc/Volley/Streak — see
@@ -45,6 +61,28 @@ export const GATHERING_SKILLS = [
 
 export function xpToNextRank(rank) {
   return Math.ceil(18 * Math.pow(rank + 1, 1.55));
+}
+
+const ATTR_BASE_VALUE = 5; // attributes start at 5 — treat that as "rank 0" for the shared curve
+
+export function xpToNextAttrPoint(value) {
+  return xpToNextRank(Math.max(0, value - ATTR_BASE_VALUE));
+}
+
+// Adds xp to an attribute (a plain int on state.hero), no cap, logging on each point gained.
+export function trainAttribute(state, attrId, xp) {
+  const h = state.hero;
+  h.attrXp[attrId] += xp;
+  let leveled = false;
+  while (h.attrXp[attrId] >= xpToNextAttrPoint(h[attrId])) {
+    h.attrXp[attrId] -= xpToNextAttrPoint(h[attrId]);
+    h[attrId] += 1;
+    leveled = true;
+  }
+  if (leveled) {
+    const meta = ATTRIBUTES.find((a) => a.id === attrId);
+    addLog(state, `${meta.name} increased to ${h[attrId]}.`, 'good');
+  }
 }
 
 // Base walk time shrinks toward ~10% of base as Athletics approaches rank 100.
@@ -96,6 +134,7 @@ export function trainSkill(state, skill, name, xp) {
 
 export function grantAthleticsXp(state, seconds) {
   trainSkill(state, state.hero.skills.athletics, 'Athletics', seconds * ATHLETICS_XP_PER_SECOND);
+  trainAttribute(state, 'quick', seconds * QUICK_XP_PER_ATHLETICS_SECOND);
 }
 
 // Jump (shortcuts): instant relocation between two linked POIs, gated by a

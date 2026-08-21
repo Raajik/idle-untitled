@@ -6,7 +6,7 @@
 import { topLevelEntries, childTabs, drainNewUnlocks, UNLOCKS } from './unlocks.js';
 import { battleTab, attributesTab, skillsTab, inventoryTab, trainingTab, rebirthTab, recallTab, tinkeringTab, overviewTab, settingsTab, battleDockHtml } from './tabs.js';
 import { startTravelToRegion, startTravelToPoi } from '../game/travel.js';
-import { raiseAttribute, derivedStats, xpForLevel, totalXpForLevel } from '../game/hero.js';
+import { derivedStats, xpForLevel, totalXpForLevel } from '../game/hero.js';
 import { equipItem, salvageItem } from '../game/loot.js';
 import { buyTraining } from '../game/training.js';
 import { performRebirth, buyUpgrade } from '../game/prestige.js';
@@ -319,7 +319,6 @@ export function createRenderer(state, { onImport }) {
     switch (action) {
       case 'travel-region': startTravelToRegion(state, arg); break;
       case 'travel-poi': startTravelToPoi(state, arg); break;
-      case 'raise': raiseAttribute(state, arg); break;
       case 'equip': equipItem(state, Number(arg)); break;
       case 'toggle-autoequip': state.settings.autoEquip = !state.settings.autoEquip; break;
       case 'train': buyTraining(state, arg); break;

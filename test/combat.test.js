@@ -43,7 +43,7 @@ test('combat ticks eventually kill the monster and grant rewards', () => {
   for (let i = 0; i < 40; i++) tickCombat(s, 0.25);
   assert.ok(s.progress.totalKills >= 1);
   assert.ok(s.pyreals > pyrealsBefore);
-  assert.ok(s.hero.xp > 0 || s.hero.level > 1);
+  assert.ok(s.progress.totalXpEarned > 0 || s.hero.level > 1);
 });
 
 test('depth rises with time and kills spent at a POI', () => {
@@ -94,6 +94,55 @@ test('the Devastating melee stance applies a stacking bleed that ticks damage ov
   const hpBefore = s.monster.hp;
   for (let i = 0; i < 6; i++) tickCombat(s, 1.1);
   assert.ok(s.monster.hp < hpBefore);
+});
+
+test('melee swings grow STR, COORD, and QUICK', () => {
+  const s = atPoi('holtburg-meeting-hall');
+  for (let i = 0; i < 40; i++) tickCombat(s, 0.25);
+  assert.ok(s.hero.attrXp.str > 0 || s.hero.str > 5);
+  assert.ok(s.hero.attrXp.coord > 0 || s.hero.coord > 5);
+  assert.ok(s.hero.attrXp.quick > 0 || s.hero.quick > 5);
+});
+
+test('archery grows COORD markedly faster than melee', () => {
+  const melee = atPoi('holtburg-meeting-hall');
+  const archery = atPoi('holtburg-meeting-hall');
+  archery.hero.combat.mode = 'archery';
+  archery.equipment.weapon = { slot: 'weapon', power: 5, spells: [], rarity: 'Common', name: 'Worn Bow', baseType: 'bow' };
+  for (let i = 0; i < 40; i++) {
+    tickCombat(melee, 0.25);
+    tickCombat(archery, 0.25);
+  }
+  const coordProgress = (s) => (s.hero.coord - 5) * 1000 + s.hero.attrXp.coord;
+  assert.ok(coordProgress(archery) > coordProgress(melee));
+});
+
+test('hero death grants a bigger END bump than a single non-lethal hit', () => {
+  const s = atPoi('virindi-citadel'); // brutal, guarantees hits land
+  s.hero.end = 1;
+  let died = false;
+  for (let i = 0; i < 400 && !died; i++) {
+    tickCombat(s, 0.25);
+    if (s.hero.dead) died = true;
+  }
+  assert.ok(died);
+  // a single hit alone only grants HIT_TAKEN_END_XP (1); death adds DEATH_END_XP (15) on top.
+  assert.ok(s.hero.attrXp.end > 5 || s.hero.end > 5);
+});
+
+test('Magic Resistance only trains against magic-based attacks', () => {
+  const magic = atPoi('daiklos'); // all-void/acid monster pool
+  magic.hero.skills.magicResistance.rank = 100; // guarantee procs so focus/self grow
+  magic.hero.end = 1;
+  for (let i = 0; i < 40; i++) tickCombat(magic, 0.25);
+  assert.ok(magic.hero.skills.magicResistance.xp > 0 || magic.hero.skills.magicResistance.rank > 0);
+  assert.ok(magic.hero.attrXp.focus > 0 || magic.hero.focus > 5);
+  assert.ok(magic.hero.attrXp.self > 0 || magic.hero.self > 5);
+
+  const physical = atPoi('holtburg-meeting-hall'); // all-bludgeon monster pool
+  for (let i = 0; i < 40; i++) tickCombat(physical, 0.25);
+  assert.equal(physical.hero.skills.magicResistance.rank, 0);
+  assert.equal(physical.hero.skills.magicResistance.xp, 0);
 });
 
 test('magic casting drains mana, trains War Magic, and deals damage', () => {

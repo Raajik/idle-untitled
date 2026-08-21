@@ -7,6 +7,7 @@ import { monsterStatsForLevel } from '../data/monsterScaling.js';
 import { rollSpell, spellLevelCeiling, rollSpellLevel } from '../data/spells.js';
 import { pick, pickWeighted, chance } from '../engine/rng.js';
 import { derivedStats } from './hero.js';
+import { trainAttribute, SALVAGE_ATTR_XP } from './skills.js';
 
 let nextItemId = 1;
 
@@ -131,5 +132,8 @@ export function salvageItem(state, itemId) {
   const amount = SALVAGE_YIELD[item.rarity] || 1;
   state.inventory.splice(idx, 1);
   state.materials[item.material] = (state.materials[item.material] || 0) + amount;
+  trainAttribute(state, 'str', SALVAGE_ATTR_XP.str);
+  trainAttribute(state, 'coord', SALVAGE_ATTR_XP.coord);
+  trainAttribute(state, 'focus', SALVAGE_ATTR_XP.focus);
   return { name: item.name, material: item.material, amount };
 }

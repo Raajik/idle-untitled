@@ -4,7 +4,7 @@
 
 import { SHORTCUTS, shortcutsFromLocation, otherEndpoint } from '../data/shortcuts.js';
 import { getPoiById } from '../data/regions.js';
-import { jumpCooldownSeconds, trainSkill, JUMP_XP_ON_USE } from './skills.js';
+import { jumpCooldownSeconds, trainSkill, trainAttribute, JUMP_XP_ON_USE, JUMP_QUICK_XP_ON_USE } from './skills.js';
 import { addLog } from './state.js';
 
 // Shortcuts usable right now: hero must be standing at one endpoint (not
@@ -43,6 +43,7 @@ export function jumpTo(state, shortcutId) {
 
   state.progress.jumpCooldown = jumpCooldownSeconds(rank);
   trainSkill(state, state.hero.skills.athletics, 'Athletics', JUMP_XP_ON_USE);
+  trainAttribute(state, 'quick', JUMP_QUICK_XP_ON_USE);
   addLog(state, `You take the ${shortcut.name} and arrive at ${destPoi.name} in a heartbeat.`, 'good');
   return true;
 }

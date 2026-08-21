@@ -1,9 +1,10 @@
 // Tab views: each returns an HTML string. Events are delegated via data-action attributes.
 
 import { REGIONS, getRegion, getPoiById, DAMAGE_TYPES } from '../data/regions.js';
-import { derivedStats, xpForLevel, totalXpForLevel, attributeCost, ATTRIBUTES } from '../game/hero.js';
+import { derivedStats, xpForLevel, totalXpForLevel, ATTRIBUTES } from '../game/hero.js';
 import {
   xpToNextRank,
+  xpToNextAttrPoint,
   defensiveChance,
   resistanceMitigationPct,
   hitChance,
@@ -323,23 +324,21 @@ export function attributesTab(state) {
   const d = derivedStats(state);
   const progress = state.progress.totalXpEarned - totalXpForLevel(h.level);
 
-  const allocRows = ATTRIBUTES.map((a) => {
-    const cost = attributeCost(h[a.id]);
-    const can = h.xp >= cost;
-    const latent = a.desc.includes('soon');
-    return `<div class="alloc-row">
-      <span class="name">${a.short}</span><span class="val">${h[a.id]}</span>
-      <button class="btn" data-action="raise" data-arg="${a.id}" ${can ? '' : 'disabled'}>+1 · ${fmt(cost)} XP</button>
-      <span class="muted${latent ? ' teaser' : ''}">${a.desc}</span></div>`;
+  const attrRows = ATTRIBUTES.map((a) => {
+    const need = xpToNextAttrPoint(h[a.id]);
+    return `<div class="skill-row">
+      <div class="skill-head"><b>${a.short}</b> <span class="muted">${h[a.id]}</span></div>
+      ${bar('xp', (h.attrXp[a.id] / need) * 100, `XP ${fmt(h.attrXp[a.id])} / ${fmt(need)}`)}
+      <p class="muted" style="margin-top:2px">${a.desc}</p>
+    </div>`;
   }).join('');
 
   return `
     <div class="panel">
-      <h2>Level ${h.level} — ${fmt(h.xp)} XP to spend</h2>
+      <h2>Level ${h.level}</h2>
       ${bar('xp', (progress / xpForLevel(h.level)) * 100, `XP to level ${h.level + 1}: ${fmt(progress)} / ${fmt(xpForLevel(h.level))}`)}
-      <p class="muted" style="margin:8px 0">Spend XP to raise attributes. Each raise costs more than the last.</p>
-      ${allocRows}
     </div>
+    <div class="panel"><h2>Attributes</h2>${attrRows}</div>
     <div class="panel"><h2>Derived Stats</h2><div class="stat-grid">
       <div class="stat-row"><span class="k">Max HP</span><span class="v">${d.maxHp}</span></div>
       <div class="stat-row"><span class="k">ATK</span><span class="v">${d.atk}</span></div>
@@ -379,7 +378,7 @@ export function skillsTab(state) {
       const chance = `${defensiveChance(skill.rank).toFixed(1)}% avoid${eligible ? '' : ` (inactive — ${hint})`}`;
       return skillRow(name, skill, chance);
     })
-    .join('');
+    .join('') + skillRow('Magic Resistance', skills.magicResistance, `${defensiveChance(skills.magicResistance.rank).toFixed(1)}% avoid (only vs. magic-based attacks)`);
 
   const resistRows = DAMAGE_TYPES.map((t) => {
     const skill = skills.resistance[t];

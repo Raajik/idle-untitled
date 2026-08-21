@@ -43,13 +43,13 @@ export function createInitialState() {
     hero: {
       name: '',
       level: 1,
-      xp: 0,
       str: 5,
       end: 5,
       coord: 5,
       quick: 5,
       focus: 5,
       self: 5,
+      attrXp: { str: 0, end: 0, coord: 0, quick: 0, focus: 0, self: 0 }, // progress toward each attribute's next point
       hp: 0, // current HP; 0 = "initialize on first tick"
       stamina: 0, // current Stamina; 0 = "initialize on first tick"
       mana: 0, // current Mana; 0 = "initialize on first tick"
@@ -69,6 +69,7 @@ export function createInitialState() {
         dodge: freshSkill(),
         block: freshSkill(),
         parry: freshSkill(),
+        magicResistance: freshSkill(), // avoids magic-based attacks only (see isMagicDamageType)
         resistance: freshResistance(),
         offense: freshOffense(),
         gathering: freshGathering(),
