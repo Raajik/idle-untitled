@@ -21,7 +21,7 @@ test('derivedStats scale with base stats', () => {
   const s = createInitialState();
   const before = derivedStats(s);
   s.hero.str = 20;
-  s.hero.vit = 20;
+  s.hero.end = 20;
   const after = derivedStats(s);
   assert.ok(after.atk > before.atk);
   assert.ok(after.maxHp > before.maxHp);

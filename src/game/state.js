@@ -11,8 +11,11 @@ export function createInitialState() {
       xp: 0,
       statPoints: 0,
       str: 5,
-      vit: 5,
-      agi: 5,
+      end: 5,
+      coord: 5,
+      quick: 5,
+      focus: 5,
+      self: 5,
       hp: 0, // current HP; 0 = "initialize on first tick"
       // combat timers
       attackTimer: 0,
@@ -31,7 +34,7 @@ export function createInitialState() {
       totalDrops: 0,
     },
     monster: null, // current monster instance { name, hp, maxHp, atk, def, xp, gold, isBoss }
-    equipment: { weapon: null, armor: null, trinket: null, charm: null },
+    equipment: { weapon: null, armor: null, amulet: null, ring: null },
     inventory: [],
     training: { atk: 0, hp: 0, gold: 0 },
     rebirth: {

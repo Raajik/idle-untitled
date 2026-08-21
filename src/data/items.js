@@ -1,6 +1,6 @@
 // Item definitions: slots, rarities, affix tables, name generation. Pure data + helpers.
 
-export const SLOTS = ['weapon', 'armor', 'trinket', 'charm'];
+export const SLOTS = ['weapon', 'armor', 'amulet', 'ring'];
 
 export const RARITIES = [
   { name: 'Common', weight: 100, powerMult: 1.0, affixes: 0 },
@@ -19,22 +19,22 @@ export const AFFIXES = [
 ];
 
 export const BASE_NAMES = {
-  weapon: ['Sword', 'Axe', 'Mace', 'Dagger', 'Spear', 'Staff', 'Bow'],
-  armor: ['Mail', 'Plate', 'Leathers', 'Robe', 'Aegis'],
-  trinket: ['Ring', 'Amulet', 'Band', 'Sigil'],
-  charm: ['Charm', 'Totem', 'Idol', 'Fetish'],
+  weapon: ['Sword', 'Axe', 'Mace', 'Spear', 'Dagger', 'Staff', 'Bow', 'Crossbow'],
+  armor: ['Leather Armor', 'Studded Leather', 'Chainmail', 'Plate Armor', 'Covenant Armor'],
+  amulet: ['Amulet', 'Necklace', 'Pendant', 'Talisman'],
+  ring: ['Ring', 'Band', 'Signet', 'Loop'],
 };
 
 export const PREFIXES = {
   Common: ['Worn', 'Plain', 'Sturdy'],
   Uncommon: ['Fine', 'Keen', 'Gleaming'],
-  Rare: ['Masterwork', 'Runed', 'Swift'],
+  Rare: ['Masterwork', 'Runed', 'Superior'],
   Epic: ['Dread', 'Radiant', 'Ancient'],
-  Legendary: ['Worldsplitter', 'Dawnborn', 'Kingsfall', 'Everlasting'],
+  Legendary: ['Peerless', 'Dawnborn', 'Kingsfall', 'Everlasting'],
 };
 
 // Base power a drop of a given zone has, before rarity multiplier.
-// Weapons convert power to ATK; armor to DEF + HP; trinket/charm lean on affixes.
+// Weapons convert power to ATK; armor to DEF + HP; amulet/ring lean on affixes.
 export function zoneItemPower(zoneIndex) {
   return 2 + zoneIndex * 3;
 }

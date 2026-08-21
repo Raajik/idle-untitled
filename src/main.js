@@ -9,7 +9,7 @@ import { createRenderer } from './ui/render.js';
 let state = loadGame() || createInitialState();
 
 if (state.log.length === 0) {
-  addLog(state, 'You arrive at Slime Meadow. Your blade moves on its own...', 'dim');
+  addLog(state, 'You wake near a Lifestone on the edge of the Drudge Hideout. Your blade moves on its own...', 'dim');
 }
 
 const offline = applyOfflineProgress(state);

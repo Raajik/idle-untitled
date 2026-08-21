@@ -1,75 +1,73 @@
-// Zone & monster definitions. Pure data — add zones here, never touch engine code.
-//
-// Each zone: monsters array, killsToBoss, and a boss. Monster stats are base values
-// for the zone; combat scales them slightly per kill within the zone for a gentle
-// difficulty ramp. Numbers are intentionally small and readable.
+// Zone & monster definitions (Asheron's Call theme). Pure data — add zones here,
+// never touch engine code. Stats are tuned so combat is brutal: monsters hit hard
+// enough to threaten the hero at every zone, and survival is never guaranteed.
 
 export const ZONES = [
   {
-    id: 'slime-meadow',
-    name: 'Slime Meadow',
+    id: 'drudge-hideout',
+    name: 'Drudge Hideout',
     killsToBoss: 15,
     monsters: [
-      { name: 'Green Slime', hp: 12, atk: 2, def: 0, xp: 6, gold: 3 },
-      { name: 'Blue Slime', hp: 16, atk: 3, def: 1, xp: 8, gold: 4 },
-      { name: 'Slime Bud', hp: 9, atk: 1, def: 0, xp: 5, gold: 3 },
+      { name: 'Drudge Skulker', hp: 22, atk: 8, def: 2, xp: 6, gold: 3 },
+      { name: 'Drudge', hp: 28, atk: 9, def: 2, xp: 8, gold: 4 },
+      { name: 'Shreth', hp: 34, atk: 8, def: 1, xp: 9, gold: 4 },
     ],
-    boss: { name: 'King Slime', hp: 55, atk: 5, def: 1, xp: 60, gold: 40 },
+    boss: { name: 'Drudge Warlord', hp: 85, atk: 11, def: 2, xp: 70, gold: 45 },
   },
   {
-    id: 'goblin-camp',
-    name: 'Goblin Camp',
+    id: 'banderling-plains',
+    name: 'Banderling Plains',
     killsToBoss: 20,
     monsters: [
-      { name: 'Goblin Grunt', hp: 34, atk: 6, def: 2, xp: 18, gold: 9 },
-      { name: 'Goblin Slinger', hp: 26, atk: 8, def: 1, xp: 20, gold: 11 },
-      { name: 'Warg Pup', hp: 42, atk: 5, def: 3, xp: 19, gold: 10 },
+      { name: 'Banderling', hp: 60, atk: 16, def: 5, xp: 18, gold: 9 },
+      { name: 'Mosswart', hp: 48, atk: 18, def: 4, xp: 20, gold: 11 },
+      { name: 'Banderling Guard', hp: 75, atk: 15, def: 6, xp: 19, gold: 10 },
     ],
-    boss: { name: 'Goblin Chief', hp: 200, atk: 10, def: 3, xp: 170, gold: 110 },
+    boss: { name: 'Banderling Chieftain', hp: 260, atk: 22, def: 6, xp: 180, gold: 115 },
   },
   {
-    id: 'whispering-woods',
-    name: 'Whispering Woods',
+    id: 'mosswart-horde',
+    name: 'Mosswart Horde',
     killsToBoss: 25,
     monsters: [
-      { name: 'Thorn Sprite', hp: 95, atk: 12, def: 4, xp: 42, gold: 22 },
-      { name: 'Murk Wolf', hp: 125, atk: 14, def: 5, xp: 48, gold: 25 },
-      { name: 'Hex Crow', hp: 80, atk: 16, def: 4, xp: 45, gold: 24 },
+      { name: 'Mosswart Raider', hp: 140, atk: 30, def: 10, xp: 42, gold: 22 },
+      { name: 'Reedshark', hp: 175, atk: 34, def: 12, xp: 48, gold: 25 },
+      { name: 'Mosswart Shaman', hp: 115, atk: 36, def: 9, xp: 45, gold: 24 },
     ],
-    boss: { name: 'The Whisperer', hp: 620, atk: 22, def: 8, xp: 420, gold: 260 },
+    boss: { name: 'Mosswart Brood Mother', hp: 650, atk: 46, def: 14, xp: 420, gold: 260 },
   },
   {
-    id: 'ember-caves',
-    name: 'Ember Caves',
+    id: 'olthoi-nest',
+    name: 'Olthoi Nest',
     killsToBoss: 30,
     monsters: [
-      { name: 'Cinder Imp', hp: 240, atk: 25, def: 10, xp: 95, gold: 50 },
-      { name: 'Magma Turtle', hp: 380, atk: 21, def: 16, xp: 110, gold: 55 },
-      { name: 'Ash Bat', hp: 210, atk: 28, def: 9, xp: 100, gold: 52 },
+      { name: 'Olthoi Nymph', hp: 360, atk: 58, def: 22, xp: 95, gold: 50 },
+      { name: 'Skeleton Lord', hp: 470, atk: 52, def: 30, xp: 110, gold: 55 },
+      { name: 'Olthoi Drone', hp: 310, atk: 62, def: 20, xp: 100, gold: 52 },
     ],
-    boss: { name: 'Emberlord Vrax', hp: 1600, atk: 38, def: 15, xp: 950, gold: 580 },
+    boss: { name: 'Olthoi Soldier', hp: 1600, atk: 80, def: 28, xp: 950, gold: 580 },
   },
   {
-    id: 'frost-peak',
-    name: 'Frost Peak',
+    id: 'golem-caverns',
+    name: 'Golem Caverns',
     killsToBoss: 35,
     monsters: [
-      { name: 'Rime Golem', hp: 750, atk: 44, def: 24, xp: 210, gold: 110 },
-      { name: 'Snow Harpy', hp: 560, atk: 52, def: 20, xp: 230, gold: 120 },
-      { name: 'Glacial Wisp', hp: 470, atk: 57, def: 18, xp: 220, gold: 115 },
+      { name: 'Sandstone Golem', hp: 900, atk: 100, def: 50, xp: 210, gold: 110 },
+      { name: 'Gromnie', hp: 700, atk: 112, def: 44, xp: 230, gold: 120 },
+      { name: 'Mud Golem', hp: 1050, atk: 94, def: 56, xp: 220, gold: 115 },
     ],
-    boss: { name: 'Wintermaw', hp: 3400, atk: 74, def: 28, xp: 2100, gold: 1300 },
+    boss: { name: 'Magma Golem', hp: 3400, atk: 145, def: 55, xp: 2100, gold: 1300 },
   },
   {
-    id: 'shadow-keep',
-    name: 'Shadow Keep',
+    id: 'virindi-citadel',
+    name: 'Virindi Citadel',
     killsToBoss: 45,
     monsters: [
-      { name: 'Umbral Knight', hp: 1550, atk: 88, def: 42, xp: 480, gold: 260 },
-      { name: 'Void Acolyte', hp: 1300, atk: 105, def: 36, xp: 520, gold: 280 },
-      { name: 'Gloom Stalker', hp: 1420, atk: 96, def: 39, xp: 500, gold: 270 },
+      { name: 'Virindi', hp: 1500, atk: 180, def: 80, xp: 480, gold: 260 },
+      { name: 'Lugian Raider', hp: 1900, atk: 170, def: 95, xp: 520, gold: 280 },
+      { name: 'Virindi Consul', hp: 1350, atk: 195, def: 75, xp: 500, gold: 270 },
     ],
-    boss: { name: 'The Nameless King', hp: 7600, atk: 135, def: 58, xp: 5200, gold: 3200 },
+    boss: { name: 'Virindi Executor', hp: 7400, atk: 255, def: 100, xp: 5200, gold: 3200 },
   },
 ];
 

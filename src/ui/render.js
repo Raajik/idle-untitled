@@ -101,6 +101,17 @@ export function createRenderer(state, { onImport }) {
       } else if (ev.type === 'levelup') {
         const bar = document.querySelector('[data-target="hero"]');
         if (bar) flashBar(bar, 'level');
+      } else if (ev.type === 'dodge') {
+        const bar = document.querySelector('[data-target="hero"]');
+        if (bar) {
+          flashBar(bar, 'level');
+          const el = document.createElement('div');
+          el.className = 'float-dmg dodge';
+          el.textContent = 'dodge';
+          el.style.left = 30 + Math.random() * 40 + '%';
+          bar.appendChild(el);
+          el.addEventListener('animationend', () => el.remove());
+        }
       }
     }
   }
@@ -138,7 +149,7 @@ export function createRenderer(state, { onImport }) {
 
     setBar('h-hp', (h.hp / d.maxHp) * 100, h.dead ? 'Dead... reviving' : `${Math.ceil(h.hp)} / ${d.maxHp} HP`);
     setBar('h-xp', (h.xp / xpForLevel(h.level)) * 100, `XP ${h.xp} / ${xpForLevel(h.level)}`);
-    setText('h-stats', `ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s · Crit ${d.critChance.toFixed(1)}% · ${state.gold} gold`);
+    setText('h-stats', `ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s · Dodge ${d.dodge.toFixed(0)}% · Crit ${d.critChance.toFixed(1)}% · ${state.gold} gold`);
 
     const ovLine = document.getElementById('ov-hero-line');
     if (ovLine) ovLine.innerHTML = `Level ${h.level} · <span class="gold">${state.gold}g</span> · <span class="soul">${state.rebirth.souls} souls</span>`;

@@ -10,18 +10,19 @@ import { addLog } from './state.js';
 const MONSTER_ATTACK_INTERVAL = 1.2; // seconds
 const RESPAWN_DELAY = 3.0;
 
-// Gentle per-kill ramp within a zone: +2% stats per kill.
+// Gentle per-kill ramp within a zone: +1% stats per kill.
 function ramp(killsInZone) {
-  return 1 + killsInZone * 0.02;
+  return 1 + killsInZone * 0.01;
 }
 
 export function spawnMonster(state) {
   const zone = getZone(state.progress.zone);
-  const r = ramp(state.progress.killsInZone);
   const needsBoss =
     state.progress.killsInZone >= zone.killsToBoss && !state.progress[`bossDead_${state.progress.zone}`];
 
   const def = needsBoss ? zone.boss : pick(zone.monsters);
+  // Bosses are a fixed challenge (no per-kill ramp); normal monsters ramp gently.
+  const r = needsBoss ? 1 : ramp(state.progress.killsInZone);
   state.monster = {
     name: def.name,
     maxHp: Math.round(def.hp * r),
@@ -98,7 +99,7 @@ export function tickCombat(state, dt) {
     if (h.respawnTimer <= 0) {
       h.dead = false;
       h.hp = stats.maxHp;
-      addLog(state, 'You revive, ready to fight again.', 'dim');
+      addLog(state, 'You awaken at your Lifestone, ready to fight again.', 'dim');
     }
     return;
   }
@@ -119,16 +120,20 @@ export function tickCombat(state, dt) {
       pushFx({ type: 'kill', target: 'monster' });
       onMonsterDeath(state);
       spawnMonster(state);
-      // HP regen between fights: recover 30% of max
-      h.hp = Math.min(stats.maxHp, h.hp + Math.round(stats.maxHp * 0.3));
+      // No heal on kill — the Lifestone (respawn) is how you recover. Skills (Healing,
+      // Cooking, Life Magic) will add in-fight recovery later.
       return;
     }
   }
 
-  // Monster attacks
+  // Monster attacks (hero may dodge based on Coordination)
   h.monsterTimer += dt;
   while (h.monsterTimer >= MONSTER_ATTACK_INTERVAL) {
     h.monsterTimer -= MONSTER_ATTACK_INTERVAL;
+    if (Math.random() * 100 < stats.dodge) {
+      pushFx({ type: 'dodge', target: 'hero' });
+      continue;
+    }
     const { dmg } = dealDamage(m.atk, stats.def, 0);
     h.hp -= dmg;
     pushFx({ type: 'hit', target: 'hero', dmg });
@@ -136,13 +141,21 @@ export function tickCombat(state, dt) {
       h.hp = 0;
       h.dead = true;
       h.respawnTimer = RESPAWN_DELAY;
-      addLog(state, `You were slain by ${m.name}... reviving soon.`, 'boss');
+      if (m.isBoss) {
+        // Losing to the boss makes it retreat — you fall back to grinding normal
+        // monsters and can challenge it again once stronger.
+        state.progress.killsInZone = 0;
+        state.monster = null;
+        addLog(state, `The ${m.name} batters you down and retreats into the depths. Regain your strength and try again.`, 'boss');
+      } else {
+        addLog(state, `You fall to ${m.name}. Your Lifestone shimmers, calling you back...`, 'boss');
+      }
       return;
     }
   }
 
-  // Slow passive regen in combat
-  h.hp = Math.min(stats.maxHp, h.hp + stats.maxHp * 0.02 * dt);
+  // Very slow passive regen (healing is a skill, not a given)
+  h.hp = Math.min(stats.maxHp, h.hp + stats.maxHp * 0.01 * dt);
 }
 
 // Travel to an unlocked zone. Only allowed between fights is NOT required — swap freely.

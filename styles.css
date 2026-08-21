@@ -268,6 +268,7 @@ textarea.save-io {
   animation: floatUp 0.7s ease-out forwards;
 }
 .float-dmg.crit { color: var(--accent); font-size: 1.25em; }
+.float-dmg.dodge { color: var(--xp); font-style: italic; }
 @keyframes floatUp {
   0% { opacity: 1; transform: translateY(0); }
   100% { opacity: 0; transform: translateY(-30px); }

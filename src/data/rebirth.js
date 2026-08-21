@@ -1,6 +1,6 @@
 // Rebirth (prestige) definitions: soul formula inputs + permanent upgrade tree.
 
-export const REBIRTH_MIN_ZONE = 1; // must have reached at least zone index 1 (Goblin Camp)
+export const REBIRTH_MIN_ZONE = 1; // must have reached at least zone index 1 (Banderling Plains)
 
 // Hero Souls earned on rebirth: driven by highest zone unlocked and levels gained this run.
 // Tuned so a first rebirth (zone 1-2, ~level 15) yields ~2 souls, scaling to ~8 by zone 5.
@@ -45,7 +45,7 @@ export const REBIRTH_UPGRADES = [
   {
     id: 'headStart',
     name: 'Head Start',
-    desc: 'Start each run with +5 STR/VIT/AGI per rank',
+    desc: 'Start each run with +5 to all attributes per rank',
     maxRank: 3,
     cost: (rank) => rank + 3,
     effectPerRank: { startStats: 5 },

@@ -34,6 +34,21 @@ function migrate(raw) {
   state.training = { ...fresh.training, ...(raw.training || {}) };
   state.settings = { ...fresh.settings, ...(raw.settings || {}) };
   state.ui = { ...fresh.ui, ...(raw.ui || {}) };
+
+  // Normalize item slots (trinket -> amulet, charm -> ring) from pre-AC-theme saves.
+  const remap = (slot) => (slot === 'trinket' ? 'amulet' : slot === 'charm' ? 'ring' : slot);
+  state.equipment = { ...fresh.equipment, ...(raw.equipment || {}) };
+  for (const slot of Object.keys(state.equipment)) {
+    const item = state.equipment[slot];
+    const newSlot = remap(slot);
+    if (newSlot !== slot) {
+      delete state.equipment[slot];
+      state.equipment[newSlot] = state.equipment[newSlot] || item;
+    }
+    if (item && remap(item.slot) !== item.slot) item.slot = remap(item.slot);
+  }
+  state.inventory = (raw.inventory || []).map((it) => ({ ...it, slot: remap(it.slot) }));
+
   state.version = SAVE_VERSION;
   return state;
 }

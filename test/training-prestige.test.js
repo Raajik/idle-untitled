@@ -20,7 +20,7 @@ test('buyTraining requires gold and increments rank', () => {
   assert.ok(s.gold < 1000);
 });
 
-test('soulsForRun is zero before reaching Goblin Camp and grows after', () => {
+test('soulsForRun is zero before reaching Banderling Plains and grows after', () => {
   assert.equal(soulsForRun(0, 50), 0);
   const s1 = soulsForRun(1, 20);
   const s3 = soulsForRun(3, 20);

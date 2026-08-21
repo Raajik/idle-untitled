@@ -6,8 +6,8 @@ import { unlockedTabs } from '../src/ui/unlocks.js';
 
 test('offline progress grants kills, gold and xp proportional to time away', () => {
   const s = createInitialState();
-  s.hero.str = 50; // strong enough to farm slimes quickly
-  s.hero.vit = 50;
+  s.hero.str = 50; // strong enough to farm drudges quickly
+  s.hero.end = 50;
   s.lastSeen = Date.now() - 3600 * 1000; // 1 hour ago
   const summary = applyOfflineProgress(s);
   assert.ok(summary);

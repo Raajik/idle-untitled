@@ -1,7 +1,7 @@
 // Tab views: each returns an HTML string. Events are delegated via data-action attributes.
 
 import { ZONES } from '../data/zones.js';
-import { derivedStats, xpForLevel } from '../game/hero.js';
+import { derivedStats, xpForLevel, ATTRIBUTES } from '../game/hero.js';
 import { TRAINING_TRACKS, trainingCost } from '../game/training.js';
 import { soulsAvailable, canRebirth, REBIRTH_UPGRADES } from '../game/prestige.js';
 import { itemScore } from '../game/loot.js';
@@ -53,7 +53,7 @@ export function battleTab(state) {
       <h2 style="margin-top:14px">You — Level ${h.level}</h2>
       ${bar('hp', (h.hp / d.maxHp) * 100, h.dead ? 'Dead... reviving' : `${Math.ceil(h.hp)} / ${d.maxHp} HP`, 'h-hp', 'hero')}
       ${bar('xp', (h.xp / xpForLevel(h.level)) * 100, `XP ${h.xp} / ${xpForLevel(h.level)}`, 'h-xp')}
-      <div id="h-stats" class="muted">ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s · Crit ${d.critChance.toFixed(1)}% · ${state.gold} gold</div>
+      <div id="h-stats" class="muted">ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s · Dodge ${d.dodge.toFixed(0)}% · Crit ${d.critChance.toFixed(1)}% · ${state.gold} gold</div>
     </div>
     <div class="panel"><h2>Combat Log</h2><div class="log" id="combat-log">${logHtml(state)}</div></div>`;
 }
@@ -63,26 +63,26 @@ export function heroTab(state) {
   const h = state.hero;
   const d = derivedStats(state);
 
-  function allocRow(stat, name, desc) {
+  const allocRows = ATTRIBUTES.map((a) => {
     const can = h.statPoints > 0;
+    const latent = a.desc.includes('soon');
     return `<div class="alloc-row">
-      <span class="name">${name}</span><span class="val">${h[stat]}</span>
-      <button class="btn" data-action="alloc" data-arg="${stat}" ${can ? '' : 'disabled'}>+1</button>
-      <span class="muted">${desc}</span></div>`;
-  }
+      <span class="name">${a.short}</span><span class="val">${h[a.id]}</span>
+      <button class="btn" data-action="alloc" data-arg="${a.id}" ${can ? '' : 'disabled'}>+1</button>
+      <span class="muted${latent ? ' teaser' : ''}">${a.desc}</span></div>`;
+  }).join('');
 
   return `
     <div class="panel">
       <h2>Level ${h.level} — ${h.statPoints} stat points available</h2>
-      ${allocRow('str', 'STR', '+1.5 ATK each')}
-      ${allocRow('vit', 'VIT', '+5 Max HP, +0.75 DEF each')}
-      ${allocRow('agi', 'AGI', '+4% attack speed, +0.3% crit each')}
+      ${allocRows}
     </div>
     <div class="panel"><h2>Derived Stats</h2><div class="stat-grid">
       <div class="stat-row"><span class="k">Max HP</span><span class="v">${d.maxHp}</span></div>
       <div class="stat-row"><span class="k">ATK</span><span class="v">${d.atk}</span></div>
       <div class="stat-row"><span class="k">DEF</span><span class="v">${d.def}</span></div>
       <div class="stat-row"><span class="k">Attack speed</span><span class="v">${d.spd.toFixed(2)}/s</span></div>
+      <div class="stat-row"><span class="k">Dodge</span><span class="v">${d.dodge.toFixed(1)}%</span></div>
       <div class="stat-row"><span class="k">Crit chance</span><span class="v">${d.critChance.toFixed(1)}%</span></div>
       <div class="stat-row"><span class="k">XP bonus</span><span class="v">+${d.xpPct}%</span></div>
       <div class="stat-row"><span class="k">Gold bonus</span><span class="v">+${d.goldPct}%</span></div>
@@ -110,7 +110,7 @@ function itemHtml(state, item, equipped) {
 }
 
 export function equipmentTab(state) {
-  const slots = ['weapon', 'armor', 'trinket', 'charm'];
+  const slots = ['weapon', 'armor', 'amulet', 'ring'];
   const equipped = slots
     .map((s) => {
       const it = state.equipment[s];

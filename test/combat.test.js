@@ -24,7 +24,7 @@ test('combat ticks eventually kill the monster and grant rewards', () => {
   const s = createInitialState();
   // make hero strong enough to one-shot
   s.hero.str = 500;
-  s.hero.vit = 500;
+  s.hero.end = 500;
   const goldBefore = s.gold;
   for (let i = 0; i < 40; i++) tickCombat(s, 0.25);
   assert.ok(s.progress.totalKills >= 1);
@@ -35,7 +35,7 @@ test('combat ticks eventually kill the monster and grant rewards', () => {
 test('killing the boss unlocks the next zone', () => {
   const s = createInitialState();
   s.hero.str = 50000;
-  s.hero.vit = 50000;
+  s.hero.end = 50000;
   s.progress.killsInZone = ZONES[0].killsToBoss;
   for (let i = 0; i < 40; i++) tickCombat(s, 0.25);
   assert.equal(s.progress.bossesKilled, 1);
@@ -54,7 +54,7 @@ test('travelToZone respects unlocks and resets zone progress', () => {
 
 test('hero death triggers respawn cycle without progress loss', () => {
   const s = createInitialState();
-  s.hero.vit = 1; // very squishy
+  s.hero.end = 1; // very squishy
   s.progress.zone = 5; // shadow keep, brutal
   s.progress.highestZone = 5;
   let died = false;

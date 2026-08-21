@@ -21,9 +21,9 @@ export function performRebirth(state) {
   resetRun(state);
   const headStart = (state.rebirth.upgrades.headStart || 0) * 5;
   if (headStart > 0) {
-    state.hero.str += headStart;
-    state.hero.vit += headStart;
-    state.hero.agi += headStart;
+    for (const attr of ['str', 'end', 'coord', 'quick', 'focus', 'self']) {
+      state.hero[attr] += headStart;
+    }
   }
 
   addLog(state, `✦ Rebirth #${state.rebirth.count}! Gained ${souls} Hero Souls.`, 'boss');
