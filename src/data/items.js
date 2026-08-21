@@ -13,7 +13,7 @@ export const RARITIES = [
 export const AFFIXES = [
   { id: 'atkPct', label: (v) => `+${v}% ATK`, min: 4, max: 12 },
   { id: 'hpFlat', label: (v) => `+${v} Max HP`, min: 4, max: 16 },
-  { id: 'goldPct', label: (v) => `+${v}% Gold`, min: 5, max: 15 },
+  { id: 'pyrealsPct', label: (v) => `+${v}% Pyreals`, min: 5, max: 15 },
   { id: 'xpPct', label: (v) => `+${v}% XP`, min: 5, max: 15 },
   { id: 'critPct', label: (v) => `+${v}% Crit`, min: 2, max: 6 },
 ];

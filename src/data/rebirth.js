@@ -19,12 +19,12 @@ export const REBIRTH_UPGRADES = [
     effectPerRank: { xpPct: 20 },
   },
   {
-    id: 'goldBoost',
+    id: 'pyrealsBoost',
     name: 'Greed',
-    desc: '+20% Gold per rank',
+    desc: '+20% Pyreals per rank',
     maxRank: 5,
     cost: (rank) => rank + 1,
-    effectPerRank: { goldPct: 20 },
+    effectPerRank: { pyrealsPct: 20 },
   },
   {
     id: 'atkBoost',

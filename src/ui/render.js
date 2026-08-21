@@ -6,12 +6,13 @@
 import { unlockedTabs, drainNewUnlocks, UNLOCKS } from './unlocks.js';
 import { battleTab, heroTab, equipmentTab, trainingTab, rebirthTab, overviewTab, settingsTab } from './tabs.js';
 import { travelToZone } from '../game/combat.js';
-import { allocateStat, derivedStats, xpForLevel } from '../game/hero.js';
+import { raiseAttribute, derivedStats, xpForLevel, totalXpForLevel } from '../game/hero.js';
 import { equipItem } from '../game/loot.js';
 import { buyTraining } from '../game/training.js';
 import { performRebirth, buyUpgrade } from '../game/prestige.js';
 import { exportSave, importSave, hardReset, saveGame, suppressSave } from '../save.js';
 import { drainFx } from '../engine/fx.js';
+import { fmt } from '../engine/format.js';
 import { ZONES } from '../data/zones.js';
 
 const TAB_RENDERERS = { battle: battleTab, hero: heroTab, equipment: equipmentTab, training: trainingTab, rebirth: rebirthTab, overview: overviewTab, settings: settingsTab };
@@ -36,7 +37,7 @@ export function createRenderer(state, { onImport }) {
 
   function updateSummary() {
     const d = derivedStats(state);
-    summary.innerHTML = `<b>Lv ${state.hero.level}</b> · <span class="gold">${state.gold}g</span>` +
+    summary.innerHTML = `<b>Lv ${state.hero.level}</b> · <span class="gold">${fmt(state.pyreals)}p</span>` +
       (state.rebirth.count > 0 ? `\n<span class="soul">${state.rebirth.souls} souls</span> · run ${state.rebirth.count + 1}` : '') +
       `\nATK ${d.atk} · HP ${Math.ceil(state.hero.hp)}/${d.maxHp}`;
   }
@@ -148,11 +149,12 @@ export function createRenderer(state, { onImport }) {
     }
 
     setBar('h-hp', (h.hp / d.maxHp) * 100, h.dead ? 'Dead... reviving' : `${Math.ceil(h.hp)} / ${d.maxHp} HP`);
-    setBar('h-xp', (h.xp / xpForLevel(h.level)) * 100, `XP ${h.xp} / ${xpForLevel(h.level)}`);
-    setText('h-stats', `ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s · Dodge ${d.dodge.toFixed(0)}% · Crit ${d.critChance.toFixed(1)}% · ${state.gold} gold`);
+    const xpProgress = state.progress.totalXpEarned - totalXpForLevel(h.level);
+    setBar('h-xp', (xpProgress / xpForLevel(h.level)) * 100, `XP ${fmt(xpProgress)} / ${fmt(xpForLevel(h.level))}`);
+    setText('h-stats', `ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s · Dodge ${d.dodge.toFixed(0)}% · Crit ${d.critChance.toFixed(1)}% · ${fmt(state.pyreals)} pyreals`);
 
     const ovLine = document.getElementById('ov-hero-line');
-    if (ovLine) ovLine.innerHTML = `Level ${h.level} · <span class="gold">${state.gold}g</span> · <span class="soul">${state.rebirth.souls} souls</span>`;
+    if (ovLine) ovLine.innerHTML = `Level ${h.level} · <span class="gold">${fmt(state.pyreals)} pyreals</span> · <span class="soul">${state.rebirth.souls} souls</span>`;
     setText('ov-kills', `${state.progress.killsInZone}/${zone.killsToBoss} kills to boss`);
 
     // append only new log lines so the log doesn't rebuild (keeps scroll stable)
@@ -206,7 +208,7 @@ export function createRenderer(state, { onImport }) {
 
     switch (action) {
       case 'travel': travelToZone(state, Number(arg)); break;
-      case 'alloc': allocateStat(state, arg); break;
+      case 'raise': raiseAttribute(state, arg); break;
       case 'equip': equipItem(state, Number(arg)); break;
       case 'toggle-autoequip': state.settings.autoEquip = !state.settings.autoEquip; break;
       case 'train': buyTraining(state, arg); break;

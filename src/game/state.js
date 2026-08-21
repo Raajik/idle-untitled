@@ -5,11 +5,10 @@ export const SAVE_VERSION = 1;
 export function createInitialState() {
   return {
     version: SAVE_VERSION,
-    gold: 0,
+    pyreals: 0,
     hero: {
       level: 1,
       xp: 0,
-      statPoints: 0,
       str: 5,
       end: 5,
       coord: 5,
@@ -30,13 +29,14 @@ export function createInitialState() {
       bossActive: false,
       bossesKilled: 0,
       totalKills: 0,
-      totalGoldEarned: 0,
+      totalPyrealsEarned: 0,
+      totalXpEarned: 0,
       totalDrops: 0,
     },
-    monster: null, // current monster instance { name, hp, maxHp, atk, def, xp, gold, isBoss }
+    monster: null, // current monster instance { name, hp, maxHp, atk, def, xp, pyreals, isBoss }
     equipment: { weapon: null, armor: null, amulet: null, ring: null },
     inventory: [],
-    training: { atk: 0, hp: 0, gold: 0 },
+    training: { atk: 0, hp: 0, pyreals: 0 },
     rebirth: {
       souls: 0,
       count: 0,
@@ -57,7 +57,7 @@ export function createInitialState() {
 // Reset everything a rebirth resets, keeping souls/upgrades/settings/unlock memory.
 export function resetRun(state) {
   const fresh = createInitialState();
-  state.gold = fresh.gold;
+  state.pyreals = fresh.pyreals;
   state.hero = fresh.hero;
   state.progress = fresh.progress;
   state.monster = null;

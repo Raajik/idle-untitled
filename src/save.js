@@ -4,6 +4,7 @@ import { createInitialState, SAVE_VERSION, addLog } from './game/state.js';
 import { derivedStats, heroDps, grantXp } from './game/hero.js';
 import { getZone } from './data/zones.js';
 import { generateItem, maybeAutoEquip, DROP_CHANCE } from './game/loot.js';
+import { fmt } from './engine/format.js';
 
 const SAVE_KEY = 'idle-untitled-save-v1';
 
@@ -34,6 +35,17 @@ function migrate(raw) {
   state.training = { ...fresh.training, ...(raw.training || {}) };
   state.settings = { ...fresh.settings, ...(raw.settings || {}) };
   state.ui = { ...fresh.ui, ...(raw.ui || {}) };
+
+  // Migrate pre-pyreals saves: gold -> pyreals (also the training track and progress counters).
+  if (state.pyreals === undefined && raw.gold !== undefined) state.pyreals = raw.gold;
+  if (state.training.gold !== undefined) {
+    state.training.pyreals = state.training.gold;
+    delete state.training.gold;
+  }
+  if (state.progress.totalGoldEarned !== undefined) {
+    state.progress.totalPyrealsEarned = state.progress.totalGoldEarned;
+    delete state.progress.totalGoldEarned;
+  }
 
   // Normalize item slots (trinket -> amulet, charm -> ring) from pre-AC-theme saves.
   const remap = (slot) => (slot === 'trinket' ? 'amulet' : slot === 'charm' ? 'ring' : slot);
@@ -104,14 +116,14 @@ export function applyOfflineProgress(state) {
   if (kills <= 0) return null;
 
   const avgXp = zone.monsters.reduce((s, m) => s + m.xp, 0) / zone.monsters.length;
-  const avgGold = zone.monsters.reduce((s, m) => s + m.gold, 0) / zone.monsters.length;
+  const avgPyreals = zone.monsters.reduce((s, m) => s + m.pyreals, 0) / zone.monsters.length;
 
   const stats = derivedStats(state);
-  const goldGain = Math.round(kills * avgGold * (1 + stats.goldPct / 100));
+  const pyrealsGain = Math.round(kills * avgPyreals * (1 + stats.pyrealsPct / 100));
   const levelsBefore = state.hero.level;
   grantXp(state, kills * avgXp);
-  state.gold += goldGain;
-  state.progress.totalGoldEarned += goldGain;
+  state.pyreals += pyrealsGain;
+  state.progress.totalPyrealsEarned += pyrealsGain;
   state.progress.totalKills += kills;
 
   // Sample expected drops, keep the best few
@@ -129,13 +141,13 @@ export function applyOfflineProgress(state) {
   const summary = {
     elapsedSec,
     kills,
-    goldGain,
+    pyrealsGain,
     levelsGained: state.hero.level - levelsBefore,
     equips: kept.length,
   };
   addLog(
     state,
-    `Welcome back! Away ${hours < 1 ? Math.round(elapsedSec / 60) + 'm' : hours.toFixed(1) + 'h'}: ${kills} kills, +${goldGain} gold${summary.levelsGained ? `, +${summary.levelsGained} levels` : ''}.`,
+    `Welcome back! Away ${hours < 1 ? Math.round(elapsedSec / 60) + 'm' : hours.toFixed(1) + 'h'}: ${fmt(kills)} kills, +${fmt(pyrealsGain)} pyreals${summary.levelsGained ? `, +${summary.levelsGained} levels` : ''}.`,
     'good'
   );
   return summary;

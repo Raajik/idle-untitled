@@ -3,6 +3,7 @@
 import { getZone, ZONES } from '../data/zones.js';
 import { pick, rand } from '../engine/rng.js';
 import { pushFx } from '../engine/fx.js';
+import { fmt } from '../engine/format.js';
 import { derivedStats, grantXp } from './hero.js';
 import { rollDrop, maybeAutoEquip } from './loot.js';
 import { addLog } from './state.js';
@@ -30,7 +31,7 @@ export function spawnMonster(state) {
     atk: Math.round(def.atk * r),
     def: Math.round(def.def * r),
     xp: def.xp,
-    gold: def.gold,
+    pyreals: def.pyreals,
     isBoss: needsBoss,
   };
   if (needsBoss) addLog(state, `☠ ${def.name} appears!`, 'boss');
@@ -49,9 +50,9 @@ function onMonsterDeath(state) {
   const p = state.progress;
   const stats = derivedStats(state);
 
-  const goldGain = Math.round(m.gold * (1 + stats.goldPct / 100));
-  state.gold += goldGain;
-  p.totalGoldEarned += goldGain;
+  const pyrealsGain = Math.round(m.pyreals * (1 + stats.pyrealsPct / 100));
+  state.pyreals += pyrealsGain;
+  p.totalPyrealsEarned += pyrealsGain;
 
   const levels = grantXp(state, m.xp);
 
@@ -60,18 +61,18 @@ function onMonsterDeath(state) {
     p[`bossDead_${p.zone}`] = true;
     p.bossesKilled += 1;
     p.bossActive = false;
-    addLog(state, `☠ ${m.name} defeated! +${m.xp} XP, +${goldGain} gold`, 'boss');
+    addLog(state, `☠ ${m.name} defeated! +${fmt(m.xp)} XP, +${fmt(pyrealsGain)} pyreals`, 'boss');
     if (p.zone + 1 < ZONES.length && p.highestZone < p.zone + 1) {
       p.highestZone = p.zone + 1;
       addLog(state, `New zone unlocked: ${getZone(p.zone + 1).name}!`, 'good');
     }
   } else {
     p.killsInZone += 1;
-    addLog(state, `${m.name} slain. +${m.xp} XP, +${goldGain} gold`, 'dim');
+    addLog(state, `${m.name} slain. +${fmt(m.xp)} XP, +${fmt(pyrealsGain)} pyreals`, 'dim');
   }
 
   if (levels > 0) {
-    addLog(state, `Level up! Now level ${state.hero.level} (+${levels * 3} stat points)`, 'good');
+    addLog(state, `Level up! Now level ${state.hero.level}.`, 'good');
     pushFx({ type: 'levelup' });
   }
 

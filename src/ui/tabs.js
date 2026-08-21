@@ -1,11 +1,12 @@
 // Tab views: each returns an HTML string. Events are delegated via data-action attributes.
 
 import { ZONES } from '../data/zones.js';
-import { derivedStats, xpForLevel, ATTRIBUTES } from '../game/hero.js';
+import { derivedStats, xpForLevel, totalXpForLevel, attributeCost, ATTRIBUTES } from '../game/hero.js';
 import { TRAINING_TRACKS, trainingCost } from '../game/training.js';
 import { soulsAvailable, canRebirth, REBIRTH_UPGRADES } from '../game/prestige.js';
 import { itemScore } from '../game/loot.js';
 import { UNLOCKS } from './unlocks.js';
+import { fmt } from '../engine/format.js';
 
 function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -40,6 +41,7 @@ export function battleTab(state) {
   }).join('');
 
   const zone = ZONES[p.zone];
+  const xpProgress = p.totalXpEarned - totalXpForLevel(h.level);
   const monsterPanel = `
     <div><b id="m-name" class="${m && m.isBoss ? 'soul' : ''}">${m ? esc(m.name) + (m.isBoss ? ' ☠ BOSS' : '') : 'Searching...'}</b></div>
     ${bar('hp', m ? (m.hp / m.maxHp) * 100 : 0, m ? `${Math.max(0, Math.ceil(m.hp))} / ${m.maxHp}` : '...', 'm-hp', 'monster')}
@@ -52,8 +54,8 @@ export function battleTab(state) {
       ${monsterPanel}
       <h2 style="margin-top:14px">You — Level ${h.level}</h2>
       ${bar('hp', (h.hp / d.maxHp) * 100, h.dead ? 'Dead... reviving' : `${Math.ceil(h.hp)} / ${d.maxHp} HP`, 'h-hp', 'hero')}
-      ${bar('xp', (h.xp / xpForLevel(h.level)) * 100, `XP ${h.xp} / ${xpForLevel(h.level)}`, 'h-xp')}
-      <div id="h-stats" class="muted">ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s · Dodge ${d.dodge.toFixed(0)}% · Crit ${d.critChance.toFixed(1)}% · ${state.gold} gold</div>
+      ${bar('xp', (xpProgress / xpForLevel(h.level)) * 100, `XP ${fmt(xpProgress)} / ${fmt(xpForLevel(h.level))}`, 'h-xp')}
+      <div id="h-stats" class="muted">ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s · Dodge ${d.dodge.toFixed(0)}% · Crit ${d.critChance.toFixed(1)}% · ${fmt(state.pyreals)} pyreals</div>
     </div>
     <div class="panel"><h2>Combat Log</h2><div class="log" id="combat-log">${logHtml(state)}</div></div>`;
 }
@@ -62,19 +64,23 @@ export function battleTab(state) {
 export function heroTab(state) {
   const h = state.hero;
   const d = derivedStats(state);
+  const progress = state.progress.totalXpEarned - totalXpForLevel(h.level);
 
   const allocRows = ATTRIBUTES.map((a) => {
-    const can = h.statPoints > 0;
+    const cost = attributeCost(h[a.id]);
+    const can = h.xp >= cost;
     const latent = a.desc.includes('soon');
     return `<div class="alloc-row">
       <span class="name">${a.short}</span><span class="val">${h[a.id]}</span>
-      <button class="btn" data-action="alloc" data-arg="${a.id}" ${can ? '' : 'disabled'}>+1</button>
+      <button class="btn" data-action="raise" data-arg="${a.id}" ${can ? '' : 'disabled'}>+1 · ${fmt(cost)} XP</button>
       <span class="muted${latent ? ' teaser' : ''}">${a.desc}</span></div>`;
   }).join('');
 
   return `
     <div class="panel">
-      <h2>Level ${h.level} — ${h.statPoints} stat points available</h2>
+      <h2>Level ${h.level} — ${fmt(h.xp)} XP to spend</h2>
+      ${bar('xp', (progress / xpForLevel(h.level)) * 100, `XP to level ${h.level + 1}: ${fmt(progress)} / ${fmt(xpForLevel(h.level))}`)}
+      <p class="muted" style="margin:8px 0">Spend XP to raise attributes. Each raise costs more than the last.</p>
       ${allocRows}
     </div>
     <div class="panel"><h2>Derived Stats</h2><div class="stat-grid">
@@ -85,7 +91,7 @@ export function heroTab(state) {
       <div class="stat-row"><span class="k">Dodge</span><span class="v">${d.dodge.toFixed(1)}%</span></div>
       <div class="stat-row"><span class="k">Crit chance</span><span class="v">${d.critChance.toFixed(1)}%</span></div>
       <div class="stat-row"><span class="k">XP bonus</span><span class="v">+${d.xpPct}%</span></div>
-      <div class="stat-row"><span class="k">Gold bonus</span><span class="v">+${d.goldPct}%</span></div>
+      <div class="stat-row"><span class="k">Pyreals bonus</span><span class="v">+${d.pyrealsPct}%</span></div>
       <div class="stat-row"><span class="k">Loot luck</span><span class="v">+${d.luckPct}%</span></div>
     </div></div>`;
 }
@@ -136,13 +142,13 @@ export function trainingTab(state) {
   const rows = TRAINING_TRACKS.map((t) => {
     const rank = state.training[t.id];
     const cost = trainingCost(t.id, rank);
-    const afford = state.gold >= cost;
+    const afford = state.pyreals >= cost;
     return `<div class="upgrade-row">
       <div><b>${t.name}</b> <span class="muted">rank ${rank}</span><div class="desc">${t.desc}</div></div>
-      <button class="btn" data-action="train" data-arg="${t.id}" ${afford ? '' : 'disabled'}>Buy — <span class="gold">${cost}g</span></button>
+      <button class="btn" data-action="train" data-arg="${t.id}" ${afford ? '' : 'disabled'}>Buy — <span class="gold">${fmt(cost)}p</span></button>
     </div>`;
   }).join('');
-  return `<div class="panel"><h2>Training — <span class="gold">${state.gold} gold</span></h2>${rows}</div>`;
+  return `<div class="panel"><h2>Training — <span class="gold">${fmt(state.pyreals)} pyreals</span></h2>${rows}</div>`;
 }
 
 // --- Rebirth ---
@@ -163,7 +169,7 @@ export function rebirthTab(state) {
   return `
     <div class="panel">
       <h2>Rebirth — <span class="soul">${state.rebirth.souls} Hero Souls</span> · ${state.rebirth.count} rebirths</h2>
-      <p class="muted" style="margin-bottom:10px">Reset your level, gold, gear, and zone progress in exchange for Hero Souls — permanent power that carries across every run.</p>
+      <p class="muted" style="margin-bottom:10px">Reset your level, pyreals, gear, and zone progress in exchange for Hero Souls — permanent power that carries across every run.</p>
       <button class="btn primary" data-action="rebirth" ${can ? '' : 'disabled'}>
         ${can ? `Rebirth now — gain ${souls} souls` : `Reach ${ZONES[1].name} to unlock rebirth`}
       </button>
@@ -179,10 +185,11 @@ export function overviewTab(state) {
   const unlocked = UNLOCKS.filter((u) => u.when(state)).map((u) => u.id);
 
   const tiles = [];
+  const xpProgress = state.progress.totalXpEarned - totalXpForLevel(h.level);
   tiles.push(`<div class="panel"><h2>Hero</h2>
-    <span id="ov-hero-line">Level ${h.level} · <span class="gold">${state.gold}g</span> · <span class="soul">${state.rebirth.souls} souls</span></span><br/>
+    <span id="ov-hero-line">Level ${h.level} · <span class="gold">${fmt(state.pyreals)} pyreals</span> · <span class="soul">${state.rebirth.souls} souls</span></span><br/>
     ${bar('hp', (h.hp / d.maxHp) * 100, `${Math.ceil(h.hp)} / ${d.maxHp} HP`, 'h-hp', 'hero')}
-    ${bar('xp', (h.xp / xpForLevel(h.level)) * 100, `XP ${h.xp} / ${xpForLevel(h.level)}`, 'h-xp')}
+    ${bar('xp', (xpProgress / xpForLevel(h.level)) * 100, `XP ${fmt(xpProgress)} / ${fmt(xpForLevel(h.level))}`, 'h-xp')}
     <div class="muted">ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s</div></div>`);
 
   tiles.push(`<div class="panel"><h2>Battle — ${esc(ZONES[state.progress.zone].name)}</h2>
@@ -210,6 +217,6 @@ export function settingsTab(state) {
       <textarea class="save-io" id="save-io" placeholder="Exported save appears here; paste a save here and click Import"></textarea>
     </div>
     <div class="panel"><h2>About</h2>
-      <p class="muted">Idle Untitled — a text idle RPG. No energy, no tokens, no premium anything. v${state.version}</p>
+      <p class="muted">Immortal Isparian Incremental (III) — a text idle RPG in Asheron's Call's world. No energy, no tokens, no premium anything. v${state.version}</p>
     </div>`;
 }

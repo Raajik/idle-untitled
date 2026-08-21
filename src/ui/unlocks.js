@@ -7,7 +7,7 @@ export const UNLOCKS = [
   { id: 'battle', kind: 'tab', label: '⚔ Battle', when: () => true },
   { id: 'hero', kind: 'tab', label: '🧙 Hero', when: (s) => s.hero.level >= 2, toast: '🧙 Hero unlocked — allocate your stat points!' },
   { id: 'equipment', kind: 'tab', label: '🎒 Equipment', when: (s) => s.progress.totalDrops >= 1, toast: '🎒 Equipment unlocked — monsters can drop loot!' },
-  { id: 'training', kind: 'tab', label: '💰 Training', when: (s) => s.progress.totalGoldEarned >= 50, toast: '💰 Training unlocked — spend gold on permanent % upgrades!' },
+  { id: 'training', kind: 'tab', label: '💰 Training', when: (s) => s.progress.totalPyrealsEarned >= 5000, toast: '💰 Training unlocked — spend pyreals on permanent % upgrades!' },
   { id: 'rebirth', kind: 'tab', label: '✦ Rebirth', when: (s) => s.progress.bossesKilled >= 1, toast: '✦ Rebirth unlocked — a greater power stirs...', teaser: (s) => !canRebirth(s) },
   { id: 'overview', kind: 'tab', label: '📊 Overview', when: (s) => s.rebirth.count >= 1, toast: '📊 Overview unlocked — monitor everything at once!' },
   { id: 'settings', kind: 'tab', label: '⚙ Settings', when: () => true },

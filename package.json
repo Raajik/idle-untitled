@@ -1,7 +1,7 @@
 {
-  "name": "idle-untitled",
+  "name": "immortal-isparian-incremental",
   "version": "0.1.0",
-  "description": "A text-based idle RPG. No energy, no tokens, no premium anything.",
+  "description": "Immortal Isparian Incremental (III) — a text-based idle RPG in Asheron's Call's world of Dereth. No energy, no tokens, no premium anything.",
   "type": "module",
   "scripts": {
     "test": "node --test"

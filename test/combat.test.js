@@ -25,10 +25,10 @@ test('combat ticks eventually kill the monster and grant rewards', () => {
   // make hero strong enough to one-shot
   s.hero.str = 500;
   s.hero.end = 500;
-  const goldBefore = s.gold;
+  const pyrealsBefore = s.pyreals;
   for (let i = 0; i < 40; i++) tickCombat(s, 0.25);
   assert.ok(s.progress.totalKills >= 1);
-  assert.ok(s.gold > goldBefore);
+  assert.ok(s.pyreals > pyrealsBefore);
   assert.ok(s.hero.xp > 0 || s.hero.level > 1);
 });
 

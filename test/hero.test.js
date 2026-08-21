@@ -1,20 +1,42 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { xpForLevel, grantXp, derivedStats, allocateStat, heroDps } from '../src/game/hero.js';
+import { xpForLevel, totalXpForLevel, levelFromTotalXp, grantXp, derivedStats, raiseAttribute, attributeCost, heroDps } from '../src/game/hero.js';
 import { createInitialState } from '../src/game/state.js';
 
-test('xpForLevel is strictly increasing', () => {
+test('xpForLevel is strictly increasing (cubic AC curve)', () => {
   for (let lvl = 1; lvl < 50; lvl++) {
     assert.ok(xpForLevel(lvl + 1) > xpForLevel(lvl));
   }
+  assert.equal(xpForLevel(1), 1000);
+  assert.equal(xpForLevel(2), 8000);
 });
 
-test('grantXp handles multi-level jumps and awards stat points', () => {
+test('level derives from total XP earned (cubic)', () => {
+  assert.equal(levelFromTotalXp(0), 1);
+  assert.equal(levelFromTotalXp(999), 1);
+  assert.equal(levelFromTotalXp(1000), 2);
+  assert.equal(levelFromTotalXp(totalXpForLevel(5)), 5);
+});
+
+test('grantXp adds spendable XP and derives level', () => {
   const s = createInitialState();
-  const levels = grantXp(s, 10000);
+  const levels = grantXp(s, 50000);
   assert.ok(levels > 1);
-  assert.equal(s.hero.statPoints, levels * 3);
   assert.ok(s.hero.level > 2);
+  assert.equal(s.hero.xp, 50000); // all XP is available to spend
+  assert.equal(s.progress.totalXpEarned, 50000);
+});
+
+test('raiseAttribute spends XP and rejects when too costly', () => {
+  const s = createInitialState();
+  assert.equal(raiseAttribute(s, 'str'), false); // no XP yet
+  s.hero.xp = 100000;
+  const before = s.hero.str;
+  const cost = attributeCost(before);
+  assert.equal(raiseAttribute(s, 'str'), true);
+  assert.equal(s.hero.str, before + 1);
+  assert.equal(s.hero.xp, 100000 - cost);
+  assert.equal(raiseAttribute(s, 'nope'), false);
 });
 
 test('derivedStats scale with base stats', () => {
@@ -26,15 +48,6 @@ test('derivedStats scale with base stats', () => {
   assert.ok(after.atk > before.atk);
   assert.ok(after.maxHp > before.maxHp);
   assert.ok(after.def > before.def);
-});
-
-test('allocateStat spends points only when available', () => {
-  const s = createInitialState();
-  assert.equal(allocateStat(s, 'str'), false); // 0 points
-  s.hero.statPoints = 1;
-  assert.equal(allocateStat(s, 'str'), true);
-  assert.equal(s.hero.str, 6);
-  assert.equal(allocateStat(s, 'nope'), false);
 });
 
 test('equipment raises derived stats', () => {

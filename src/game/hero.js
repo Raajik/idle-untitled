@@ -1,6 +1,9 @@
 // Hero stats: Asheron's Call six attributes -> derived combat stats.
 // Strength / Endurance / Coordination / Quickness drive melee combat;
 // Focus (Life Magic) and Self (mana) are latent until the skill system lands.
+//
+// Attributes are raised by spending XP (AC-style) with a power-2.5 cost curve.
+// Character level is derived from total XP earned this run, using AC's cubic curve.
 
 import { REBIRTH_UPGRADES } from '../data/rebirth.js';
 
@@ -13,13 +16,45 @@ export const ATTRIBUTES = [
   { id: 'self', name: 'Self', short: 'SELF', desc: 'Mana (coming soon)' },
 ];
 
+// --- Experience / level (AC cubic curve) ---
+
+// XP required to advance from `level` to `level + 1` (AC: level^3 * 1000).
 export function xpForLevel(level) {
-  return Math.floor(16 * Math.pow(level, 1.7));
+  return 1000 * level * level * level;
+}
+
+// Cumulative XP required to REACH `level` (sum of the per-level steps below it).
+export function totalXpForLevel(level) {
+  const n = level - 1;
+  const s = (n * (n + 1)) / 2; // 1 + 2 + ... + n
+  return Math.floor(1000 * s * s);
+}
+
+// Character level derived from total XP earned this run.
+export function levelFromTotalXp(xp) {
+  let level = 1;
+  while (xp >= totalXpForLevel(level + 1)) level += 1;
+  return level;
+}
+
+// --- Attribute raising (AC-style: spend XP, escalating cost ~ value^2.5) ---
+
+export function attributeCost(value) {
+  return Math.ceil(3 * Math.pow(value, 2.5));
+}
+
+export function raiseAttribute(state, attr) {
+  if (!ATTRIBUTES.some((a) => a.id === attr)) return false;
+  const cost = attributeCost(state.hero[attr]);
+  if (state.hero.xp < cost) return false;
+  state.hero.xp -= cost;
+  state.hero[attr] += 1;
+  return true;
 }
 
 // Aggregate all percentage/flat bonuses from equipment affixes, training, and rebirth upgrades.
 export function getBonuses(state) {
-  const b = { atkPct: 0, hpFlat: 0, hpPct: 0, goldPct: 0, xpPct: 0, critPct: 0, luckPct: 0, weaponAtk: 0, armorDef: 0, startStats: 0 };
+  const b = { atkPct: 0, hpFlat: 0, hpPct: 0, pyrealsPct: 0, xpPct: 0, critPct: 0, luckPct: 0, weaponAtk: 0, armorDef: 0, startStats: 0 };
 
   for (const slot of Object.keys(state.equipment)) {
     const item = state.equipment[slot];
@@ -36,7 +71,7 @@ export function getBonuses(state) {
 
   b.atkPct += state.training.atk * 6;
   b.hpPct += state.training.hp * 8;
-  b.goldPct += state.training.gold * 5;
+  b.pyrealsPct += state.training.pyreals * 5;
 
   for (const up of REBIRTH_UPGRADES) {
     const rank = state.rebirth.upgrades[up.id] || 0;
@@ -66,30 +101,22 @@ export function derivedStats(state) {
     dodge,
     critChance,
     xpPct: b.xpPct,
-    goldPct: b.goldPct,
+    pyrealsPct: b.pyrealsPct,
     luckPct: b.luckPct,
   };
 }
 
-// Grant XP, applying multiplier and handling multiple level-ups. Returns levels gained.
+// Grant XP: adds to the spendable pool AND the run's total (which drives level).
+// Returns the number of levels gained.
 export function grantXp(state, amount) {
   const mult = 1 + derivedStats(state).xpPct / 100;
-  state.hero.xp += Math.round(amount * mult);
-  let levels = 0;
-  while (state.hero.xp >= xpForLevel(state.hero.level)) {
-    state.hero.xp -= xpForLevel(state.hero.level);
-    state.hero.level += 1;
-    state.hero.statPoints += 3;
-    levels += 1;
-  }
+  const gained = Math.round(amount * mult);
+  state.hero.xp += gained;
+  state.progress.totalXpEarned += gained;
+  const newLevel = levelFromTotalXp(state.progress.totalXpEarned);
+  const levels = newLevel - state.hero.level;
+  state.hero.level = newLevel;
   return levels;
-}
-
-export function allocateStat(state, stat) {
-  if (state.hero.statPoints <= 0 || !ATTRIBUTES.some((a) => a.id === stat)) return false;
-  state.hero.statPoints -= 1;
-  state.hero[stat] += 1;
-  return true;
 }
 
 // Average hero damage per second against a target with `def` defense — used by offline sim.

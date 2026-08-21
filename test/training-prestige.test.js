@@ -11,13 +11,13 @@ test('training cost grows exponentially', () => {
   }
 });
 
-test('buyTraining requires gold and increments rank', () => {
+test('buyTraining requires pyreals and increments rank', () => {
   const s = createInitialState();
-  assert.equal(buyTraining(s, 'atk'), false); // no gold
-  s.gold = 1000;
+  assert.equal(buyTraining(s, 'atk'), false); // no pyreals
+  s.pyreals = 10000;
   assert.equal(buyTraining(s, 'atk'), true);
   assert.equal(s.training.atk, 1);
-  assert.ok(s.gold < 1000);
+  assert.ok(s.pyreals < 10000);
 });
 
 test('soulsForRun is zero before reaching Banderling Plains and grows after', () => {
@@ -32,7 +32,7 @@ test('rebirth resets the run but keeps souls and upgrades', () => {
   const s = createInitialState();
   s.progress.highestZone = 2;
   s.hero.level = 25;
-  s.gold = 5000;
+  s.pyreals = 5000;
   s.inventory.push({ id: 1, slot: 'weapon', power: 5, affixes: [], rarity: 'Common', name: 'x' });
   assert.ok(canRebirth(s));
 
@@ -40,7 +40,7 @@ test('rebirth resets the run but keeps souls and upgrades', () => {
   assert.ok(gained > 0);
   assert.equal(s.rebirth.souls, gained);
   assert.equal(s.rebirth.count, 1);
-  assert.equal(s.gold, 0);
+  assert.equal(s.pyreals, 0);
   assert.equal(s.hero.level, 1);
   assert.equal(s.progress.highestZone, 0);
   assert.equal(s.inventory.length, 0);
