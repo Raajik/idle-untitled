@@ -27,7 +27,7 @@ export const REGIONS = [
   {
     id: 'holtburg',
     name: 'Holtburg',
-    walkSeconds: 30,
+    walkSeconds: 180, // 3 minutes — matches TUTORIAL_JOURNEY_SECONDS for the "seen a Lifestone" path that skips the scripted journey
     pois: [
       {
         id: 'holtburg-meeting-hall', name: 'Holtburg Meeting Hall', coords: '42.2N, 33.9E', quest: 'None', walkSeconds: 6,
