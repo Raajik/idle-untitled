@@ -93,6 +93,7 @@ export function createInitialState() {
         gathering: freshGathering(),
         tinkering: freshSkill(),
         salvaging: freshSkill(), // scales how much material breaking an item down returns
+        cooking: freshSkill(), // taught by the General Store's larder quest
         lifestone: { recall: freshSkill() },
       },
     },
@@ -118,7 +119,10 @@ export function createInitialState() {
       // Holtburg — growing the budding Lifestone there moves this to Holtburg's hub.
       boundLifestone: { regionId: null, poiId: null },
       lifestoneGrowth: {}, // poiId -> 0..LIFESTONE_GROWTH_REQUIRED for each budding Lifestone
-      quests: {}, // poiId -> 'active' | 'done'; drives the ! marker on a POI tile
+      quests: {}, // quest key -> 'active' | 'done'; drives the ! marker on a card
+      reputation: {}, // regionId -> standing, earned by quests (see game/quests.js)
+      kills: {}, // species -> how many you've killed, for kill objectives
+      storeFoodUnlocked: false, // the General Store's larder quest
       recallUnlocked: false,
       tookTownTour: false, // the Town Hall tour, which is what opens the General Store
       autoHealUnlocked: false, // set by receiving a Healing Kit

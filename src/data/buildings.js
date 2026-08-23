@@ -35,7 +35,7 @@ export const MAX_BUILDING_LEVEL = 10;
 
 // Perk keys that are NOT hero bonuses — each is read by one specific caller:
 // `materialMult` by game/waves.js (clear payout), `healCostPct` by game/shop.js.
-const LOCAL_PERK_KEYS = ['materialMult', 'healCostPct', 'investmentPct'];
+const LOCAL_PERK_KEYS = ['materialMult', 'healCostPct', 'reputationPct'];
 
 const BASE_ROTATION_SECONDS = 3600; // one hour at level 1
 const MIN_ROTATION_SECONDS = 300;
@@ -57,7 +57,10 @@ const BUILDING_TEMPLATES = [
     // explain itself before it will take your money.
     service: 'tour',
     unlocksOnService: 'general-store',
-    perk: { key: 'investmentPct', perLevel: -3, text: (v) => `${v}% to invest in any business` },
+    // Reputation is what makes a town cheap to build in now. A Town Hall is
+    // where the work gets posted, so what investing in it buys is a better
+    // return on doing that work.
+    perk: { key: 'reputationPct', perLevel: 10, text: (v) => `+${v}% reputation from every job` },
   },
   {
     id: 'general-store',
@@ -89,6 +92,17 @@ const BUILDING_TEMPLATES = [
     ],
     exchange: true,
     perk: null, // more of everything, better, faster — that IS the perk
+  },
+  {
+    id: 'bounty-board',
+    name: 'Bounty Board',
+    blurb: 'Nailed-up scraps of paper, most of them asking for the same three things.',
+    // A board isn't a business — it's already there when you arrive, and nothing
+    // about it is for sale. Investing widens what it posts.
+    startsUnlocked: true,
+    upgrade: { pyreals: 300, growth: 1.5, materialKind: 'wood', materials: 2 },
+    bounties: true,
+    perk: { key: 'pyrealsPct', perLevel: 2, text: (v) => `+${v}% Pyreals` },
   },
   {
     id: 'physician',
@@ -148,6 +162,7 @@ const BUILDING_TEMPLATES = [
     name: 'Archmage',
     blurb: 'Wands, orbs, staves, amulets, and unsolicited advice about mana.',
     unlock: { pyreals: 4500, materialKind: 'gem', materials: 6 },
+    needsReputation: 40,
     upgrade: { pyreals: 2800, growth: 1.7, materialKind: 'gem', materials: 3 },
     stock: { slots: ['weapon', 'amulet'], weaponFilter: 'magic', min: 3, max: 5 },
     perk: { key: 'maxManaFlat', perLevel: 6, text: (v) => `+${v} Max Mana` },
@@ -157,6 +172,7 @@ const BUILDING_TEMPLATES = [
     name: 'Jeweler',
     blurb: 'Rings that catch the light, and — so they claim — good fortune.',
     unlock: { pyreals: 6000, materialKind: 'metal', materials: 6 },
+    needsReputation: 55,
     upgrade: { pyreals: 3600, growth: 1.7, materialKind: 'metal', materials: 3 },
     stock: { slots: ['ring'], min: 2, max: 4 },
     perk: { key: 'luckPct', perLevel: 3, text: (v) => `+${v}% better loot rarity` },
@@ -174,6 +190,7 @@ const BUILDING_TEMPLATES = [
     name: 'Trade Hall',
     blurb: 'Where Holtburg argues about prices, loudly, on your behalf.',
     unlock: { pyreals: 12000, materialKind: 'wood', materials: 12 },
+    needsReputation: 80,
     upgrade: { pyreals: 7000, growth: 1.7, materialKind: 'wood', materials: 6 },
     perk: { key: 'pyrealsPct', perLevel: 6, text: (v) => `+${v}% Pyreals` },
   },
@@ -225,7 +242,7 @@ export function buildingsForRegion(regionId) {
 export function freshBuildings() {
   const map = {};
   for (const def of BUILDINGS) {
-    map[def.id] = { level: def.startsUnlocked ? 1 : 0, stock: [], sells: [], exchange: [], rotatesAt: 0 };
+    map[def.id] = { level: def.startsUnlocked ? 1 : 0, stock: [], sells: [], exchange: [], bounties: [], rotatesAt: 0 };
   }
   return map;
 }
@@ -240,7 +257,7 @@ export function unlockCost(building, state) {
   const u = building.unlock;
   if (!u) return null;
   const raw = { pyreals: u.pyreals, materialKind: u.materialKind || null, materials: u.materials || 0 };
-  return state ? discounted(state, raw) : raw;
+  return state ? discounted(state, raw, building.regionId) : raw;
 }
 
 // Cost to go from `level` to `level + 1`. Pyreals grow geometrically, materials
@@ -253,17 +270,48 @@ export function upgradeCost(building, level, state) {
     materialKind: u.materialKind || null,
     materials: (u.materials || 0) * level,
   };
-  return state ? discounted(state, raw) : raw;
+  return state ? discounted(state, raw, building.regionId) : raw;
 }
 
-// The Town Hall's perk discounts every investment in town, including its own.
-export function investmentDiscount(state) {
-  return Math.max(0.25, 1 + buildingBonus(state, 'investmentPct') / 100);
+// --- Reputation ---
+//
+// What the town thinks of you, earned by doing things for it (see
+// game/quests.js). It does two jobs that used to be done with money alone:
+//
+//   it discounts every investment, so a town that knows you is cheaper to build
+//   in than one that doesn't — which is what the Town Hall's perk used to do,
+//   and is a far better fit for a *reputation*
+//
+//   it gates the doors that shouldn't simply be bought. An Archmage doesn't set
+//   up shop for a stranger with a full purse.
+export const REPUTATION_DISCOUNT_PER_POINT = 0.004; // 0.4% off per point
+export const MAX_REPUTATION_DISCOUNT = 0.5;
+
+export function reputationDiscount(state, regionId) {
+  const rep = (state.progress.reputation && state.progress.reputation[regionId]) || 0;
+  return Math.min(MAX_REPUTATION_DISCOUNT, rep * REPUTATION_DISCOUNT_PER_POINT);
 }
 
-function discounted(state, cost) {
+// What every investment in a town is multiplied by. Reputation is the whole of
+// it now; the Town Hall buys something else entirely.
+export function investmentDiscount(state, regionId = state.location.regionId) {
+  return Math.max(0.4, 1 - reputationDiscount(state, regionId));
+}
+
+// Standing a business wants before it will deal with you at all.
+export function reputationRequired(building) {
+  return building && building.needsReputation ? building.needsReputation : 0;
+}
+
+export function meetsReputation(state, building) {
+  const need = reputationRequired(building);
+  if (!need) return true;
+  return ((state.progress.reputation || {})[building.regionId] || 0) >= need;
+}
+
+function discounted(state, cost, regionId) {
   if (!cost) return null;
-  const scale = investmentDiscount(state);
+  const scale = investmentDiscount(state, regionId);
   return {
     pyreals: Math.max(1, Math.round(cost.pyreals * scale)),
     materialKind: cost.materialKind,

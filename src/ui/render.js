@@ -29,6 +29,8 @@ import { applyRending } from '../game/rending.js';
 import { buyItem, sellItem, healService, buyConsumable, buyMaterial } from '../game/shop.js';
 import { getMaterial } from '../data/materials.js';
 import { addLog } from '../game/state.js';
+import { completeQuest } from '../game/quests.js';
+import { claimBounty } from '../game/bounties.js';
 
 const TAB_RENDERERS = {
   battle: battleTab,
@@ -593,6 +595,12 @@ export function createRenderer(state, { onImport }) {
       case 'invest-open': investToOpen(state, arg); break;
       case 'invest-building': investInBuilding(state, arg); break;
       case 'take-tour': takeTour(state, arg); break;
+      case 'hand-in-quest': completeQuest(state, arg, state.location.regionId); break;
+      case 'claim-bounty': {
+        const [buildingId, id] = splitBuildingArg(arg);
+        claimBounty(state, buildingId, Number(id));
+        break;
+      }
       case 'set-poi-tier': state.ui.activePoiTier = arg; break;
       case 'set-skill-tab': state.ui.activeSkillTab = arg; break;
       case 'set-void-spell': state.hero.combat.voidSpell = arg; state.hero.attackTimer = 0; break;

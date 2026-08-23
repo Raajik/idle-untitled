@@ -67,7 +67,7 @@ test('the town is a card in the grid, in every band', () => {
     s.ui.activePoiTier = tier.id;
     const html = battleTab(s);
     assert.ok(html.includes('town-tile-holtburg'), `${tier.label} should carry the town card`);
-    assert.ok(html.includes('Holtburg Town'), `${tier.label} should name it`);
+    assert.ok(html.includes('&#127968; Holtburg'), `${tier.label} should name it`);
   }
 });
 
@@ -109,9 +109,9 @@ test('the town card carries the Town Hall\'s quest marker', () => {
 
 test('the town card reports how much of the town is open', () => {
   const s = inHoltburg('drudge-hideout');
-  assert.ok(battleTab(s).includes('1 of 11 open'), 'a fresh Holtburg has only its Town Hall');
+  assert.ok(battleTab(s).includes('2 of 12 open'), 'a fresh Holtburg has its Town Hall and its board');
   takeTour(s, 'holtburg:town-hall');
-  assert.ok(battleTab(s).includes('2 of 11 open'), 'the tour opens the Store');
+  assert.ok(battleTab(s).includes('3 of 12 open'), 'the tour opens the Store');
 });
 
 test('the map stays on screen while you walk home', () => {

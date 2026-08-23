@@ -9,7 +9,15 @@ import { canEnlighten } from '../game/enlightenment.js';
 // Owning any gear at all — via a kill-drop, a shop purchase, or the tutorial's
 // auto-equips — not just having ever gotten a monster drop specifically.
 function ownsAnyGear(s) {
-  return s.inventory.length > 0 || Object.values(s.equipment).some(Boolean);
+  // Anything you've picked up at all, not just gear. Trophies and materials live
+  // on the Inventory tab too and are usually what you loot FIRST — a rat tail on
+  // the road comes long before a breastplate — and `totalDrops` covers a drop
+  // that auto-salvage broke down before it ever reached the bag.
+  if (s.inventory.length > 0) return true;
+  if (Object.values(s.equipment).some(Boolean)) return true;
+  if ((s.progress && s.progress.totalDrops) > 0) return true;
+  if (Object.values(s.trophies || {}).some((n) => n > 0)) return true;
+  return Object.values(s.materials || {}).some((n) => n > 0);
 }
 
 export const UNLOCKS = [

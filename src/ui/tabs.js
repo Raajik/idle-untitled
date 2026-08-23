@@ -65,7 +65,9 @@ import {
   perkText,
   MAX_BUILDING_LEVEL,
 } from '../data/buildings.js';
-import { rotationRemaining, buildingHasQuest, buildingQuestText } from '../game/buildings.js';
+import { rotationRemaining, buildingHasQuest, buildingQuestText, buildingQuest } from '../game/buildings.js';
+import { objectiveHave, objectiveText, canCompleteQuest, reputation } from '../game/quests.js';
+import { bountyReady, bountiesAt } from '../game/bounties.js';
 import { buyPrice, sellPrice, healCost } from '../game/shop.js';
 import { TRAINING_TRACKS, trainingCost } from '../game/training.js';
 import { soulsAvailable, canEnlighten, ENLIGHTENMENT_UPGRADES } from '../game/enlightenment.js';
@@ -83,6 +85,8 @@ import {
   weaponClass,
   isArmorSlot,
   isUnderclothing,
+  itemDamage,
+  itemArmour,
 } from '../data/items.js';
 import { UNLOCKS } from './unlocks.js';
 import { fmt, formatDuration, formatClock, plural } from '../engine/format.js';
@@ -494,7 +498,7 @@ function townTileHtml(state, region, travel) {
     : '';
 
   return `<button class="${cls}" id="town-tile-${region.id}" title="Return to town" data-action="travel-region" data-arg="${region.id}">
-    <span class="poi-name">&#127968; ${esc(region.name)} Town</span>
+    <span class="poi-name">&#127968; ${esc(region.name)}</span>
     <span class="poi-level">Hub</span>
     ${when}
     <span class="sub gather-note">${open} of ${shops.length} open</span>
@@ -505,7 +509,7 @@ function townTileHtml(state, region, travel) {
 // One hunting ground. Fixed-height so a band reads as a grid of equals rather
 // than a ragged list — every tile carries the same four lines whether or not it
 // has anything to say on them.
-function poiTileHtml(state, poi, travel, tone) {
+function poiTileHtml(state, poi, travel, tone, regionId) {
   const here = state.location.poiId === poi.id;
   const travelling = travel && travel.kind === 'poi' && travel.id === poi.id;
   const cls = ['tile', 'poi-tile', `tier-${tone}`, here ? 'current' : '', travelling ? 'travelling' : ''].join(' ');
@@ -529,8 +533,13 @@ function poiTileHtml(state, poi, travel, tone) {
 
   // The marker sits in the same corner on every card, so "is there something to
   // do here" is one glance down a column rather than a read of each name.
+  const bounties = bountiesAt(state, poi, regionId);
   const quest = hasOpenQuest(state, poi.id)
     ? `<span class="quest-mark" title="${esc(poi.quest || 'Something here wants doing')}">!</span>`
+    : bounties.length
+    // A posting you could work here. Marked distinctly from a real quest so the
+    // two don't read as the same kind of thing.
+    ? `<span class="quest-mark bounty" title="${esc(`Bounties you could work here: ${bounties.map((b) => b.title).join(', ')}`)}">¤</span>`
     : '';
 
   return `<button class="${cls}" id="poi-tile-${poi.id}" title="Travel" data-action="travel-poi" data-arg="${poi.id}">
@@ -581,7 +590,7 @@ function poiTiersHtml(state, region, travel, jumpTargets) {
   const townTile = townTileHtml(state, region, travel);
   const tiles = poisInTier(region, active)
     .map((poi) => {
-      const tile = poiTileHtml(state, poi, travel, activeTone);
+      const tile = poiTileHtml(state, poi, travel, activeTone, region.id);
       const shortcut = jumpTargets.get(poi.id);
       // A shortcut sits beside the place it reaches, as a tile of the same size.
       const jump = shortcut
@@ -760,6 +769,55 @@ function buildingPanelHtml(state) {
       </div>`
     : `<p class="muted">Grown as far as it goes.</p>`;
 
+  // A job this business is offering. Shown with its progress against what you're
+  // actually carrying, so "17 / 25" is a live answer rather than a counter you
+  // had to have started before you began collecting.
+  const offered = buildingQuest(state, buildingId);
+  let questPanel = '';
+  if (offered) {
+    const { def, key } = offered;
+    const have = objectiveHave(state, def.objective);
+    const need = def.objective ? def.objective.count : 0;
+    const ready = canCompleteQuest(state, key);
+    const rewards = def.rewards || {};
+    const paid = [
+      rewards.xp ? `${fmt(rewards.xp)} XP` : null,
+      `+${rewards.reputation ?? 10} reputation`,
+      (rewards.skills || []).length ? `the ${(rewards.skills || []).join(' and ')} skill` : null,
+      Object.entries(rewards.consumables || {}).map(([id, n]) => `${n}x ${esc((getConsumable(id) || {}).name || id)}`).join(', ') || null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    questPanel = `<div class="quest-panel">
+      <div class="quest-title"><span class="quest-mark static">!</span>${esc(def.title)}</div>
+      <p class="muted">${esc(def.desc)}</p>
+      ${def.objective ? `<div class="quest-progress ${ready ? 'ready' : ''}">${esc(objectiveText(def.objective))} — <b>${fmt(have)} / ${fmt(need)}</b></div>` : ''}
+      <div class="muted quest-reward">Pays ${paid}</div>
+      <div class="actions"><button class="btn primary" data-action="hand-in-quest" data-arg="${key}" ${ready ? '' : 'disabled'}>Hand it in</button></div>
+    </div>`;
+  }
+
+  // The board. Every posting says what it wants, how far along you are, and what
+  // it pays; claiming one replaces it rather than leaving a gap.
+  let boardPanel = '';
+  if (building.bounties && (entry.bounties || []).length) {
+    const rows = entry.bounties
+      .map((b) => {
+        const have = objectiveHave(state, b.objective);
+        const ready = bountyReady(state, b);
+        return `<div class="upgrade-row${ready ? ' bounty-ready' : ''}">
+          <div>
+            <b>${esc(b.title)}</b>
+            <div class="desc">${esc(objectiveText(b.objective))} — <span class="${ready ? 'xp-text' : ''}">${fmt(Math.min(have, b.objective.count))} / ${fmt(b.objective.count)}</span></div>
+            <div class="desc muted">+${b.reputation} reputation · ${fmt(b.xp)} XP · ${fmt(b.pyreals)}p</div>
+          </div>
+          <button class="btn" data-action="claim-bounty" data-arg="${buildingId}:${b.id}" ${ready ? '' : 'disabled'}>Claim</button>
+        </div>`;
+      })
+      .join('');
+    boardPanel = `<div class="muted" style="margin:10px 0 4px">Posted here — rerolls with the shelves</div>${rows}`;
+  }
+
   let service = '';
   if (building.service === 'heal') {
     const cost = healCost(state);
@@ -774,6 +832,8 @@ function buildingPanelHtml(state) {
 
   return `<div class="shop-panel">${head}
     <div class="muted" style="margin:6px 0 2px">Level ${entry.level}/${MAX_BUILDING_LEVEL}${perk ? ` — ${esc(perk)}` : ''}</div>
+    ${questPanel}
+    ${boardPanel}
     ${rotationLine}
     ${investLine}
     ${service}

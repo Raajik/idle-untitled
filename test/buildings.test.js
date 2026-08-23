@@ -10,6 +10,8 @@ import {
   upgradeCost,
   rotationSeconds,
   investmentDiscount,
+  reputationRequired,
+  meetsReputation,
   MAX_BUILDING_LEVEL,
 } from '../src/data/buildings.js';
 import {
@@ -32,10 +34,12 @@ function townWithStore() {
   return s;
 }
 
-test('only the Town Hall is open when you arrive in Holtburg', () => {
+test('only the Town Hall and the board are open when you arrive in Holtburg', () => {
+  // A bounty board isn't a business — it's a plank with paper nailed to it, and
+  // it's already there.
   const s = createInitialState();
-  const open = BUILDINGS.filter((b) => b.regionId === 'holtburg' && isUnlocked(s, b.id)).map((b) => b.id);
-  assert.deepEqual(open, ['holtburg:town-hall']);
+  const open = BUILDINGS.filter((b) => b.regionId === 'holtburg' && isUnlocked(s, b.id)).map((b) => b.type).sort();
+  assert.deepEqual(open, ['bounty-board', 'town-hall']);
 });
 
 test('every town past the first is already trading when you get there', () => {
@@ -208,21 +212,50 @@ test('opening a business costs pyreals and materials, and refuses when short', (
   assert.ok(s.buildings['holtburg:weaponsmith'].stock.length > 0);
 });
 
-test('the Town Hall makes every investment in town cheaper, including its own', () => {
-  const plain = createInitialState();
-  plain.progress.unlockedRegions = ['holtburg'];
-  const grown = createInitialState();
-  grown.progress.unlockedRegions = ['holtburg'];
-  grown.buildings['holtburg:town-hall'].level = MAX_BUILDING_LEVEL;
+test('a town that knows you is cheaper to build in', () => {
+  // Reputation is what discounts investment now, not a Town Hall perk — which
+  // is a far better fit for what a reputation IS.
+  const stranger = createInitialState();
+  stranger.progress.unlockedRegions = ['holtburg'];
+  const known = createInitialState();
+  known.progress.unlockedRegions = ['holtburg'];
+  known.progress.reputation = { holtburg: 60 };
 
-  // The Hall is open from the start, so even a fresh town gets its level-1 cut;
-  // what matters is that investing in it widens the discount.
-  assert.ok(investmentDiscount(grown) < investmentDiscount(plain));
-  assert.ok(investmentDiscount(plain) <= 1);
+  assert.equal(investmentDiscount(stranger, 'holtburg'), 1, 'a stranger pays full price');
+  assert.ok(investmentDiscount(known, 'holtburg') < 1);
 
   const smith = getBuilding('holtburg:weaponsmith');
-  assert.ok(unlockCost(smith, grown).pyreals < unlockCost(smith, plain).pyreals);
-  assert.ok(upgradeCost(smith, 3, grown).pyreals < upgradeCost(smith, 3, plain).pyreals);
+  assert.ok(unlockCost(smith, known).pyreals < unlockCost(smith, stranger).pyreals);
+  assert.ok(upgradeCost(smith, 3, known).pyreals < upgradeCost(smith, 3, stranger).pyreals);
+});
+
+test('the discount is generous but never free', () => {
+  const s = createInitialState();
+  s.progress.unlockedRegions = ['holtburg'];
+  s.progress.reputation = { holtburg: 100000 };
+  assert.ok(investmentDiscount(s, 'holtburg') >= 0.4, 'a floor keeps investing a real cost');
+});
+
+test('some doors do not open for money', () => {
+  const s = createInitialState();
+  s.progress.unlockedRegions = ['holtburg'];
+  s.pyreals = 10_000_000;
+  for (const kind of ['metal', 'wood', 'cloth', 'hide', 'stone', 'gem']) s.materials['iron'] = 9999;
+  s.materials['copper'] = 9999;
+  s.materials['oak'] = 9999;
+  s.materials['linen'] = 9999;
+  s.materials['granite'] = 9999;
+  s.materials['gromnie-hide'] = 9999;
+  s.materials['opal'] = 9999;
+
+  const archmage = getBuilding('holtburg:archmage');
+  assert.ok(reputationRequired(archmage) > 0, 'the Archmage should want standing');
+  assert.equal(meetsReputation(s, archmage), false);
+  assert.equal(investToOpen(s, 'holtburg:archmage'), false, 'a full purse is not enough');
+
+  s.progress.reputation = { holtburg: reputationRequired(archmage) };
+  assert.equal(meetsReputation(s, archmage), true);
+  assert.equal(investToOpen(s, 'holtburg:archmage'), true);
 });
 
 test('a business perk applies to the hero, and grows as you invest', () => {

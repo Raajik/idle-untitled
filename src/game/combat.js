@@ -39,6 +39,7 @@ import { tickRecallCooldown, respawnAtLifestone, tickLifestoneGrowth } from './l
 import { gainVitae } from './vitae.js';
 import { tickBuffs, tickAutoCast } from './buffs.js';
 import { rollSpellword } from './spellwords.js';
+import { recordKill } from './quests.js';
 import { tickAutoHeal, tickAutoDrink } from './consumables.js';
 import { tickJumpCooldown } from './shortcuts.js';
 import { beginWaveIfNeeded, recordWaveKill, waveDifficulty } from './waves.js';
@@ -389,6 +390,7 @@ function onMonsterDeath(state, m) {
 
   p.totalKills += 1;
   p.killsInPoi += 1;
+  recordKill(state, m.species); // the one objective that can't be read off your pack
   addLog(state, `${m.name} slain. +${fmt(m.xp)} XP, +${fmt(pyrealsGain)} pyreals`, 'dim');
 
   if (levels > 0) {

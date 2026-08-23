@@ -10,6 +10,8 @@ import {
   BUILDINGS,
   buildingIn,
   getBuilding,
+  meetsReputation,
+  reputationRequired,
   rotationSeconds,
   unlockCost,
   upgradeCost,
@@ -24,6 +26,9 @@ import { MATERIALS } from '../data/materials.js';
 import { getConsumable } from '../data/consumables.js';
 import { pick, randInt } from '../engine/rng.js';
 import { addLog } from './state.js';
+import { rollBounties } from './bounties.js';
+import { questKey, getQuest } from '../data/quests.js';
+import { grantReputation, openQuestsFor, questForGiver } from './quests.js';
 
 // What the clerk actually says, and the reason the whole town works this way:
 // nothing here gets handed to you, it gets invested in.
@@ -111,6 +116,7 @@ function restock(state, def, entry, now, { quiet = false } = {}) {
   entry.stock = rollBuildingStock(state, def, entry.level);
   entry.sells = rollShelf(def);
   entry.exchange = def.exchange ? rollExchangeRates(entry.level) : [];
+  entry.bounties = def.bounties ? rollBounties(state, def.regionId) : [];
   entry.rotatesAt = now + rotationSeconds(entry.level) * 1000;
   if (!firstRoll && !quiet) addLog(state, `The ${def.name} has restocked.`, 'dim');
 }
@@ -121,7 +127,7 @@ function restock(state, def, entry, now, { quiet = false } = {}) {
 export function rotationRemaining(state, buildingId, now = Date.now()) {
   const def = getBuilding(buildingId);
   const entry = state.buildings[buildingId];
-  if (!def || (!def.stock && !def.sells) || !entry || entry.level === 0) return 0;
+  if (!def || (!def.stock && !def.sells && !def.bounties) || !entry || entry.level === 0) return 0;
   return Math.max(0, (entry.rotatesAt - now) / 1000);
 }
 
@@ -130,7 +136,7 @@ export function rotationRemaining(state, buildingId, now = Date.now()) {
 // comparisons unless something actually rotated.
 export function tickBuildings(state, now = Date.now()) {
   for (const def of BUILDINGS) {
-    if (!def.stock && !def.sells && !def.exchange) continue;
+    if (!def.stock && !def.sells && !def.exchange && !def.bounties) continue;
     const entry = state.buildings[def.id];
     if (!entry || entry.level === 0) continue;
     if (now >= (entry.rotatesAt || 0)) restock(state, def, entry, now);
@@ -144,11 +150,13 @@ export function tickBuildings(state, now = Date.now()) {
 export const TOUR_QUEST = 'Ask how the town works';
 
 export function openTownQuests(state, regionId) {
+  openQuestsFor(state, regionId);
   const hallId = buildingIn(regionId, 'town-hall');
   const def = getBuilding(hallId);
   if (!def || def.service !== 'tour') return;
   if (state.progress.tookTownTour) {
     state.progress.quests[hallId] = 'done';
+    state.progress.quests[questKey('town-tour', regionId)] = 'done';
     return;
   }
   if (!state.progress.quests[hallId]) state.progress.quests[hallId] = 'active';
@@ -156,11 +164,21 @@ export function openTownQuests(state, regionId) {
 
 // Whether this building is currently asking for something.
 export function buildingHasQuest(state, buildingId) {
-  return state.progress.quests[buildingId] === 'active';
+  if (state.progress.quests[buildingId] === 'active') return true;
+  return !!buildingQuest(state, buildingId);
+}
+
+// The quest this building is offering, if any.
+export function buildingQuest(state, buildingId) {
+  const def = getBuilding(buildingId);
+  if (!def) return null;
+  return questForGiver(state, def.regionId, def.type);
 }
 
 export function buildingQuestText(state, buildingId) {
-  return buildingHasQuest(state, buildingId) ? TOUR_QUEST : null;
+  const quest = buildingQuest(state, buildingId);
+  if (quest) return quest.def.title;
+  return state.progress.quests[buildingId] === 'active' ? TOUR_QUEST : null;
 }
 
 export function isUnlocked(state, buildingId) {
@@ -191,6 +209,12 @@ export function takeTour(state, buildingId, now = Date.now()) {
   state.progress.tookTownTour = true;
   state.progress.quests[buildingId] = 'done';
   addLog(state, TOUR_LINE, 'good');
+  // Sitting through it is itself the hand-in, so it pays like any other job.
+  const tourKey = questKey('town-tour', def.regionId);
+  if (state.progress.quests[tourKey] !== 'done') {
+    state.progress.quests[tourKey] = 'done';
+    grantReputation(state, def.regionId, (getQuest('town-tour').rewards || {}).reputation || 0);
+  }
   if (def.unlocksOnService && openBuilding(state, def.unlocksOnService, now)) {
     addLog(state, `The ${getBuilding(def.unlocksOnService).name} opens its doors to you.`, 'good');
   }
@@ -203,6 +227,12 @@ export function investToOpen(state, buildingId, now = Date.now()) {
   if (!entry || entry.level > 0) return false;
   const cost = unlockCost(def, state);
   if (!cost || !canAfford(state, cost)) return false;
+  // Some doors don't open for money. An Archmage doesn't set up shop for a
+  // stranger with a full purse (see data/buildings.js needsReputation).
+  if (!meetsReputation(state, def)) {
+    addLog(state, `The ${def.name} won't deal with you yet — ${reputationRequired(def)} reputation in ${def.regionId} would change that.`, 'dim');
+    return false;
+  }
 
   payCost(state, cost);
   openBuilding(state, buildingId, now);

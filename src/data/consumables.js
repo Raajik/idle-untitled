@@ -38,6 +38,21 @@ export const CONSUMABLES = [
     },
     desc: 'Bitter, green, and faintly fizzing. Drinking one teaches you more about alchemy than any book would.',
   },
+
+  {
+    id: 'simple-meal',
+    name: 'Simple Meal',
+    rarity: 'Common',
+    startingCharges: 1,
+    price: 40,
+    buff: {
+      id: 'well-fed',
+      name: 'Well Fed',
+      seconds: 30 * 60,
+      effect: { hpRegenFlat: 1 },
+    },
+    desc: 'Cooked meat and something green. +1 Health regeneration for 30 minutes.',
+  },
 ];
 
 export function getConsumable(id) {

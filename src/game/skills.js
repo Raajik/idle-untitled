@@ -57,6 +57,13 @@ export const OFFENSE_SKILLS = [
 export const MELEE_WEAPON_BASE_TYPES = ['sword', 'spear', 'axe', 'mace'];
 
 // Gathering skills, in the order they're listed in the Skills tab.
+// Cooking is taught rather than started with (see data/quests.js store-larder).
+export const CRAFT_SKILLS = [
+  { key: 'tinkering', label: 'Tinkering' },
+  { key: 'salvaging', label: 'Salvaging' },
+  { key: 'cooking', label: 'Cooking', taught: true },
+];
+
 export const GATHERING_SKILLS = [
   { key: 'mining', label: 'Mining' },
   { key: 'foraging', label: 'Foraging' },

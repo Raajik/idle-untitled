@@ -89,6 +89,7 @@ function migrate(raw) {
   for (const entry of Object.values(state.buildings)) {
     entry.sells = entry.sells || [];
     entry.exchange = entry.exchange || [];
+    entry.bounties = entry.bounties || [];
   }
   if (state.buildings['holtburg:general-store'] && state.buildings['holtburg:general-store'].level > 0) {
     state.progress.tookTownTour = true;

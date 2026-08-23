@@ -645,6 +645,26 @@ button.btn.primary { border-color: var(--accent); color: var(--accent); }
 .jump-tile { border-color: var(--soul); color: var(--soul); }
 .jump-tile:hover:not(:disabled) { border-color: var(--soul); color: var(--soul); opacity: 0.8; }
 
+/* A job a business is offering, inside its panel. Framed so it reads as an ask
+   rather than as another row of stock. */
+.quest-panel {
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 5px;
+  padding: 9px 11px;
+  margin: 10px 0;
+}
+.quest-panel .quest-title { font-weight: bold; margin-bottom: 4px; }
+.quest-panel .quest-progress { margin-top: 6px; font-variant-numeric: tabular-nums; }
+.quest-panel .quest-progress.ready { color: var(--xp); }
+.quest-panel .quest-reward { margin-top: 4px; font-size: 11px; }
+.quest-mark.static { position: static; animation: none; margin-right: 6px; }
+/* A bounty you could work here, as opposed to a quest that lives here. Quieter
+   and a different colour, so the two never read as the same kind of thing. */
+.quest-mark.bounty { background: var(--mana); animation: none; }
+.upgrade-row.bounty-ready { border-left: 3px solid var(--xp); padding-left: 8px; }
+
 /* Shop panel (Nearby) */
 .shop-panel { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 .shop-panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
