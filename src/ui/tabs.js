@@ -183,6 +183,25 @@ function attackBarHtml(state, d) {
     </div>`;
 }
 
+// Which vital a buff's effect belongs to, as a text class. Keyed off the bonus
+// key rather than the spell's name so anything new that raises one of these is
+// colored to match without a second list to keep in step.
+const VITAL_TEXT_CLASS = {
+  hpRegenFlat: 'hp-text',
+  staminaRegenFlat: 'stamina-text',
+  manaRegenFlat: 'mana-text',
+  hpFlat: 'hp-text',
+  maxManaFlat: 'mana-text',
+};
+
+// The class for whatever vital an effect touches, or '' if it isn't about one.
+function vitalTextClass(effect) {
+  for (const key of Object.keys(effect || {})) {
+    if (VITAL_TEXT_CLASS[key]) return VITAL_TEXT_CLASS[key];
+  }
+  return '';
+}
+
 // Everything you can keep running or keep drinking: the three self-buffs, the
 // automation toggles they and the Healing Kit unlock, and whatever is in your
 // pack. Lives next to the vitals because that's what all of it is for.
@@ -193,7 +212,7 @@ function upkeepHtml(state) {
       const auto = isAutoCast(state, sp.id);
       const status = buff ? `<span class="xp-text">${formatDuration(buff.remaining)} left</span>` : '<span class="muted">not up</span>';
       return `<div class="upgrade-row">
-        <div><b>${esc(sp.name)}</b> ${status}<div class="desc">${esc(sp.desc)} · ${sp.manaCost} mana</div></div>
+        <div><b class="${vitalTextClass(sp.effect)}">${esc(sp.name)}</b> ${status}<div class="desc">${esc(sp.desc)} · ${sp.manaCost} mana</div></div>
         <div class="actions">
           <button class="btn" data-action="cast-spell" data-arg="${sp.id}" ${canCastBuffSpell(state, sp.id) ? '' : 'disabled'}>Cast</button>
           <button class="btn small${auto ? ' active' : ''}" data-action="toggle-autocast" data-arg="${sp.id}">Auto ${auto ? 'ON' : 'OFF'}</button>
@@ -205,7 +224,7 @@ function upkeepHtml(state) {
   const packRows = CONSUMABLES.filter((c) => charges(state, c.id) > 0)
     .map(
       (c) => `<div class="upgrade-row">
-        <div><b class="rarity-${c.rarity}">${esc(c.name)}</b> <span class="muted">${plural(charges(state, c.id), 'charge')}</span><div class="desc">${esc(c.desc)}</div></div>
+        <div><b class="${c.buff ? vitalTextClass(c.buff.effect) : `rarity-${c.rarity}`}">${esc(c.name)}</b> <span class="muted">${plural(charges(state, c.id), 'charge')}</span><div class="desc">${esc(c.desc)}</div></div>
         <div class="actions">${c.buff ? `<button class="btn" data-action="use-consumable" data-arg="${c.id}">Use</button>` : '<span class="muted">Spent by auto-healing</span>'}</div>
       </div>`
     )

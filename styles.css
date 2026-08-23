@@ -325,7 +325,11 @@ button.btn.primary { border-color: var(--accent); color: var(--accent); }
 .item .stats { font-size: 12px; color: var(--text-dim); }
 .item .actions { margin-top: 4px; display: flex; gap: 6px; }
 .item button { font-size: 12px; padding: 2px 8px; }
+/* Text tinted to match a vital's own bar, so a buff reads as "this is the mana
+   one" before you've read the word. Paired with VITAL_TEXT_CLASS in ui/tabs.js. */
 .hp-text { color: var(--hp); }
+.stamina-text { color: var(--stamina); }
+.mana-text { color: var(--mana); }
 .xp-text { color: var(--xp); }
 .rarity-Common { color: var(--rarity-common); }
 .rarity-Uncommon { color: var(--rarity-uncommon); }
