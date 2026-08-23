@@ -68,18 +68,33 @@
 
   /* --- the hover card: C's information, on demand --- */
   .hoverwrap { position: relative; }
+  /* Sized to its contents rather than to a guess, and told never to wrap: the
+     card is allowed to be as wide as it needs, because a tooltip that folds a
+     monster's name onto two lines is harder to read than a wide one. */
   .hovercard {
     position: absolute; left: 100%; top: -6px; margin-left: 8px; z-index: 30;
-    width: 236px; background: var(--bg-panel); border: 1px solid var(--accent);
-    border-radius: 6px; padding: 10px 12px; font-size: 12px;
+    width: max-content; max-width: 460px;
+    background: var(--bg-panel); border: 1px solid var(--accent);
+    border-radius: 6px; padding: 11px 14px; font-size: 12px;
     box-shadow: 0 6px 20px rgba(0,0,0,0.55);
+    white-space: nowrap;
   }
-  .hovercard .hc-name { font-weight: bold; margin-bottom: 2px; }
-  .hovercard .hc-sub { color: var(--text-dim); font-size: 11px; margin-bottom: 7px; }
-  .hovercard .hc-line { display: flex; justify-content: space-between; gap: 10px; margin: 3px 0; }
-  .hovercard .hc-line .k { color: var(--text-dim); }
-  .hovercard .hc-note { margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--border); font-size: 11px; }
-  .hovercard .hc-art { float: right; opacity: 0.5; }
+  .hovercard .hc-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+  .hovercard .hc-name { font-weight: bold; font-size: 13px; }
+  .hovercard .hc-sub { color: var(--text-dim); font-size: 11px; margin-left: auto; }
+
+  /* Facts: a label column and a value column, both on one line each. */
+  .hovercard .hc-facts { display: grid; grid-template-columns: auto auto; gap: 3px 14px; margin-bottom: 9px; }
+  .hovercard .hc-facts .k { color: var(--text-dim); }
+  .hovercard .hc-facts .v { font-variant-numeric: tabular-nums; }
+
+  /* Inhabitants and what each of them is soft to, side by side — a POI can hold
+     three different species, so one shared "weaknesses" line would be a lie. */
+  .hovercard .hc-table { display: grid; grid-template-columns: auto auto auto; gap: 2px 14px; align-items: baseline; }
+  .hovercard .hc-table .th { color: var(--text-dim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; padding-bottom: 3px; border-bottom: 1px solid var(--border); }
+  .hovercard .hc-table .lv { color: var(--text-dim); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .hovercard .hc-note { margin-top: 9px; padding-top: 7px; border-top: 1px solid var(--border); font-size: 11px; }
+  .hovercard .hc-art { opacity: 0.5; font-size: 15px; }
 
   .caption { color: var(--text-dim); font-size: 11px; margin-top: 8px; font-style: italic; }
 </style>
@@ -154,9 +169,11 @@
   <!-- ============================================================ -->
   <div class="mock">
     <h2>Hovering a row — C's card, on demand</h2>
-    <p class="why">Everything the location card carried, shown only when you ask for it: <b>level range, walk time
-      against base, what a clear yields, how many times you've cleared it, what lives there</b>, and any job or
-      bounty that points at it. Nothing is lost from C; it just stops competing for permanent space.</p>
+    <p class="why">Everything the location card carried, shown only when you ask for it — and the card is
+      <b>sized to its contents and never wraps</b>, because a tooltip that folds a monster's name onto two lines
+      is harder to read than a wide one. Inhabitants and weaknesses sit side by side: a place can hold three
+      different species, so <b>one shared "weaknesses" line would be a lie</b>. The bold entry is the primary
+      (+45%); the dimmed pair behind it are the +30% and +15%.</p>
     <div class="frame">
       <div class="demo">
         <div class="fake-side">
@@ -166,14 +183,23 @@
             <div class="hoverwrap">
               <button class="place-row" style="--tier-edge:#6ab06a;background:var(--bg-inset);border-color:var(--border)"><span class="lv">3</span><span class="nm">Green Mire Grave</span><span class="t faster">0:18</span><span class="mk bounty">¤</span></button>
               <div class="hovercard">
-                <div class="hc-art">🐾</div>
-                <div class="hc-name">Green Mire Grave</div>
-                <div class="hc-sub">Lv 3–4 · foraging</div>
-                <div class="hc-line"><span class="k">Travel</span><span class="xp-text">0:18 <span class="muted">(base 0:24)</span></span></div>
-                <div class="hc-line"><span class="k">Clears</span><span>2 Velvet · 7 done</span></div>
-                <div class="hc-line"><span class="k">Lives here</span><span>Grave Mite, Wisp, Zombie</span></div>
-                <div class="hc-line"><span class="k">Soft to</span><span class="el-acid" style="color:#8ac06a">Acid</span></div>
-                <div class="hc-note"><span class="mana-text">¤ Bounty</span> — Wanted: Velvet, 4 / 18</div>
+                <div class="hc-head">
+                  <span class="hc-art">🐾</span>
+                  <span class="hc-name">Green Mire Grave</span>
+                  <span class="hc-sub">Lv 3–4 · Foraging</span>
+                </div>
+                <div class="hc-facts">
+                  <span class="k">Travel:</span><span class="v"><span class="xp-text">0:18</span> <span class="muted">(base 0:24)</span></span>
+                  <span class="k">Resources:</span><span class="v">2 Velvet per clear</span>
+                  <span class="k">Clears:</span><span class="v">7</span>
+                </div>
+                <div class="hc-table">
+                  <span class="th">Inhabitants:</span><span class="th"></span><span class="th">Weaknesses:</span>
+                  <span>Grave Mite</span><span class="lv">Lv 3</span><span><span style="color:#6ab6d4">❄ Cold</span> <span class="muted">· pierce · slash</span></span>
+                  <span>Shallow Wisp</span><span class="lv">Lv 4</span><span><span style="color:#e8d04b">⚡ Lightning</span> <span class="muted">· slash · acid</span></span>
+                  <span>Mire Zombie</span><span class="lv">Lv 4</span><span><span style="color:#e8763e">🔥 Fire</span> <span class="muted">· bludgeon · acid</span></span>
+                </div>
+                <div class="hc-note"><span class="mana-text">¤ Bounty</span> — Wanted: Velvet · 4 / 18</div>
               </div>
             </div>
             <button class="place-row" style="--tier-edge:#6ab06a"><span class="lv">4</span><span class="nm">A Rat Nest</span><span class="t faster">0:15</span></button>
