@@ -49,6 +49,9 @@ function migrate(raw) {
   state.hero.knownSpells = Array.isArray(state.hero.knownSpells) ? state.hero.knownSpells : [];
   state.settings.autoCastSpells = Array.isArray(state.settings.autoCastSpells) ? state.settings.autoCastSpells : [];
   state.settings.autoDrink = Array.isArray(state.settings.autoDrink) ? state.settings.autoDrink : [];
+  // Void Magic and War's element picker arrived after these saves were written.
+  state.hero.combat = { ...fresh.hero.combat, ...(state.hero.combat || {}) };
+  if (typeof state.progress.rotCooldown !== 'number') state.progress.rotCooldown = 0;
   // Run was renamed to Athletics — carry an old save's progress over rather than losing it.
   if (rawSkills.run && !rawSkills.athletics) {
     state.hero.skills.athletics = { ...rawSkills.run };

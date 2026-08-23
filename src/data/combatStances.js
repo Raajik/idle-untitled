@@ -34,13 +34,40 @@ export const ARCHERY_STANCES = [
   { label: 'Called Shot', interval: 2.8, accuracyMod: 20, resource: 'stamina' },
 ];
 
-// Magic: three spell profiles, all cast with the War Magic skill. Volley's
-// "AoE" is flavor only for now — combat is strictly one monster at a time.
+// Magic: three spell profiles cast with the War Magic skill. War picks its
+// element per cast (see data/elements.js); Volley hits the whole engaged group.
 export const MAGIC_SPELLS = {
   arc: { label: 'Arc', castTime: 2.5, dmgMult: 2.6, critMult: 3.0, manaCost: 15, resource: 'mana' },
-  volley: { label: 'Volley', castTime: 1.5, dmgMult: 1.4, critMult: 2.0, manaCost: 10, resource: 'mana' },
+  volley: { label: 'Volley', castTime: 1.5, dmgMult: 1.4, critMult: 2.0, manaCost: 10, resource: 'mana', aoe: true, aoeMult: 0.6 },
   streak: { label: 'Streak', castTime: 0.5, dmgMult: 0.6, critMult: 2.0, manaCost: 4, resource: 'mana' },
 };
+
+// Void Magic: the same three-slot shape, always void damage, with Corruption in
+// Volley's place. Corruption does no damage on impact — it lands a rot on every
+// engaged monster that ticks until the thing dies, stacking three deep. That
+// makes Void the patient school: it pays nothing up front and everything if the
+// fight runs long, which is the opposite bet to War's burst.
+export const VOID_SPELLS = {
+  arc: { label: 'Nether Bolt', castTime: 2.5, dmgMult: 2.4, critMult: 3.0, manaCost: 15, resource: 'mana' },
+  corruption: {
+    label: 'Corruption',
+    castTime: 1.5,
+    dmgMult: 0,
+    critMult: 1,
+    manaCost: 14,
+    resource: 'mana',
+    rot: true,
+    cooldown: 5,
+  },
+  streak: { label: 'Nether Streak', castTime: 0.5, dmgMult: 0.55, critMult: 2.0, manaCost: 4, resource: 'mana' },
+};
+
+// Corruption's rot: per stack, per tick, as a share of the caster's magic ATK.
+// No duration — it runs until the monster dies, which is what makes stacking it
+// early on a long fight worth the cast time.
+export const ROT_TICK_SECONDS = 1;
+export const ROT_MAX_STACKS = 3;
+export const ROT_DAMAGE_PER_STACK_PCT = 0.12;
 
 // Stamina a single physical attack costs, 1-5, scaled to the length of its windup
 // — that is, to how full the attack bar gets before the blow lands.

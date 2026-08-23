@@ -100,7 +100,10 @@ export const RARITIES = [
 // attacks cost and scale off (see game/combat.js), and which materials Tinkering
 // will take for it (see data/tinkering.js).
 export const WEAPON_CLASSES = {
-  melee: ['sword', 'axe', 'mace', 'spear'],
+  // Katars, cesti and nekode are melee weapons that train Unarmed — holding one
+  // is closer to fighting bare-handed than to swinging a sword (see
+  // data/weaponTraits.js UNARMED_WEAPONS).
+  melee: ['sword', 'axe', 'mace', 'spear', 'katar', 'cestus', 'nekode'],
   ranged: ['bow', 'crossbow'],
   magic: ['wand', 'orb', 'staff'],
 };
@@ -115,7 +118,7 @@ export function weaponClass(baseType) {
 }
 
 export const BASE_NAMES = {
-  weapon: ['Sword', 'Axe', 'Mace', 'Spear', 'Bow', 'Crossbow', 'Wand', 'Orb', 'Staff'],
+  weapon: ['Sword', 'Axe', 'Mace', 'Spear', 'Katar', 'Cestus', 'Nekode', 'Bow', 'Crossbow', 'Wand', 'Orb', 'Staff'],
   shirt: ['Shirt', 'Tunic', 'Doublet'],
   pants: ['Pants', 'Trousers', 'Breeches'],
   head: ['Helm', 'Coif', 'Cowl'],
@@ -143,6 +146,9 @@ export const ITEM_ICONS = {
   axe: '🪓',
   mace: '🔨',
   spear: '🔱',
+  katar: '🗡',
+  cestus: '🥊',
+  nekode: '🐾',
   bow: '🏹',
   crossbow: '🎯',
   wand: '🪄',

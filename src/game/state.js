@@ -74,10 +74,12 @@ export function createInitialState() {
       respawnTimer: 0,
       dead: false,
       combat: {
-        mode: 'melee', // 'melee' | 'archery' | 'magic'
+        mode: 'melee', // 'melee' | 'archery' | 'magic' | 'void'
         meleeStance: 0, // 0-4: fastest/lightest to the 4s heavy bleed swing
         archeryStance: 0, // 0-4: fastest/least accurate to slowest/most accurate
         magicSpell: 'arc', // 'arc' | 'volley' | 'streak'
+        voidSpell: 'arc', // 'arc' | 'corruption' | 'streak' (see VOID_SPELLS)
+        warElement: 'auto', // 'auto' or a member of CASTABLE_ELEMENTS (see data/elements.js)
       },
       skills: {
         athletics: freshSkill(), // renamed from run; also powers Jump/shortcuts
@@ -121,6 +123,7 @@ export function createInitialState() {
       alchemyUnlocked: false, // set by drinking your first potion
       recallCooldown: 0, // seconds remaining until Recall can be used again
       jumpCooldown: 0, // seconds remaining until a shortcut Jump can be used again
+      rotCooldown: 0, // seconds until Corruption can be cast again (see data/combatStances.js)
     },
     // Everything currently engaged, front of the list first — the hero swings at
     // that one while all of them swing back. Up to MAX_SWARM (see game/waves.js).

@@ -550,6 +550,8 @@ export function createRenderer(state, { onImport }) {
       case 'take-tour': takeTour(state, arg); break;
       case 'set-poi-tier': state.ui.activePoiTier = arg; break;
       case 'set-skill-tab': state.ui.activeSkillTab = arg; break;
+      case 'set-void-spell': state.hero.combat.voidSpell = arg; state.hero.attackTimer = 0; break;
+      case 'set-war-element': state.hero.combat.warElement = arg; break;
       case 'set-shop-tab': state.ui.activeShopTab = arg; break;
       case 'toggle-section': state.ui.collapsed[arg] = !state.ui.collapsed[arg]; break;
       case 'buy-consumable': {

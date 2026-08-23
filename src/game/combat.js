@@ -13,12 +13,18 @@ import {
   MELEE_STANCES,
   ARCHERY_STANCES,
   MAGIC_SPELLS,
+  VOID_SPELLS,
   BLEED_TICK_SECONDS,
   BLEED_DURATION_SECONDS,
   BLEED_MAX_STACKS,
   BLEED_DAMAGE_PER_STACK_PCT,
+  ROT_TICK_SECONDS,
+  ROT_MAX_STACKS,
+  ROT_DAMAGE_PER_STACK_PCT,
   staminaCostForWindup,
 } from '../data/combatStances.js';
+import { traitFor } from '../data/weaponTraits.js';
+import { bestElementFor, elementDamageMult, imbueOf, CASTABLE_ELEMENTS } from '../data/elements.js';
 import { pick, pickWeighted } from '../engine/rng.js';
 import { pushFx } from '../engine/fx.js';
 import { fmt } from '../engine/format.js';
@@ -197,6 +203,23 @@ function applyDamageToMonster(state, m, dmg, crit) {
   return true;
 }
 
+// Applies one attack's worth of damage to several monsters at once — a Volley,
+// or a bolt punching through the front rank.
+//
+// Every figure is worked out BEFORE anything is applied, and each target is
+// re-checked against the field as we go. Applying as we went meant a kill on the
+// primary target returned early and the rest of the group never got hit at all,
+// and a kill that emptied the wave could splash the replacements.
+// Returns true if anything died, which reshuffles the group.
+function applyDamageToGroup(state, hits) {
+  let died = false;
+  for (const { monster, dmg, crit } of hits) {
+    if (!state.monsters.includes(monster)) continue;
+    if (applyDamageToMonster(state, monster, dmg, crit)) died = true;
+  }
+  return died;
+}
+
 // Devastating melee stance stacks a bleed on the monster: each new stack adds
 // its own damage-per-tick and refreshes the whole effect's remaining duration
 // (rather than layering independent timers), capped at BLEED_MAX_STACKS.
@@ -205,6 +228,54 @@ function applyBleed(state, m, heroAtk) {
   m.bleed.stacks = Math.min(BLEED_MAX_STACKS, m.bleed.stacks + 1);
   m.bleed.dmgPerStack = Math.max(1, Math.round(heroAtk * BLEED_DAMAGE_PER_STACK_PCT));
   m.bleed.remaining = BLEED_DURATION_SECONDS;
+}
+
+// Corruption settles on every monster currently engaged, stacking to
+// ROT_MAX_STACKS. Unlike Bleed there's no duration: a rot runs until the thing
+// it's on is dead, so stacking it early is the whole play, and the 5s cooldown
+// is what stops that being three casts in the first two seconds.
+function applyRot(state, magicAtk) {
+  const dmgPerStack = Math.max(1, Math.round(magicAtk * ROT_DAMAGE_PER_STACK_PCT));
+  let touched = 0;
+  for (const m of state.monsters) {
+    if (!m.rot) m.rot = { stacks: 0, dmgPerStack: 0, timer: 0 };
+    if (m.rot.stacks < ROT_MAX_STACKS) touched += 1;
+    m.rot.stacks = Math.min(ROT_MAX_STACKS, m.rot.stacks + 1);
+    // A stronger caster's newer stacks are worth more; take the better figure
+    // rather than averaging, so gear upgrades are felt immediately.
+    m.rot.dmgPerStack = Math.max(m.rot.dmgPerStack, dmgPerStack);
+  }
+  addLog(
+    state,
+    touched
+      ? `Corruption takes hold of ${touched === 1 ? state.monsters[0].name : `${touched} of them`}.`
+      : 'Corruption seeps in, but it can hold no deeper.',
+    'dim'
+  );
+}
+
+// Rot damage, same shape as the bleed tick. Returns true if anything died.
+function tickRot(state, dt) {
+  let died = false;
+  for (const m of [...state.monsters]) {
+    if (!m.rot || m.rot.stacks <= 0) continue;
+    m.rot.timer += dt;
+    while (m.rot.timer >= ROT_TICK_SECONDS && m.hp > 0) {
+      m.rot.timer -= ROT_TICK_SECONDS;
+      const dmg = m.rot.stacks * m.rot.dmgPerStack;
+      m.hp -= dmg;
+      pushFx({ type: 'hit', target: 'monster', dmg, crit: false });
+      addLog(state, `${m.name} rots for ${dmg}.`, 'dim');
+      if (m.hp <= 0) {
+        pushFx({ type: 'kill', target: 'monster' });
+        state.monsters = state.monsters.filter((other) => other !== m);
+        onMonsterDeath(state, m);
+        died = true;
+      }
+    }
+  }
+  if (died && state.monsters.length === 0) engageWave(state);
+  return died;
 }
 
 // Ticks any active bleed on the current monster once per BLEED_TICK_SECONDS.
@@ -376,18 +447,60 @@ function hastened(seconds, stats) {
   return seconds * (1 - pct / 100);
 }
 
+// War and Void are the same machine with different ammunition: same three-slot
+// shape, same cast/mana/timer handling, different table. Everything below reads
+// the table rather than branching on the school, so Void cost one entry here
+// instead of a parallel copy of the magic loop.
+export function isMagicMode(mode) {
+  return mode === 'magic' || mode === 'void';
+}
+
+export function spellTableFor(mode) {
+  return mode === 'void' ? VOID_SPELLS : MAGIC_SPELLS;
+}
+
+export function activeSpell(state) {
+  const h = state.hero;
+  if (h.combat.mode === 'void') return VOID_SPELLS[h.combat.voidSpell] || VOID_SPELLS.arc;
+  return MAGIC_SPELLS[h.combat.magicSpell] || MAGIC_SPELLS.arc;
+}
+
+// The skill a magic school trains, so Void ranks up its own line.
+function magicSkillFor(state, mode) {
+  return mode === 'void'
+    ? { skill: state.hero.skills.offense.void, label: 'Void Magic', key: 'void' }
+    : { skill: state.hero.skills.offense.war, label: 'War Magic', key: 'war' };
+}
+
+// What the weapon in hand does that others don't (see data/weaponTraits.js).
+export function activeTrait(state) {
+  const weapon = state.equipment.weapon;
+  return traitFor(state.hero.combat.mode, weapon ? weapon.baseType : null);
+}
+
+// The element this cast will actually use. Void is void, always. War casts what
+// you picked, or — on Auto — whatever lands hardest on the thing in front of it.
+export function activeElement(state, target = currentTarget(state)) {
+  const h = state.hero;
+  if (h.combat.mode === 'void') return 'void';
+  const chosen = h.combat.warElement;
+  if (chosen && chosen !== 'auto') return chosen;
+  const imbue = imbueOf(state.equipment.weapon);
+  // Nothing to read yet: fall back to the weapon's own element, then to fire.
+  if (!target) return imbue || 'fire';
+  return bestElementFor(target.dmgType, imbue, CASTABLE_ELEMENTS);
+}
+
 export function activeAttackInterval(state, stats) {
   const h = state.hero;
   const mode = h.combat.mode;
-  if (mode === 'archery') {
-    const stance = ARCHERY_STANCES[h.combat.archeryStance];
-    return hastened(stance.interval ?? 1 / stats.spd, stats);
-  }
-  if (mode === 'magic') {
-    return hastened(MAGIC_SPELLS[h.combat.magicSpell].castTime, stats);
-  }
-  const stance = MELEE_STANCES[h.combat.meleeStance];
-  return hastened(stance.interval ?? 1 / stats.spd, stats);
+  if (isMagicMode(mode)) return hastened(activeSpell(state).castTime, stats);
+
+  const trait = activeTrait(state);
+  const stance = mode === 'archery' ? ARCHERY_STANCES[h.combat.archeryStance] : MELEE_STANCES[h.combat.meleeStance];
+  // A bow is quick and a crossbow is not; fists are quicker than either. The
+  // trait scales the whole window, so it holds across every stance.
+  return hastened((stance.interval ?? 1 / stats.spd) * (trait.speedMult ?? 1), stats);
 }
 
 // What a cast costs after Frugality (opal). Never free.
@@ -402,12 +515,14 @@ export function spellManaCost(spell, stats) {
 export function activeAttackCost(state, stats = derivedStats(state)) {
   const h = state.hero;
   const mode = h.combat.mode;
-  if (mode === 'magic') {
-    const spell = MAGIC_SPELLS[h.combat.magicSpell];
+  if (isMagicMode(mode)) {
+    const spell = activeSpell(state);
     return { resource: spell.resource, amount: spellManaCost(spell, stats) };
   }
   const stance = mode === 'archery' ? ARCHERY_STANCES[h.combat.archeryStance] : MELEE_STANCES[h.combat.meleeStance];
-  return { resource: stance.resource, amount: staminaCostForWindup(activeAttackInterval(state, stats)) };
+  const trait = activeTrait(state);
+  const raw = staminaCostForWindup(activeAttackInterval(state, stats)) * (trait.staminaMult ?? 1);
+  return { resource: stance.resource, amount: Math.max(1, Math.round(raw)) };
 }
 
 // Which vital the active attack draws on ('stamina' | 'mana' | 'life'). Used to
@@ -481,7 +596,9 @@ export function tickCombat(state, dt) {
   state.progress.timeInPoi += dt;
   if (state.monsters.length === 0) engageWave(state);
 
+  if (state.progress.rotCooldown > 0) state.progress.rotCooldown = Math.max(0, state.progress.rotCooldown - dt);
   if (tickBleed(state, dt)) return;
+  if (tickRot(state, dt)) return;
   const m = currentTarget(state);
   if (!m) return;
 
@@ -493,7 +610,9 @@ export function tickCombat(state, dt) {
   if (mode === 'archery') {
     const stance = ARCHERY_STANCES[h.combat.archeryStance];
     const attackInterval = activeAttackInterval(state, stats);
-    const staminaCost = staminaCostForWindup(attackInterval);
+    // Through activeAttackCost so the figure the UI quotes, the figure
+    // canAffordAttack tests, and the figure actually spent are one number.
+    const staminaCost = activeAttackCost(state, stats).amount;
     h.attackTimer += dt;
     while (h.attackTimer >= attackInterval) {
       if (h.stamina - staminaCost < DEFENSIVE_STAMINA_RESERVE) {
@@ -514,40 +633,86 @@ export function tickCombat(state, dt) {
         continue;
       }
 
-      const { dmg, crit } = dealDamage(stats.atk, m.def, stats.critChance, 2, stats.minDamagePct);
-      if (applyDamageToMonster(state, m, dmg, crit)) return;
+      const trait = activeTrait(state);
+      const { dmg, crit } = dealDamage(stats.atk * (trait.dmgMult ?? 1), m.def, stats.critChance, 2, stats.minDamagePct);
+      // A bolt doesn't stop at the first body. Everything behind the target takes
+      // a share, which is what makes a crossbow worth its slower crank when the
+      // wave came in six deep.
+      const hits = [{ monster: m, dmg, crit }];
+      if (trait.pierce) {
+        for (const other of state.monsters.filter((o) => o !== m).slice(0, trait.pierce)) {
+          const through = Math.max(1, Math.round(dmg * (trait.pierceMult ?? 0.5)));
+          addLog(state, `The bolt punches through into ${other.name} for ${through}.`, 'dim');
+          hits.push({ monster: other, dmg: through, crit: false });
+        }
+      }
+      if (applyDamageToGroup(state, hits)) return;
     }
-  } else if (mode === 'magic') {
-    const spell = MAGIC_SPELLS[h.combat.magicSpell];
+  } else if (isMagicMode(mode)) {
+    const spell = activeSpell(state);
     const castTime = activeAttackInterval(state, stats);
     const manaCost = spellManaCost(spell, stats);
+    const school = magicSkillFor(state, mode);
+    const imbue = imbueOf(state.equipment.weapon);
     h.attackTimer += dt;
     while (h.attackTimer >= castTime) {
+      // Corruption is the one spell on a cooldown: three stacks that never
+      // expire would otherwise just be "cast it three times immediately".
+      if (spell.rot && state.progress.rotCooldown > 0) {
+        h.attackTimer = castTime;
+        break;
+      }
       if (h.mana < manaCost) {
         h.attackTimer = castTime; // spell held on the tongue until the mana is there
         break;
       }
       h.attackTimer -= castTime;
       h.mana -= manaCost;
-      if (rollMonsterDodge(state, m)) continue;
 
-      const warSkill = h.skills.offense.war;
-      trainSkill(state, warSkill, 'War Magic', COMBAT_SKILL_XP);
+      trainSkill(state, school.skill, school.label, COMBAT_SKILL_XP);
       trainAttribute(state, 'focus', MAGIC_ATTR_XP);
       trainAttribute(state, 'self', MAGIC_ATTR_XP);
-      const warRank = effectiveRank(warSkill.rank, stats.skillRankBonus.war);
-      if (Math.random() * 100 >= Math.min(95, hitChance(warRank) + stats.hitChancePct)) {
+
+      // Corruption doesn't strike anything — it settles on the whole group and
+      // is not dodged. Everything else rolls to hit the target as usual.
+      if (spell.rot) {
+        state.progress.rotCooldown = spell.cooldown;
+        applyRot(state, stats.magicAtk);
+        continue;
+      }
+
+      if (rollMonsterDodge(state, m)) continue;
+      const rank = effectiveRank(school.skill.rank, stats.skillRankBonus[school.key]);
+      if (Math.random() * 100 >= Math.min(95, hitChance(rank) + stats.hitChancePct)) {
         addLog(state, `Your ${spell.label} fizzles past ${m.name}.`, 'dim');
         continue;
       }
 
-      const { dmg, crit } = dealDamage(stats.magicAtk * spell.dmgMult, m.def, stats.critChance, spell.critMult, stats.minDamagePct);
-      if (applyDamageToMonster(state, m, dmg, crit)) return;
+      // The element is picked per cast, so Auto re-reads the target every time
+      // the group in front of you changes.
+      const element = activeElement(state, m);
+      const power = stats.magicAtk * spell.dmgMult * elementDamageMult(element, m.dmgType, imbue);
+      const { dmg, crit } = dealDamage(power, m.def, stats.critChance, spell.critMult, stats.minDamagePct);
+
+      // Volley catches the rest of the group for a share, each rolled against
+      // its own element multiplier — a mixed wave takes uneven damage from one
+      // cast, which is correct and reads well in the log.
+      const hits = [{ monster: m, dmg, crit }];
+      if (spell.aoe) {
+        for (const other of state.monsters.filter((o) => o !== m)) {
+          const otherPower = stats.magicAtk * spell.dmgMult * (spell.aoeMult ?? 0.6) * elementDamageMult(element, other.dmgType, imbue);
+          const hit = dealDamage(otherPower, other.def, stats.critChance, spell.critMult, stats.minDamagePct);
+          hits.push({ monster: other, dmg: hit.dmg, crit: hit.crit });
+        }
+      }
+      if (applyDamageToGroup(state, hits)) return;
     }
   } else {
     const stance = MELEE_STANCES[h.combat.meleeStance];
     const attackInterval = activeAttackInterval(state, stats);
-    const staminaCost = staminaCostForWindup(attackInterval);
+    // Through activeAttackCost so the figure the UI quotes, the figure
+    // canAffordAttack tests, and the figure actually spent are one number.
+    const staminaCost = activeAttackCost(state, stats).amount;
     h.attackTimer += dt;
     while (h.attackTimer >= attackInterval) {
       if (h.stamina - staminaCost < DEFENSIVE_STAMINA_RESERVE) {
@@ -563,14 +728,19 @@ export function tickCombat(state, dt) {
       trainAttribute(state, 'str', MELEE_ATTR_XP);
       trainAttribute(state, 'coord', MELEE_ATTR_XP);
       trainAttribute(state, 'quick', MELEE_ATTR_XP);
+      const trait = activeTrait(state);
       const rank = effectiveRank(weaponSkill.skill.rank, stats.skillRankBonus[weaponSkill.key]);
-      if (Math.random() * 100 >= Math.min(95, hitChance(rank) + stats.hitChancePct)) {
+      if (Math.random() * 100 >= Math.min(95, hitChance(rank) + stats.hitChancePct + (trait.hitPct ?? 0))) {
         addLog(state, `You swing and miss ${m.name}.`, 'dim');
         continue;
       }
 
-      const { dmg, crit } = dealDamage(stats.atk * stance.dmgMult, m.def, stats.critChance, 2, stats.minDamagePct);
-      if (stance.bleed) applyBleed(state, m, stats.atk);
+      // A mace meets less armor than it looks like it should; an axe pays off on
+      // the crit rather than the average swing.
+      const facedDef = Math.round(m.def * (1 - (trait.defIgnorePct ?? 0) / 100));
+      const critMult = 2 * (trait.critDmgMult ?? 1);
+      const { dmg, crit } = dealDamage(stats.atk * stance.dmgMult * (trait.dmgMult ?? 1), facedDef, stats.critChance, critMult, stats.minDamagePct);
+      if (stance.bleed || trait.alwaysBleed) applyBleed(state, m, stats.atk);
       // No heal on kill — the Lifestone (respawn) is how you recover. Skills (Healing,
       // Cooking, Life Magic) will add in-fight recovery later.
       if (applyDamageToMonster(state, m, dmg, crit)) return;

@@ -36,9 +36,10 @@ export const QUICK_XP_PER_ATHLETICS_SECOND = 0.4; // same ~1/4 ratio to ATHLETIC
 export const JUMP_QUICK_XP_ON_USE = 4; // scaled down from JUMP_XP_ON_USE, same ratio
 
 // Melee weapons (and bare fists) train their own skill; Bow/Crossbow are Ranged.
-// War Magic governs the Magic attack bar (Arc/Volley/Streak — see
-// data/combatStances.js) and is fully playable; Life/Void Magic are latent
-// until non-combat spellcasting (heals, debuffs) lands.
+// War Magic governs the Magic attack bar (Arc/Volley/Streak) and picks its
+// element per cast; Void Magic is the same machine locked to void damage, with
+// a stacking rot in Volley's place (see data/combatStances.js). Life Magic is
+// the self-buff school (see data/buffSpells.js) and has no attack bar.
 export const OFFENSE_SKILLS = [
   { key: 'unarmed', label: 'Unarmed', category: 'Melee' },
   { key: 'sword', label: 'Sword', category: 'Melee' },
@@ -47,7 +48,7 @@ export const OFFENSE_SKILLS = [
   { key: 'mace', label: 'Mace', category: 'Melee' },
   { key: 'life', label: 'Life Magic', category: 'Magic', comingSoon: true },
   { key: 'war', label: 'War Magic', category: 'Magic' },
-  { key: 'void', label: 'Void Magic', category: 'Magic', comingSoon: true },
+  { key: 'void', label: 'Void Magic', category: 'Magic' },
   { key: 'bow', label: 'Bow', category: 'Ranged' },
   { key: 'crossbow', label: 'Crossbow', category: 'Ranged' },
 ];
@@ -57,6 +58,7 @@ export const MELEE_WEAPON_BASE_TYPES = ['sword', 'spear', 'axe', 'mace'];
 // skill (see data/items.js WEAPON_CLASSES).
 const WEAPON_BASE_TO_SKILL = {
   sword: 'sword', spear: 'spear', axe: 'axe', mace: 'mace',
+  katar: 'unarmed', cestus: 'unarmed', nekode: 'unarmed',
   bow: 'bow', crossbow: 'crossbow',
   wand: 'war', orb: 'war', staff: 'war',
 };

@@ -26,9 +26,10 @@ import {
   MAX_SKILL_RANK,
   modifiedWalkTime,
 } from '../game/skills.js';
-import { activeAttackInterval, activeAttackResource, activeAttackCost, canAffordAttack } from '../game/combat.js';
+import { activeAttackInterval, activeAttackResource, activeAttackCost, canAffordAttack, activeElement, activeTrait } from '../game/combat.js';
+import { CASTABLE_ELEMENTS, elementLabel, elementNote, imbueOf } from '../data/elements.js';
 import { WAVES_PER_POI, waveDifficulty, clearYield } from '../game/waves.js';
-import { MELEE_STANCES, ARCHERY_STANCES, MAGIC_SPELLS, staminaCostForWindup } from '../data/combatStances.js';
+import { MELEE_STANCES, ARCHERY_STANCES, MAGIC_SPELLS, VOID_SPELLS, ROT_MAX_STACKS, staminaCostForWindup } from '../data/combatStances.js';
 import {
   canRecall,
   canSacrificeVitae,
@@ -184,12 +185,22 @@ function attackBarHtml(state, d) {
       (s, i) =>
         `<button class="stance-seg${h.combat.archeryStance === i ? ' active' : ''}" data-action="set-archery-stance" data-arg="${i}" title="${plural(staminaCostForWindup(s.interval ?? 1 / d.spd), 'stamina', 'stamina')} per shot">${esc(s.label)}</button>`
     ).join('');
-  } else if (mode === 'magic') {
-    stanceHtml = Object.entries(MAGIC_SPELLS)
-      .map(
-        ([id, s]) =>
-          `<button class="stance-seg${h.combat.magicSpell === id ? ' active' : ''}" data-action="set-magic-spell" data-arg="${id}" title="${plural(s.manaCost, 'mana', 'mana')} per cast">${esc(s.label)}</button>`
-      )
+  } else if (mode === 'magic' || mode === 'void') {
+    const table = mode === 'void' ? VOID_SPELLS : MAGIC_SPELLS;
+    const chosen = mode === 'void' ? h.combat.voidSpell : h.combat.magicSpell;
+    const action = mode === 'void' ? 'set-void-spell' : 'set-magic-spell';
+    stanceHtml = Object.entries(table)
+      .map(([id, sp]) => {
+        const tip = [
+          `${plural(sp.manaCost, 'mana', 'mana')} per cast`,
+          sp.aoe ? 'Catches the whole group' : null,
+          sp.rot ? `Rots every enemy · stacks ${ROT_MAX_STACKS} · ${sp.cooldown}s cooldown · never wears off` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ');
+        const cooling = sp.rot && state.progress.rotCooldown > 0;
+        return `<button class="stance-seg${chosen === id ? ' active' : ''}" data-action="${action}" data-arg="${id}" title="${esc(tip)}">${esc(sp.label)}${cooling ? ` <span class="muted">${Math.ceil(state.progress.rotCooldown)}s</span>` : ''}</button>`;
+      })
       .join('');
   } else {
     stanceHtml = MELEE_STANCES.map(
@@ -200,14 +211,45 @@ function attackBarHtml(state, d) {
     ).join('');
   }
 
+  // War picks its element per cast; Void has only the one, so it says what it is
+  // rather than offering a choice that isn't there.
+  let elementRow = '';
+  if (mode === 'magic') {
+    const target = state.monsters[0] || null;
+    const imbue = imbueOf(weapon);
+    const picked = activeElement(state, target);
+    const seg = (id, text) => {
+      const active = h.combat.warElement === id ? ' active' : '';
+      const note = target ? elementNote(id === 'auto' ? picked : id, target.dmgType, imbue) : '';
+      const tip = id === 'auto'
+        ? `Casts whatever lands hardest${target ? ` — right now ${elementLabel(picked)}` : ''}`
+        : [elementLabel(id), note].filter(Boolean).join(' · ');
+      return `<button class="stance-seg element-seg el-${id === 'auto' ? picked : id}${active}" data-action="set-war-element" data-arg="${id}" title="${esc(tip)}">${esc(text)}</button>`;
+    };
+    const note = target ? elementNote(picked, target.dmgType, imbue) : '';
+    elementRow = `<div class="stance-row element-row">
+        ${seg('auto', `Auto${h.combat.warElement === 'auto' ? ` (${elementLabel(picked)})` : ''}`)}
+        ${CASTABLE_ELEMENTS.map((el) => seg(el, elementLabel(el))).join('')}
+      </div>${note ? `<div class="muted" style="margin-bottom:6px">${esc(elementLabel(picked))} — ${esc(note)}</div>` : ''}`;
+  } else if (mode === 'void') {
+    elementRow = `<div class="muted" style="margin-bottom:6px">Void damage, always.</div>`;
+  }
+
+  // What the thing in your hands does that another wouldn't.
+  const trait = activeTrait(state);
+  const traitLine = trait.text ? `<div class="muted trait-line">${esc(trait.text)}</div>` : '';
+
   return `
     <div class="attack-bar-panel">
       <div class="combat-mode-row">
         ${modeBtn('melee', 'Melee', false)}
         ${modeBtn('archery', 'Archery', !isRanged)}
-        ${modeBtn('magic', 'Magic', false)}
+        ${modeBtn('magic', 'War', false)}
+        ${modeBtn('void', 'Void', false)}
       </div>
       <div class="stance-row">${stanceHtml}</div>
+      ${elementRow}
+      ${traitLine}
       ${bar(`attack res-${activeAttackResource(state)}`, pct, label, 'atk-bar')}
     </div>`;
 }

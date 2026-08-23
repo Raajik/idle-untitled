@@ -261,6 +261,18 @@ body {
 /* AC-style attack bar: mode switcher, stance/spell picks, "reverse" fill bar */
 .attack-bar-panel { margin-top: 10px; }
 .combat-mode-row, .stance-row, .filter-group { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+/* War Magic's element picker. Each segment wears its own element's colour so the
+   choice reads as "what am I throwing" rather than as another row of buttons. */
+.element-row .element-seg { border-left-width: 3px; }
+.el-fire { --el: #e8763e; }
+.el-cold { --el: #6ab6d4; }
+.el-acid { --el: #8ac06a; }
+.el-lightning { --el: #e8d04b; }
+.el-void { --el: #9a7ae8; }
+.element-seg { border-left-color: var(--el, var(--border)); }
+.element-seg.active { border-color: var(--el, var(--accent)); color: var(--el, var(--accent)); }
+/* What the weapon in hand does that another wouldn't. */
+.trait-line { margin-bottom: 6px; font-size: 11px; }
 .filter-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 button.btn.small { padding: 3px 8px; font-size: 11px; }
 button.btn.active { border-color: var(--accent); color: var(--accent); background: var(--bg-inset); }

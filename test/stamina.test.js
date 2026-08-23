@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createInitialState } from '../src/game/state.js';
 import {
   tickCombat,
+  activeTrait,
   activeAttackCost,
   canAffordAttack,
   activeAttackInterval,
@@ -75,14 +76,40 @@ test('a melee swing spends stamina', () => {
 test('activeAttackCost reports what the current stance actually spends', () => {
   const s = atPoi();
   const d = derivedStats(s);
+  // A weapon's trait scales the cost on top of the windup (fists are cheap, see
+  // data/weaponTraits.js), so the quoted figure is the windup cost times that.
   for (let i = 0; i < MELEE_STANCES.length; i++) {
     s.hero.combat.meleeStance = i;
     const cost = activeAttackCost(s, d);
+    const trait = activeTrait(s);
     assert.equal(cost.resource, 'stamina');
-    assert.equal(cost.amount, staminaCostForWindup(activeAttackInterval(s, d)));
+    assert.equal(
+      cost.amount,
+      Math.max(1, Math.round(staminaCostForWindup(activeAttackInterval(s, d)) * (trait.staminaMult ?? 1)))
+    );
   }
   s.hero.combat.mode = 'magic';
   assert.equal(activeAttackCost(s, d).resource, 'mana');
+  s.hero.combat.mode = 'void';
+  assert.equal(activeAttackCost(s, d).resource, 'mana', 'Void casts on mana too');
+});
+
+test('the quoted cost is the cost actually paid', () => {
+  // These drifted apart once weapon traits scaled the cost: canAffordAttack
+  // tested one number and the swing spent another, so a hero could be told they
+  // could swing and then not swing.
+  const s = atPoi();
+  const d = derivedStats(s);
+  s.hero.combat.meleeStance = 4;
+  s.hero.hp = d.maxHp;
+  s.hero.mana = d.maxMana;
+  const cost = activeAttackCost(s, d).amount;
+  s.hero.stamina = cost + DEFENSIVE_STAMINA_RESERVE;
+  s.hero.attackTimer = activeAttackInterval(s, d);
+  assert.equal(canAffordAttack(s), true);
+  const before = s.hero.stamina;
+  tickCombat(s, 0.25);
+  assert.ok(s.hero.stamina < before, 'the swing should have gone off and been paid for');
 });
 
 test('running out of stamina parks the attack bar at full instead of resetting it', () => {
