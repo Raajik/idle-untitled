@@ -810,6 +810,7 @@ const SPELL_ID_LABELS = {
   xpPct: 'Wisdom (+% XP)',
   critPct: 'Precision (+% Crit)',
   maxManaFlat: 'Clarity (+Max Mana)',
+  weaponDamage: 'Keenness (+ATK)',
   magicDamage: 'Channeling (+Magic ATK)',
   hitChance: 'Accuracy (+% to hit)',
   attackSpeed: 'Alacrity (faster attacks)',

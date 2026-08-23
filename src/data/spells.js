@@ -90,43 +90,57 @@ const DEFS = {
     bonusKey: () => 'maxManaFlat',
   },
 
-  // --- Properties Tinkering works into a weapon (see data/tinkering.js). These
-  // are deterministic: a given material always teaches the same property, so
-  // Tinkering is a choice rather than a slot-machine pull. ---
+  // --- Properties Tinkering works into a weapon (see data/tinkering.js) ---
+  //
+  // These behave differently from the affixes above in two ways. They're exact:
+  // no jitter, because Tinkering is a decision and you should know what you're
+  // buying before you spend the material. And they're mild — a single pass is a
+  // small nudge, and even ten passes is a modest, steady weapon rather than a
+  // different weapon. What makes them worth it is that you choose them.
+  //
+  // Alacrity is deliberately the strongest of them: attack speed on a weapon was
+  // never worth chasing in Asheron's Call, and it should be here. At its
+  // ceiling it takes a 4.0s Devastating swing down to 3.0s.
 
+  weaponDamage: {
+    name: 'Keenness',
+    roll: (level) => ({ value: level * 1 }),
+    effectLabel: (v) => `+${v} ATK`,
+    bonusKey: () => 'atkFlat',
+  },
   magicDamage: {
     name: 'Channeling',
-    roll: (level) => ({ value: magnitude(level, 2) }),
+    roll: (level) => ({ value: level * 1 }),
     effectLabel: (v) => `+${v} Magic ATK`,
     bonusKey: () => 'magicAtkFlat',
   },
   hitChance: {
     name: 'Accuracy',
-    roll: (level) => ({ value: magnitude(level, 1.2) }),
+    roll: (level) => ({ value: level * 1.5 }),
     effectLabel: (v) => `+${v}% to hit`,
     bonusKey: () => 'hitChancePct',
   },
   attackSpeed: {
     name: 'Alacrity',
-    roll: (level) => ({ value: magnitude(level, 1.2) }),
+    roll: (level) => ({ value: level * 2.5 }),
     effectLabel: (v) => `${v}% faster attacks`,
     bonusKey: () => 'attackSpeedPct',
   },
   spellEfficiency: {
     name: 'Frugality',
-    roll: (level) => ({ value: magnitude(level, 2) }),
+    roll: (level) => ({ value: level * 1.5 }),
     effectLabel: (v) => `-${v}% mana per cast`,
     bonusKey: () => 'manaCostPct',
   },
   minDamage: {
     name: 'Tempering',
-    roll: (level) => ({ value: magnitude(level, 4) }),
+    roll: (level) => ({ value: level * 7 }),
     effectLabel: (v) => `+${v}% toward your best hit`,
     bonusKey: () => 'minDamagePct',
   },
   evasion: {
     name: 'Evasion',
-    roll: (level) => ({ value: magnitude(level, 2) }),
+    roll: (level) => ({ value: level * 1 }),
     effectLabel: (v) => `+${v}% Dodge`,
     bonusKey: () => 'dodgeBonus',
   },
@@ -135,7 +149,7 @@ const DEFS = {
     // layers — Block wants a shield and Parry wants a melee weapon — so brass
     // worked into a melee weapon feeds every one of them.
     name: 'Guard',
-    roll: (level) => ({ value: magnitude(level, 1.5) }),
+    roll: (level) => ({ value: level * 1 }),
     effectLabel: (v) => `+${v}% Dodge, Block and Parry`,
     bonusKey: () => ['dodgeBonus', 'blockBonus', 'parryBonus'],
   },

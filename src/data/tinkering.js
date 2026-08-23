@@ -12,14 +12,14 @@
 
 export const TINKER_RECIPES = {
   melee: {
-    iron: 'flatDamage', // sharper
+    iron: 'weaponDamage', // sharper
     granite: 'minDamage', // tempered: rolls closer to its best hit
     velvet: 'hitChance', // a grip that doesn't slip
     brass: 'guard', // fittings you can turn a blow with — melee can use all three layers
     oak: 'attackSpeed', // a lighter haft
   },
   ranged: {
-    mahogany: 'flatDamage',
+    mahogany: 'weaponDamage',
     velvet: 'hitChance',
     brass: 'evasion',
     oak: 'attackSpeed',
