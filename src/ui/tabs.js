@@ -27,7 +27,9 @@ import {
   modifiedWalkTime,
 } from '../game/skills.js';
 import { activeAttackInterval, activeAttackResource, activeAttackCost, canAffordAttack, activeElement, activeTrait } from '../game/combat.js';
-import { CASTABLE_ELEMENTS, elementLabel, elementNote, imbueOf } from '../data/elements.js';
+import { WAR_DAMAGE_TYPES, damageLabel, damageGlyph, damageTypeNote, rendingName, RENDING_PER_LEVEL, MAX_RENDING_LEVEL } from '../data/elements.js';
+import { gemDamageType, rendingRefusal } from '../game/rending.js';
+import { weaknessesOf, speciesLabel, speciesOf } from '../data/species.js';
 import { WAVES_PER_POI, waveDifficulty, clearYield, gatherMultiplier, nextMilestone } from '../game/waves.js';
 import { MELEE_STANCES, ARCHERY_STANCES, MAGIC_SPELLS, VOID_SPELLS, ROT_MAX_STACKS, staminaCostForWindup } from '../data/combatStances.js';
 import {
@@ -36,6 +38,8 @@ import {
   offeringCost,
   lifestoneGrowth,
   isGrown,
+  hasOpenQuest,
+  conditionOf,
   LIFESTONE_GROWTH_REQUIRED,
 } from '../game/lifestone.js';
 import { BUFF_SPELLS } from '../data/buffSpells.js';
@@ -45,7 +49,7 @@ import { charges, canAutoHeal, isAutoDrink, upkeepConsumables, STAMINA_PER_HP } 
 import { vitaePct, atMaxVitae, xpToClearStack, VITAE_PER_STACK, MAX_VITAE_PCT } from '../game/vitae.js';
 import { ACHIEVEMENTS } from '../data/achievements.js';
 import { availableShortcutsFrom, canJump } from '../game/shortcuts.js';
-import { getMaterial, materialsForSlot, MATERIALS } from '../data/materials.js';
+import { getMaterial, materialsForSlot, MATERIALS, RENDING_MATERIALS, totalOfKind, heldOfKind, kindLabel } from '../data/materials.js';
 import { creatureArt } from './creatureArt.js';
 import { kindOf } from '../data/bestiary.js';
 import { TROPHIES } from '../data/trophies.js';
@@ -213,28 +217,30 @@ function attackBarHtml(state, d) {
     ).join('');
   }
 
-  // War picks its element per cast; Void has only the one, so it says what it is
-  // rather than offering a choice that isn't there.
+  // War throws any of the seven ordinary types, drawn as a row of square runes.
+  // Void has only the one, so it says so rather than offering a choice that
+  // isn't there.
   let elementRow = '';
   if (mode === 'magic') {
     const target = state.monsters[0] || null;
-    const imbue = imbueOf(weapon);
     const picked = activeElement(state, target);
-    const seg = (id, text) => {
+    const glyph = (id) => {
+      const type = id === 'auto' ? picked : id;
       const active = h.combat.warElement === id ? ' active' : '';
-      const note = target ? elementNote(id === 'auto' ? picked : id, target.dmgType, imbue) : '';
+      const note = target ? damageTypeNote(type, target.name, weapon) : '';
       const tip = id === 'auto'
-        ? `Casts whatever lands hardest${target ? ` — right now ${elementLabel(picked)}` : ''}`
-        : [elementLabel(id), note].filter(Boolean).join(' · ');
-      return `<button class="stance-seg element-seg el-${id === 'auto' ? picked : id}${active}" data-action="set-war-element" data-arg="${id}" title="${esc(tip)}">${esc(text)}</button>`;
+        ? `Auto — whatever lands hardest${target ? `, right now ${damageLabel(picked)}${note ? ` (${note})` : ''}` : ''}`
+        : [damageLabel(id), note].filter(Boolean).join(' · ');
+      const face = id === 'auto' ? 'A' : damageGlyph(id);
+      // A type this creature is soft to is worth pointing at.
+      const soft = target && damageTypeNote(type, target.name, weapon).startsWith('+') ? ' soft' : '';
+      return `<button class="rune el-${type}${active}${soft}" data-action="set-war-element" data-arg="${id}" title="${esc(tip)}"><span class="rune-face">${face}</span></button>`;
     };
-    const note = target ? elementNote(picked, target.dmgType, imbue) : '';
-    elementRow = `<div class="stance-row element-row">
-        ${seg('auto', `Auto${h.combat.warElement === 'auto' ? ` (${elementLabel(picked)})` : ''}`)}
-        ${CASTABLE_ELEMENTS.map((el) => seg(el, elementLabel(el))).join('')}
-      </div>${note ? `<div class="muted" style="margin-bottom:6px">${esc(elementLabel(picked))} — ${esc(note)}</div>` : ''}`;
+    const note = target ? damageTypeNote(picked, target.name, weapon) : '';
+    elementRow = `<div class="rune-row">${['auto', ...WAR_DAMAGE_TYPES].map(glyph).join('')}</div>
+      <div class="muted rune-line">${esc(damageLabel(picked))}${note ? ` — ${esc(note)}` : ''}${weapon && weapon.imbue ? ` · ${esc(rendingName(weapon.imbue.damageType, weapon.imbue.level))}` : ''}</div>`;
   } else if (mode === 'void') {
-    elementRow = `<div class="muted" style="margin-bottom:6px">Void damage, always.</div>`;
+    elementRow = `<div class="muted rune-line"><span class="rune-face el-void">${damageGlyph('void')}</span> Void damage, always.</div>`;
   }
 
   // What the thing in your hands does that another wouldn't.
@@ -475,8 +481,10 @@ function poiTileHtml(state, poi, travel, tone) {
   const level = poiLevelLabel(poi);
   const levelBadge = level ? `<span class="poi-level">${level}</span>` : '<span class="poi-level muted">—</span>';
 
+  const quest = hasOpenQuest(state, poi.id) ? '<span class="quest-mark" title="Something here wants doing">!</span>' : '';
+
   return `<button class="${cls}" id="poi-tile-${poi.id}" title="Travel" data-action="travel-poi" data-arg="${poi.id}">
-    <span class="poi-name">${esc(poi.name)}</span>
+    <span class="poi-name">${quest}${esc(poi.name)}</span>
     ${levelBadge}
     ${when}
     ${yieldNote}
@@ -494,9 +502,14 @@ function poiTiersHtml(state, region, travel, jumpTargets) {
   const currentPoi = state.location.poiId ? getPoiById(state.location.poiId) : null;
   const homeTier = currentPoi ? (isSite(currentPoi) ? 'sites' : (tierForPoi(currentPoi) || {}).id) : null;
   const stored = state.ui.activePoiTier;
-  // Falling back to the first band skips Sites deliberately: it's listed first
-  // because it's a different errand, not because it's where you meant to go.
-  const fallback = (tiers.find((t) => t.id !== 'sites') || tiers[0]).id;
+  // Sites lead when one of them is still asking for something — arriving in a
+  // region should put the Lifestone that just claimed you in front of you, not
+  // bury it behind a band of dungeons. Once it's restored, the hunting grounds
+  // take the default back.
+  const sitesWaiting = poisInTier(region, 'sites').some((p) => hasOpenQuest(state, p.id));
+  const fallback = sitesWaiting && tiers.some((t) => t.id === 'sites')
+    ? 'sites'
+    : (tiers.find((t) => t.id !== 'sites') || tiers[0]).id;
   const active = tiers.some((t) => t.id === stored)
     ? stored
     : homeTier && tiers.some((t) => t.id === homeTier)
@@ -535,14 +548,17 @@ function poiTiersHtml(state, region, travel, jumpTargets) {
 
 // --- Town buildings (rendered inside the Battle tab's Town panel) ---
 
-// "1,200p · 8 Iron (have 3)" — the parenthetical only appears when you're short.
+// "1,200p · 8 metal (have 3)" — the parenthetical only appears when you're short.
+// A cost names a KIND, so what it's really saying is "eight of anything metal",
+// and the tooltip lists what you'd actually be spending.
 function costHtml(state, cost) {
   const parts = [`${fmt(cost.pyreals)}p`];
-  if (cost.materialId) {
-    const material = getMaterial(cost.materialId);
-    const have = state.materials[cost.materialId] || 0;
+  if (cost.materialKind) {
+    const have = totalOfKind(state, cost.materialKind);
     const short = have < cost.materials ? ` (have ${fmt(have)})` : '';
-    parts.push(`${cost.materials} ${esc(material ? material.name : cost.materialId)}${short}`);
+    const held = heldOfKind(state, cost.materialKind);
+    const title = held.length ? held.map((m) => `${m.count} ${m.name}`).join(', ') : `no ${cost.materialKind} yet`;
+    parts.push(`<span title="${esc(title)}">${cost.materials} ${esc(cost.materialKind)}${short}</span>`);
   }
   return parts.join(' · ');
 }
@@ -725,17 +741,18 @@ function lifestoneSiteHtml(state, poi) {
   const grown = isGrown(state, poi.id);
   const cost = offeringCost(state);
 
+  const region = getRegion(poi.regionId);
   const story = grown
-    ? `<p>The stone stands full-grown, waist-high and steady, its light breathing slow and blue. It knows you now.</p>`
-    : `<p>A <span class="lifestone-glow">Lifestone</span> no bigger than a fist juts from the turf here, its light thin and guttering — a stone that never finished becoming one. It wants for something living. <em>Yours</em> would do.</p>
-       <p style="margin-top:8px">It thickens on its own, given long enough. Press your hands to it and it will take <b>${fmt(cost.hp)} health</b>, <b>${fmt(cost.mana)} mana</b> and <b>${VITAE_PER_STACK}% of you</b> that won't come back until you've earned it back — and grow all at once for it.</p>`;
+    ? `<p>The stone stands waist-high now, steady, its light breathing slow and blue. It knows you. Wherever you go from here, some small part of you keeps facing this way — and when you die, that's the thread you'll follow back.</p>`
+    : `<p>Something is trying to be a <span class="lifestone-glow">Lifestone</span> here. It's the size of your fist and the colour of a held breath, and its light comes and goes like it can't quite remember how. Stand close and you can feel it reaching — not for blood, exactly. For someone to have been here.</p>
+       <p style="margin-top:8px">Give it that, and it grows. What it takes isn't health or mana; it's <b>${VITAE_PER_STACK}% of you</b>, the way dying takes it — you'll walk out of here a little less than you walked in, and only living will earn it back. It will thicken on its own too, if you'd rather wait.</p>`;
 
   const maxed = atMaxVitae(state);
   const action = grown
-    ? `<p class="muted" style="margin-top:8px">This is your Lifestone now — die anywhere and you'll wake at ${esc(getRegion(poi.regionId).name)}.</p>`
+    ? `<p class="muted" style="margin-top:8px">This is your Lifestone now — die anywhere and you'll wake at ${esc(region.name)}.</p>`
     : `<div class="actions" style="margin-top:8px">
-        <button class="btn primary" data-action="sacrifice-vitae" data-arg="${poi.id}" ${canSacrificeVitae(state, poi.id) ? '' : 'disabled'}>Sacrifice Vitae — ${fmt(cost.hp)} HP, ${fmt(cost.mana)} mana, +${VITAE_PER_STACK}% vitae</button>
-        ${maxed ? `<span class="muted">You have nothing left to give at ${MAX_VITAE_PCT}% vitae.</span>` : ''}
+        <button class="btn primary" data-action="sacrifice-vitae" data-arg="${poi.id}" ${canSacrificeVitae(state, poi.id) ? '' : 'disabled'}>Sacrifice Vitae — +${cost.vitaePct}% vitae</button>
+        ${maxed ? `<span class="muted">There's nothing left of you to give at ${MAX_VITAE_PCT}% vitae.</span>` : ''}
       </div>`;
 
   return `<div class="panel intro-panel">
@@ -1064,6 +1081,45 @@ export function skillsTab(state) {
 }
 
 // --- Tinkering ---
+// Rending gems: boss loot, one per damage type, worked into a weapon that can
+// actually deal that damage. Listed with the reason a gem won't go in, because
+// "why is this greyed out" is the whole question at this panel.
+function rendingPanelHtml(state) {
+  const weapon = state.equipment.weapon;
+  const held = RENDING_MATERIALS.filter((m) => (state.materials[m.id] || 0) > 0);
+  const current = weapon && weapon.imbue
+    ? `<p class="muted" style="margin-bottom:8px">${esc(weapon.name)} — <b>${esc(rendingName(weapon.imbue.damageType, weapon.imbue.level))}</b> (+${Math.round(weapon.imbue.level * RENDING_PER_LEVEL * 100)}% ${esc(damageLabel(weapon.imbue.damageType))} damage).</p>`
+    : '';
+
+  if (!held.length) {
+    return `<div class="panel"><h2>Rending</h2>
+      ${current}
+      <p class="muted">No rending gems yet. They come off the deepest thing in a dungeon — clear a place out and one turns up now and then.</p>
+    </div>`;
+  }
+
+  const rows = held
+    .map((m) => {
+      const type = gemDamageType(m.id);
+      const refusal = rendingRefusal(state, m.id);
+      const count = state.materials[m.id];
+      return `<div class="upgrade-row${refusal ? ' spent' : ''}">
+        <div>
+          <b class="el-${type}">${esc(m.name)}</b> <span class="muted">${fmt(count)}</span>
+          <div class="desc">${esc(damageLabel(type))} Rending — +${Math.round(RENDING_PER_LEVEL * 100)}% ${esc(damageLabel(type))} damage per level${refusal ? ` · ${esc(refusal)}` : ''}</div>
+        </div>
+        <button class="btn" data-action="apply-rending" data-arg="${m.id}" ${refusal ? 'disabled' : ''}>Work in</button>
+      </div>`;
+    })
+    .join('');
+
+  return `<div class="panel"><h2>Rending</h2>
+    ${current}
+    <p class="muted" style="margin-bottom:8px">A gem only goes into a weapon that already deals its damage — a mace has nothing for acid to bite on. A weapon holds one rending; another of the same gem deepens it, to ${MAX_RENDING_LEVEL}.</p>
+    ${rows}
+  </div>`;
+}
+
 export function tinkeringTab(state) {
   const heldMaterials = Object.entries(state.materials)
     .filter(([, count]) => count > 0)
@@ -1122,6 +1178,7 @@ export function tinkeringTab(state) {
         .join(' → ')} → … The same materials raise your town's buildings, so past the first few passes it's a choice.</p>
     </div>
     <div class="panel"><h2>Equipped Gear</h2>${slotRows || '<p class="muted">Nothing equipped yet.</p>'}</div>
+    ${rendingPanelHtml(state)}
     <div class="panel"><h2>Weapon Recipes</h2>${recipeRows}</div>
     <div class="panel"><h2>Materials</h2>${heldMaterials || '<p class="muted">None gathered or salvaged yet.</p>'}</div>`;
 }

@@ -24,7 +24,8 @@ import {
   staminaCostForWindup,
 } from '../data/combatStances.js';
 import { traitFor } from '../data/weaponTraits.js';
-import { bestElementFor, elementDamageMult, imbueOf, CASTABLE_ELEMENTS } from '../data/elements.js';
+import { bestDamageTypeFor, damageTypeMultiplier, WAR_DAMAGE_TYPES, VOID_DAMAGE_TYPE } from '../data/elements.js';
+import { speciesOf } from '../data/species.js';
 import { pick, pickWeighted } from '../engine/rng.js';
 import { pushFx } from '../engine/fx.js';
 import { fmt } from '../engine/format.js';
@@ -123,6 +124,7 @@ function makeMonster(def, depth) {
     name: def.name,
     level: def.level,
     dmgType: def.dmgType,
+    species: speciesOf(def.name),
     drops: def.drops,
     maxHp: Math.round(base.hp * r),
     hp: Math.round(base.hp * r),
@@ -487,17 +489,34 @@ export function activeTrait(state) {
   return traitFor(state.hero.combat.mode, weapon ? weapon.baseType : null);
 }
 
-// The element this cast will actually use. Void is void, always. War casts what
-// you picked, or — on Auto — whatever lands hardest on the thing in front of it.
+// The damage type this cast will actually use. Void Magic is void, always —
+// that's the school's whole identity. War casts what you picked, or, on Auto,
+// whatever lands hardest on the thing in front of it right now.
 export function activeElement(state, target = currentTarget(state)) {
   const h = state.hero;
-  if (h.combat.mode === 'void') return 'void';
+  if (h.combat.mode === 'void') return VOID_DAMAGE_TYPE;
   const chosen = h.combat.warElement;
   if (chosen && chosen !== 'auto') return chosen;
-  const imbue = imbueOf(state.equipment.weapon);
-  // Nothing to read yet: fall back to the weapon's own element, then to fire.
-  if (!target) return imbue || 'fire';
-  return bestElementFor(target.dmgType, imbue, CASTABLE_ELEMENTS);
+  const weapon = state.equipment.weapon;
+  // Nothing to read yet: fall back to whatever the weapon rends, then to fire.
+  if (!target) return (weapon && weapon.imbue && weapon.imbue.damageType) || 'fire';
+  return bestDamageTypeFor(target.name, target.species, weapon, WAR_DAMAGE_TYPES);
+}
+
+// The damage type a physical attack deals. A weapon that rends something deals
+// that; otherwise it's the type its own shape implies, so a mace bludgeons and a
+// bow pierces whether or not anyone has thought about it.
+const BASE_TYPE_DAMAGE = {
+  sword: 'slash', axe: 'slash', mace: 'bludgeon', spear: 'pierce',
+  katar: 'pierce', cestus: 'bludgeon', nekode: 'slash',
+  bow: 'pierce', crossbow: 'pierce',
+};
+
+export function physicalDamageType(state) {
+  const weapon = state.equipment.weapon;
+  if (weapon && weapon.imbue) return weapon.imbue.damageType;
+  if (!weapon || !weapon.baseType) return 'bludgeon'; // fists
+  return BASE_TYPE_DAMAGE[weapon.baseType] || 'bludgeon';
 }
 
 export function activeAttackInterval(state, stats) {
@@ -643,7 +662,8 @@ export function tickCombat(state, dt) {
       }
 
       const trait = activeTrait(state);
-      const { dmg, crit } = dealDamage(stats.atk * (trait.dmgMult ?? 1), m.def, stats.critChance, 2, stats.minDamagePct);
+      const typeMult = damageTypeMultiplier(physicalDamageType(state), m.name, m.species, state.equipment.weapon);
+      const { dmg, crit } = dealDamage(stats.atk * (trait.dmgMult ?? 1) * typeMult, m.def, stats.critChance, 2, stats.minDamagePct);
       // A bolt doesn't stop at the first body. Everything behind the target takes
       // a share, which is what makes a crossbow worth its slower crank when the
       // wave came in six deep.
@@ -662,7 +682,7 @@ export function tickCombat(state, dt) {
     const castTime = activeAttackInterval(state, stats);
     const manaCost = spellManaCost(spell, stats);
     const school = magicSkillFor(state, mode);
-    const imbue = imbueOf(state.equipment.weapon);
+    const weapon = state.equipment.weapon;
     h.attackTimer += dt;
     while (h.attackTimer >= castTime) {
       // Corruption is the one spell on a cooldown: three stacks that never
@@ -700,7 +720,7 @@ export function tickCombat(state, dt) {
       // The element is picked per cast, so Auto re-reads the target every time
       // the group in front of you changes.
       const element = activeElement(state, m);
-      const power = stats.magicAtk * spell.dmgMult * elementDamageMult(element, m.dmgType, imbue);
+      const power = stats.magicAtk * spell.dmgMult * damageTypeMultiplier(element, m.name, m.species, weapon);
       const { dmg, crit } = dealDamage(power, m.def, stats.critChance, spell.critMult, stats.minDamagePct);
 
       // Volley catches the rest of the group for a share, each rolled against
@@ -709,7 +729,7 @@ export function tickCombat(state, dt) {
       const hits = [{ monster: m, dmg, crit }];
       if (spell.aoe) {
         for (const other of state.monsters.filter((o) => o !== m)) {
-          const otherPower = stats.magicAtk * spell.dmgMult * (spell.aoeMult ?? 0.6) * elementDamageMult(element, other.dmgType, imbue);
+          const otherPower = stats.magicAtk * spell.dmgMult * (spell.aoeMult ?? 0.6) * damageTypeMultiplier(element, other.name, other.species, weapon);
           const hit = dealDamage(otherPower, other.def, stats.critChance, spell.critMult, stats.minDamagePct);
           hits.push({ monster: other, dmg: hit.dmg, crit: hit.crit });
         }
@@ -748,7 +768,10 @@ export function tickCombat(state, dt) {
       // the crit rather than the average swing.
       const facedDef = Math.round(m.def * (1 - (trait.defIgnorePct ?? 0) / 100));
       const critMult = 2 * (trait.critDmgMult ?? 1);
-      const { dmg, crit } = dealDamage(stats.atk * stance.dmgMult * (trait.dmgMult ?? 1), facedDef, stats.critChance, critMult, stats.minDamagePct);
+      // What this weapon deals, against what this creature is soft to, through
+      // whatever the weapon rends and whatever it slays.
+      const typeMult = damageTypeMultiplier(physicalDamageType(state), m.name, m.species, state.equipment.weapon);
+      const { dmg, crit } = dealDamage(stats.atk * stance.dmgMult * (trait.dmgMult ?? 1) * typeMult, facedDef, stats.critChance, critMult, stats.minDamagePct);
       if (stance.bleed || trait.alwaysBleed) applyBleed(state, m, stats.atk);
       // No heal on kill — the Lifestone (respawn) is how you recover. Skills (Healing,
       // Cooking, Life Magic) will add in-fight recovery later.

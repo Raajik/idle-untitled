@@ -65,9 +65,10 @@ export function createInitialState() {
       hp: null,
       stamina: null,
       mana: null,
-      // Asheron's Call's death penalty (see game/vitae.js): `stacks` x 5% off the
-      // hero's body, worked back off by earning `xpRemaining` experience.
-      vitae: { stacks: 0, xpRemaining: 0 },
+      // Asheron's Call's death penalty (see game/vitae.js): a percentage off the
+      // hero's body, arriving in 5-point lumps and leaving one point at a time
+      // as `xpRemaining` experience is earned.
+      vitae: { pct: 0, xpRemaining: 0 },
       knownSpells: [], // self-buff spell ids (see data/buffSpells.js); Alcott teaches the first three
       // combat timers (each monster carries its own; see game/combat.js)
       attackTimer: 0,
@@ -117,6 +118,7 @@ export function createInitialState() {
       // Holtburg — growing the budding Lifestone there moves this to Holtburg's hub.
       boundLifestone: { regionId: null, poiId: null },
       lifestoneGrowth: {}, // poiId -> 0..LIFESTONE_GROWTH_REQUIRED for each budding Lifestone
+      quests: {}, // poiId -> 'active' | 'done'; drives the ! marker on a POI tile
       recallUnlocked: false,
       tookTownTour: false, // the Town Hall tour, which is what opens the General Store
       autoHealUnlocked: false, // set by receiving a Healing Kit

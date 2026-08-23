@@ -7,6 +7,7 @@
 import { getRegion, getPoiById } from '../data/regions.js';
 import { TUTORIAL_ROAD, TUTORIAL_JOURNEY_SECONDS } from '../data/tutorial.js';
 import { modifiedWalkTime, grantAthleticsXp } from './skills.js';
+import { claimRegionLifestone } from './lifestone.js';
 import { addLog } from './state.js';
 
 function resetPoiProgress(state) {
@@ -63,6 +64,10 @@ export function arrive(state) {
     }
     state.location = { regionId: t.id, poiId: null };
     addLog(state, `You arrive at ${region.name}.`, 'good');
+    // Every region keeps a Lifestone in some state of repair. Reaching the region
+    // binds you to it immediately, so a death while working the area costs a few
+    // seconds rather than the walk back from wherever you were last bound.
+    claimRegionLifestone(state, t.id);
   } else {
     const poi = getPoiById(t.id);
     state.location = { regionId: poi.regionId, poiId: t.id };

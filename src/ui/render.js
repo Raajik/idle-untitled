@@ -25,6 +25,7 @@ import { castBuffSpell, toggleAutoCast } from '../game/buffs.js';
 import { useConsumable, toggleAutoDrink } from '../game/consumables.js';
 import { jumpTo } from '../game/shortcuts.js';
 import { applyTinkering } from '../game/tinkering.js';
+import { applyRending } from '../game/rending.js';
 import { buyItem, sellItem, healService, buyConsumable, buyMaterial } from '../game/shop.js';
 import { getMaterial } from '../data/materials.js';
 import { addLog } from '../game/state.js';
@@ -276,7 +277,12 @@ export function createRenderer(state, { onImport }) {
   // mid-fight without tearing the panel down.
   function updateVitaeOverlay() {
     const pct = vitaePct(state);
-    for (const el of document.querySelectorAll('.vitae-overlay')) el.style.width = `${pct}%`;
+    for (const el of document.querySelectorAll('.vitae-overlay')) {
+      el.style.width = `${pct}%`;
+      // The bar this slice sits in also turns its number red, so a diminished
+      // maximum can't be mistaken for a healthy one.
+      if (el.parentElement) el.parentElement.classList.toggle('vitae-active', pct > 0);
+    }
   }
 
   function setText(id, text) {
@@ -608,6 +614,7 @@ export function createRenderer(state, { onImport }) {
         state.ui.inventoryFilter[key] = value;
         break;
       }
+      case 'apply-rending': applyRending(state, arg); break;
       case 'apply-tinker': {
         const sel = document.getElementById(`tinker-material-${arg}`);
         if (sel) applyTinkering(state, arg, sel.value);

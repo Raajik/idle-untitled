@@ -24,6 +24,8 @@ export const ITEM_TINKERING_MATERIALS = [
   mat('ebony', 'Ebony', 'item'),
   mat('gold', 'Gold', 'item'),
   mat('gromnie-hide', 'Gromnie Hide', 'item'),
+  mat('ursuin-pelt', 'Ursuin Pelt', 'item'),
+  mat('armoredillo-hide', 'Armoredillo Hide', 'item'),
   mat('linen', 'Linen', 'item'),
   mat('moonstone', 'Moonstone', 'item'),
   mat('pine', 'Pine', 'item'),
@@ -36,17 +38,28 @@ export const ITEM_TINKERING_MATERIALS = [
 ];
 
 export const WEAPON_TINKERING_MATERIALS = [
-  mat('aquamarine', 'Aquamarine', 'weapon'),
-  mat('black-garnet', 'Black Garnet', 'weapon'),
   mat('brass', 'Brass', 'weapon'),
-  mat('emerald', 'Emerald', 'weapon'),
   mat('granite', 'Granite', 'weapon'),
-  mat('imperial-topaz', 'Imperial Topaz', 'weapon'),
   mat('iron', 'Iron', 'weapon'),
-  mat('jet', 'Jet', 'weapon'),
   mat('mahogany', 'Mahogany', 'weapon'),
   mat('oak', 'Oak', 'weapon'),
-  mat('red-garnet', 'Red Garnet', 'weapon'),
+];
+
+// The rending gems. These are NOT ordinary salvage: they're boss loot, one per
+// damage type, and applying one to a weapon is its own act (see
+// game/rending.js) rather than a Tinkering roll. They sit in their own category
+// so materialsForSlot never offers them as a normal tinker and so nothing is
+// ever *named* after them — a weapon is made of iron and rends fire, and those
+// are two different facts about it.
+export const RENDING_MATERIALS = [
+  mat('white-sapphire', 'White Sapphire', 'rending'),
+  mat('black-garnet', 'Black Garnet', 'rending'),
+  mat('imperial-topaz', 'Imperial Topaz', 'rending'),
+  mat('emerald', 'Emerald', 'rending'),
+  mat('aquamarine', 'Aquamarine', 'rending'),
+  mat('red-garnet', 'Red Garnet', 'rending'),
+  mat('jet', 'Jet', 'rending'),
+  mat('onyx', 'Onyx', 'rending'),
 ];
 
 export const MAGIC_ITEM_TINKERING_MATERIALS = [
@@ -68,7 +81,60 @@ export const MAGIC_ITEM_TINKERING_MATERIALS = [
   mat('smoky-quartz', 'Smoky Quartz', 'magic-item'),
 ];
 
-export const MATERIALS = [...ITEM_TINKERING_MATERIALS, ...WEAPON_TINKERING_MATERIALS, ...MAGIC_ITEM_TINKERING_MATERIALS];
+export const MATERIALS = [
+  ...ITEM_TINKERING_MATERIALS,
+  ...WEAPON_TINKERING_MATERIALS,
+  ...MAGIC_ITEM_TINKERING_MATERIALS,
+  ...RENDING_MATERIALS,
+];
+
+// What a material IS, as opposed to what it can be applied to. Building
+// investment asks for a KIND — "8 metal" — rather than naming iron specifically,
+// so a stack of copper you'll never tinker with is still worth something and you
+// spend whichever of a kind you have most of.
+export const MATERIAL_KINDS = ['metal', 'wood', 'cloth', 'hide', 'stone', 'gem'];
+
+export const MATERIAL_KIND = {
+  // metal
+  iron: 'metal', copper: 'metal', silver: 'metal', gold: 'metal', brass: 'metal',
+  // wood
+  oak: 'wood', mahogany: 'wood', pine: 'wood', teak: 'wood', ebony: 'wood',
+  // cloth
+  linen: 'cloth', satin: 'cloth', velvet: 'cloth',
+  // hide
+  'gromnie-hide': 'hide', 'ursuin-pelt': 'hide', 'armoredillo-hide': 'hide',
+  // stone
+  granite: 'stone', porcelain: 'stone', hematite: 'stone', malachite: 'stone',
+};
+
+export function materialKind(id) {
+  // Anything not named above is a gem: the magic-item pool is almost entirely
+  // stones-you-set rather than stones-you-build-with.
+  return MATERIAL_KIND[id] || 'gem';
+}
+
+export function materialsOfKind(kind) {
+  // Rending gems are boss loot with exactly one use (see game/rending.js) and
+  // are never spent on a shopfront, however much "gem" they technically are.
+  return MATERIALS.filter((m) => m.category !== 'rending' && materialKind(m.id) === kind);
+}
+
+// What the player is holding of a kind, most plentiful first — which is the
+// order investment spends them in.
+export function heldOfKind(state, kind) {
+  return materialsOfKind(kind)
+    .map((m) => ({ id: m.id, name: m.name, count: state.materials[m.id] || 0 }))
+    .filter((m) => m.count > 0)
+    .sort((a, b) => b.count - a.count);
+}
+
+export function totalOfKind(state, kind) {
+  return heldOfKind(state, kind).reduce((sum, m) => sum + m.count, 0);
+}
+
+export function kindLabel(kind) {
+  return kind ? kind[0].toUpperCase() + kind.slice(1) : '';
+}
 
 export function getMaterial(id) {
   return MATERIALS.find((m) => m.id === id) || null;
@@ -113,9 +179,9 @@ export const SALVAGE_GROWTH_PER_RANK = 1.03; // ~19x by rank 100
 // must be a member of the pool for the skill that clear trains
 // (test/waves.test.js enforces this).
 export const GATHER_MATERIAL_POOLS = {
-  mining: ['iron', 'brass', 'granite', 'jet', 'copper', 'silver', 'gold', 'green-garnet', 'opal'],
+  mining: ['iron', 'brass', 'granite', 'copper', 'silver', 'gold', 'green-garnet', 'opal'],
   woodcutting: ['oak', 'mahogany', 'pine', 'teak', 'ebony'],
-  skinning: ['gromnie-hide'],
+  skinning: ['gromnie-hide', 'ursuin-pelt', 'armoredillo-hide'],
   foraging: ['linen', 'satin', 'porcelain', 'velvet'],
-  fishing: ['aquamarine', 'moonstone', 'amber'],
+  fishing: ['moonstone', 'amber', 'porcelain'],
 };

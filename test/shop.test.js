@@ -8,22 +8,22 @@ import { tickBuildings, investToOpen, takeTour } from '../src/game/buildings.js'
 // rather than at character creation.
 function stockedStore() {
   const s = createInitialState();
-  takeTour(s, 'town-hall');
+  takeTour(s, 'holtburg:town-hall');
   tickBuildings(s);
   return s;
 }
 
 test("buying an item from a building's stock spends pyreals and adds it to inventory", () => {
   const s = stockedStore();
-  const stock = s.buildings['general-store'].stock;
+  const stock = s.buildings['holtburg:general-store'].stock;
   assert.ok(stock.length > 0);
   const originalLength = stock.length;
   const item = stock[0];
   s.pyreals = buyPrice(item) + 100;
   const before = s.pyreals;
 
-  assert.equal(buyItem(s, 'general-store', 0), true);
-  assert.equal(s.buildings['general-store'].stock.length, originalLength - 1);
+  assert.equal(buyItem(s, 'holtburg:general-store', 0), true);
+  assert.equal(s.buildings['holtburg:general-store'].stock.length, originalLength - 1);
   assert.ok(s.inventory.some((it) => it.id === item.id));
   assert.ok(s.pyreals < before);
 });
@@ -31,13 +31,13 @@ test("buying an item from a building's stock spends pyreals and adds it to inven
 test('buying fails without enough pyreals', () => {
   const s = stockedStore();
   s.pyreals = 0;
-  assert.equal(buyItem(s, 'general-store', 0), false);
+  assert.equal(buyItem(s, 'holtburg:general-store', 0), false);
 });
 
 test('buying from a building that is still locked fails', () => {
   const s = stockedStore();
   s.pyreals = 1000000;
-  assert.equal(buyItem(s, 'weaponsmith', 0), false);
+  assert.equal(buyItem(s, 'holtburg:weaponsmith', 0), false);
 });
 
 test('selling an inventory item removes it and grants pyreals', () => {
@@ -60,7 +60,7 @@ test('the Physician heals the hero to full for pyreals, once unlocked', () => {
 
   s.pyreals = 100000;
   s.materials['linen'] = 100;
-  assert.equal(investToOpen(s, 'physician'), true);
+  assert.equal(investToOpen(s, 'holtburg:physician'), true);
 
   const cost = healCost(s);
   assert.ok(cost > 0);
@@ -71,9 +71,10 @@ test('the Physician heals the hero to full for pyreals, once unlocked', () => {
 
 test('upgrading the Physician makes healing cheaper', () => {
   const s = createInitialState();
+  s.progress.unlockedRegions = ['holtburg'];
   s.hero.hp = 1;
-  s.buildings['physician'].level = 1;
+  s.buildings['holtburg:physician'].level = 1;
   const atLevel1 = healCost(s);
-  s.buildings['physician'].level = 5;
+  s.buildings['holtburg:physician'].level = 5;
   assert.ok(healCost(s) < atLevel1);
 });

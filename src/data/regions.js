@@ -48,6 +48,7 @@ export const REGIONS = [
         // turns a death from a three-minute walk back into a few seconds.
         id: 'budding-lifestone', name: 'A Budding Lifestone', coords: '42.9N, 33.4E', quest: 'Grow the Lifestone', walkSeconds: 8,
         site: 'lifestone',
+        condition: 'budding',
         monsters: [],
       },
       {
@@ -99,6 +100,18 @@ export const REGIONS = [
           { name: 'Sewer Rat', level: 5, dmgType: 'acid' },
         ],
         boss: { name: 'Rat King', level: 8, dmgType: 'pierce' },
+      },
+      {
+        // Skinning has to be somewhere you go on purpose, not a by-product of a
+        // dungeon that happened to have an animal in it.
+        id: 'ursuin-run', name: 'The Ursuin Run', coords: '39.1N, 31.7E', quest: 'Hunt Wild Ursuin', walkSeconds: 16,
+        gather: { skill: 'skinning', material: 'ursuin-pelt' },
+        monsters: [
+          { name: 'Ursuin Cub', level: 4, dmgType: 'slash' },
+          { name: 'Wild Ursuin', level: 5, dmgType: 'slash' },
+          { name: 'Ursuin Matriarch', level: 5, dmgType: 'bludgeon' },
+        ],
+        boss: { name: 'The Grey Ursuin', level: 9, dmgType: 'slash' },
       },
       {
         id: 'cave-of-alabree', name: 'Cave of Alabree', coords: '41.8N, 32.1E', quest: "Brogord's Demise", walkSeconds: 18,
@@ -199,6 +212,12 @@ export const REGIONS = [
     walkSeconds: 1200, // 20 min at rank-0 Athletics; ~2 min once Athletics is maxed
     pois: [
       {
+        id: 'glenden-lifestone', name: 'A Cracked Lifestone', coords: '—', quest: 'Restore the Lifestone', walkSeconds: 10,
+        site: 'lifestone',
+        condition: 'cracked',
+        monsters: [],
+      },
+      {
         id: 'banderling-plains', name: 'Banderling Plains', coords: '—', quest: 'None', walkSeconds: 20,
         gather: { skill: 'woodcutting', material: 'pine' },
         monsters: [
@@ -209,8 +228,18 @@ export const REGIONS = [
         boss: { name: 'Banderling Chieftain', level: 23, dmgType: 'slash' },
       },
       {
+        id: 'armoredillo-warren', name: 'Armoredillo Warren', coords: '—', quest: 'Hunt Armoredillos', walkSeconds: 24,
+        gather: { skill: 'skinning', material: 'armoredillo-hide' },
+        monsters: [
+          { name: 'Armoredillo', level: 19, dmgType: 'bludgeon' },
+          { name: 'Banded Armoredillo', level: 20, dmgType: 'bludgeon' },
+          { name: 'Elder Armoredillo', level: 21, dmgType: 'pierce' },
+        ],
+        boss: { name: 'The Ironback', level: 25, dmgType: 'bludgeon' },
+      },
+      {
         id: 'mosswart-horde', name: 'Mosswart Horde', coords: '—', quest: 'None', walkSeconds: 30,
-        gather: { skill: 'fishing', material: 'aquamarine' },
+        gather: { skill: 'fishing', material: 'amber' },
         monsters: [
           { name: 'Mosswart Raider', level: 24, dmgType: 'acid' },
           { name: 'Reedshark', level: 25, dmgType: 'pierce' },
@@ -226,6 +255,12 @@ export const REGIONS = [
     name: 'Eastham',
     walkSeconds: 7200, // 2 hours at rank-0 Athletics; ~12 min once Athletics is maxed
     pois: [
+      {
+        id: 'eastham-lifestone', name: 'A Shattered Lifestone', coords: '—', quest: 'Restore the Lifestone', walkSeconds: 12,
+        site: 'lifestone',
+        condition: 'shattered',
+        monsters: [],
+      },
       {
         id: 'olthoi-nest', name: 'Olthoi Nest', coords: '—', quest: 'None', walkSeconds: 20,
         gather: { skill: 'fishing', material: 'amber' },
@@ -244,6 +279,12 @@ export const REGIONS = [
     name: 'Direlands',
     walkSeconds: 21600, // 6 hours at rank-0 Athletics; ~36 min once Athletics is maxed
     pois: [
+      {
+        id: 'direlands-lifestone', name: 'A Dead Lifestone', coords: '—', quest: 'Restore the Lifestone', walkSeconds: 14,
+        site: 'lifestone',
+        condition: 'dead',
+        monsters: [],
+      },
       {
         id: 'golem-caverns', name: 'Golem Caverns', coords: '—', quest: 'None', walkSeconds: 20,
         gather: { skill: 'mining', material: 'brass' },

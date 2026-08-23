@@ -201,10 +201,12 @@ body {
   text-shadow: 0 1px 2px #000;
   z-index: 2;
 }
-/* Vitae: the slice of a vitals bar that death (or a Lifestone) has taken. Sits at
-   the far end of the bar, over the fill, hatched in the soul purple so it reads
-   as damage to the vessel rather than as another resource. Width is set by the
-   renderer; 0% collapses it to nothing. */
+/* Vitae: the slice of a vitals bar that death (or a Lifestone) has taken. Sits
+   at the far end of the bar, over the fill, in a dark purple so it reads as
+   damage to the vessel rather than as another resource. It breathes slowly —
+   four seconds a cycle, purely for flavour; the bar itself creeps back a point
+   at a time as XP comes in, so there's usually something moving here. Width is
+   set by the renderer; 0% collapses it to nothing. */
 .bar > .vitae-overlay {
   position: absolute;
   top: 0;
@@ -212,13 +214,27 @@ body {
   bottom: 0;
   width: 0;
   z-index: 1;
-  border-left: 1px solid var(--soul);
+  border-left: 1px solid #6b46a8;
   border-radius: 0 3px 3px 0;
-  background: repeating-linear-gradient(
-    135deg,
-    rgba(154, 122, 232, 0.75) 0 5px,
-    rgba(154, 122, 232, 0.25) 5px 10px
-  );
+  background: linear-gradient(180deg, rgba(58, 30, 92, 0.94), rgba(38, 18, 64, 0.94));
+  animation: vitae-breathe 4s ease-in-out infinite;
+  transition: width 0.6s linear;
+}
+@keyframes vitae-breathe {
+  0%, 100% { opacity: 0.92; }
+  50% { opacity: 0.62; }
+}
+
+/* While vitae is on you, the vitals it's eating read red — the number is the
+   thing people actually watch, and a debuffed maximum that looks identical to a
+   healthy one is the whole confusion. Outlined so it stays legible over both the
+   filled bar and the empty track. */
+.bar.vitae-active > .label {
+  color: #ff6b6b;
+  font-weight: bold;
+  text-shadow:
+    0 0 2px rgba(0, 0, 0, 0.9),
+    0 0 3px rgba(255, 255, 255, 0.45);
 }
 
 /* The rest of a pack: named small, under the one you're actually swinging at. */
@@ -275,16 +291,42 @@ body {
 /* AC-style attack bar: mode switcher, stance/spell picks, "reverse" fill bar */
 .attack-bar-panel { margin-top: 10px; }
 .combat-mode-row, .stance-row, .filter-group { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-/* War Magic's element picker. Each segment wears its own element's colour so the
-   choice reads as "what am I throwing" rather than as another row of buttons. */
-.element-row .element-seg { border-left-width: 3px; }
+/* War Magic's damage-type picker: seven square runes plus Auto, each wearing its
+   own type's colour so the choice reads as "what am I throwing" at a glance
+   rather than as another row of words. A type the thing in front of you is soft
+   to gets a lit border, so the right answer is visible without reading a
+   tooltip. */
+.rune-row { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+.rune {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.rune:hover { border-color: var(--el, var(--accent)); color: var(--el, var(--accent)); }
+.rune.soft { border-color: var(--el, var(--accent)); color: var(--el, var(--text)); }
+.rune.active { border-color: var(--el, var(--accent)); color: var(--el, var(--accent)); box-shadow: inset 0 0 0 1px var(--el, var(--accent)); }
+.rune-line { margin-bottom: 6px; font-size: 11px; }
+.rune-face { display: inline-block; }
+
+.el-bludgeon { --el: #b8bcc4; }
+.el-pierce { --el: #c9d4e0; }
+.el-slash { --el: #e0d0b0; }
 .el-fire { --el: #e8763e; }
 .el-cold { --el: #6ab6d4; }
 .el-acid { --el: #8ac06a; }
 .el-lightning { --el: #e8d04b; }
-.el-void { --el: #9a7ae8; }
-.element-seg { border-left-color: var(--el, var(--border)); }
-.element-seg.active { border-color: var(--el, var(--accent)); color: var(--el, var(--accent)); }
+.el-void { --el: #9a7ae8; color: #9a7ae8; }
 /* What the weapon in hand does that another wouldn't. */
 .trait-line { margin-bottom: 6px; font-size: 11px; }
 .filter-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
@@ -385,6 +427,20 @@ button.btn.primary { border-color: var(--accent); color: var(--accent); }
 }
 /* Two lines' worth of room whether or not the name needs it, so a long name
    ("Small Fledgling Mukkir Nest") doesn't make its tile taller than its row. */
+/* Something here wants doing. Deliberately loud — it's the only marker in the
+   game that says "go here first". */
+.quest-mark {
+  display: inline-block;
+  margin-right: 5px;
+  color: var(--bg);
+  background: var(--accent);
+  border-radius: 3px;
+  padding: 0 4px;
+  font-weight: bold;
+  animation: quest-pulse 1.8s ease-in-out infinite;
+}
+@keyframes quest-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+
 .poi-grid .poi-name { font-weight: bold; line-height: 1.2; overflow-wrap: anywhere; min-height: 2.4em; }
 .poi-grid .poi-level { font-size: 10px; color: var(--tier-edge, var(--text-dim)); letter-spacing: 0.04em; }
 .poi-grid .sub, .poi-grid .travel-timer { margin-top: 0; }

@@ -48,6 +48,10 @@ const RULES = [
   [/mukkir queen|olthoi soldier/i, 'beast', 'large'],
   [/mukkir|olthoi/i, 'beast', 'medium'],
   [/gromnie|fern guardian/i, 'beast', 'large'],
+  // The skinnable ones (see the Ursuin Run / Armoredillo Warren in regions.js).
+  [/ursuin cub/i, 'beast', 'medium'],
+  [/ursuin/i, 'beast', 'large'],
+  [/armoredillo|ironback/i, 'beast', 'medium'],
   [/shreth|reedshark|lurker|the mire warden/i, 'beast', 'medium'],
 ];
 

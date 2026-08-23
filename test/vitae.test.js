@@ -97,25 +97,20 @@ test('spending every drop of vitae is exactly enough to finish a Lifestone', () 
   assert.equal(GROWTH_PER_OFFERING * MAX_VITAE_STACKS, LIFESTONE_GROWTH_REQUIRED);
 });
 
-test('Sacrificing Vitae costs vitals and vitae, and is refused once you are spent', () => {
+test('Sacrificing Vitae costs vitae, and is refused once you are spent', () => {
   const s = atPoi('budding-lifestone');
   s.location = { regionId: 'holtburg', poiId: 'budding-lifestone' };
-  const refill = () => {
-    const d = derivedStats(s);
-    s.hero.hp = d.maxHp;
-    s.hero.mana = d.maxMana;
-  };
-  refill();
+  const d = derivedStats(s);
+  s.hero.hp = d.maxHp;
+  s.hero.mana = d.maxMana;
 
   assert.equal(sacrificeVitae(s, 'budding-lifestone'), true);
   assert.equal(vitaePct(s), VITAE_PER_STACK);
-  assert.ok(s.hero.hp < derivedStats(s).maxHp, 'it should have taken blood too');
+  assert.equal(s.hero.hp, d.maxHp, 'the stone takes vitae, not blood');
 
   for (let i = 1; i < MAX_VITAE_STACKS; i++) {
-    refill();
     assert.equal(sacrificeVitae(s, 'budding-lifestone'), true, `sacrifice ${i + 1} should be allowed`);
   }
-  refill();
   assert.equal(canSacrificeVitae(s, 'budding-lifestone'), false, 'nothing left to give at the floor');
 });
 

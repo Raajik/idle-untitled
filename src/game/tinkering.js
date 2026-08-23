@@ -77,6 +77,23 @@ export function canTinker(state, slot, materialId) {
   return effect === 'any' || item.spells.some((sp) => sp.id === effect);
 }
 
+// Working elemental mitigation into armour doesn't land at a level you choose —
+// it lands where it lands. Rolled on a bell rather than flat so the middle of
+// the range is the ordinary result and both ends are events: about a third of
+// rolls come out 5-6, while a 1-3 or a 7-10 is worth remarking on. Averaging
+// three uniforms is the cheapest way to get that shape and needs no table.
+export function rollBellLevel(min, max) {
+  const spread = max - min;
+  const t = (Math.random() + Math.random() + Math.random()) / 3;
+  return Math.max(min, Math.min(max, min + Math.round(t * spread)));
+}
+
+// Whether this application is one of those rolls: mitigation, worked into
+// something you wear.
+function isMitigationRoll(slot, effect) {
+  return effect === 'any' && slot !== 'weapon';
+}
+
 export function applyTinkering(state, slot, materialId) {
   if (!canTinker(state, slot, materialId)) return false;
   const item = state.equipment[slot];
@@ -88,7 +105,12 @@ export function applyTinkering(state, slot, materialId) {
   const effect = tinkerEffectFor(state, slot, materialId);
   // A weapon gets exactly the property its material teaches; anything else takes
   // pot luck from the spells its slot can carry.
-  const rolled = effect === 'any' ? rollSpell(slot, ceiling) : rollSpellById(effect, ceiling);
+  // Armour and jewelry take pot luck from what their slot can carry, and the
+  // LEVEL is a bell roll rather than always the ceiling — which is what makes a
+  // good mitigation roll something that happened to you rather than something
+  // you bought.
+  const rolledLevel = isMitigationRoll(slot, effect) ? rollBellLevel(1, ceiling) : ceiling;
+  const rolled = effect === 'any' ? rollSpell(slot, rolledLevel) : rollSpellById(effect, ceiling);
   if (!rolled) return false;
 
   const existing = item.spells.find((sp) => sp.id === rolled.id);

@@ -1,6 +1,6 @@
 // Loot: drop rolls, item generation, rarity rolls, inventory/equip helpers.
 
-import { SLOTS, RARITIES, BASE_NAMES, poiItemPower, equipSlotsForKind } from '../data/items.js';
+import { SLOTS, RARITIES, BASE_NAMES, poiItemPower, equipSlotsForKind, weaponClass } from '../data/items.js';
 import {
   getMaterial,
   materialsForSlot,
@@ -11,11 +11,16 @@ import {
 } from '../data/materials.js';
 import { getPoiById, regionIndex } from '../data/regions.js';
 import { kindOf, sizeOf } from '../data/bestiary.js';
+import { speciesOf, speciesLabel, weaknessesOf } from '../data/species.js';
+import { WAR_DAMAGE_TYPES, MAX_RENDING_LEVEL } from '../data/elements.js';
+import { gemForDamageType } from './rending.js';
 import { monsterStatsForLevel } from '../data/monsterScaling.js';
 import { rollSpell, spellLevelCeiling, rollSpellLevel } from '../data/spells.js';
 import { pick, pickWeighted, chance, randInt } from '../engine/rng.js';
 import { derivedStats } from './hero.js';
-import { waveDifficulty } from './waves.js';
+// waves.js imports rollChampionReward back from here. The cycle is safe because
+// every use on both sides is inside a function, not at module-init time.
+import { waveDifficulty, WAVES_PER_POI } from './waves.js';
 import { trainSkill, trainAttribute, SALVAGE_ATTR_XP, SALVAGE_SKILL_XP } from './skills.js';
 
 let nextItemId = 1;
@@ -142,6 +147,75 @@ export function rollDrop(state, monsterName = null) {
     preferMaterial: poi.gather ? poi.gather.material : null,
     slotPool: allowed,
   });
+}
+
+// --- Champion rewards ---
+//
+// Rending gems and Slayer weapons are what finishing a place is FOR. Farming
+// wave one forever should never produce either, so both hang off the full clear
+// — the deepest thing you did — rather than off any old kill.
+//
+// NOTE: these are meant to be boss drops. Bosses aren't spawned yet (their data
+// sits unused in data/regions.js, waiting to become POIs of their own), so the
+// full clear stands in for the boss it will eventually contain. When boss POIs
+// land, this is the function they should call.
+
+export const RENDING_GEM_CHANCE = 0.06; // per full clear
+export const SLAYER_CHANCE = 0.02;
+
+// Deeper regions hand out deeper gems.
+function rendingLevelFor(regionIdx) {
+  const ceiling = Math.max(1, Math.min(MAX_RENDING_LEVEL, 1 + regionIdx));
+  return randInt(1, ceiling);
+}
+
+// Rolls what a full clear yields beyond its materials. Returns a list of
+// { kind, ... } for the caller to log, which is empty most of the time.
+export function rollChampionReward(state, poi) {
+  const rewards = [];
+  const regionIdx = Math.max(0, regionIndex(poi.regionId || state.location.regionId));
+  const luck = derivedStats(state).luckPct;
+  const luckMult = 1 + luck / 200; // luck helps here too, but only half as much
+
+  if (chance(RENDING_GEM_CHANCE * luckMult)) {
+    // The gem is whatever this place's inhabitants are softest to, so a dungeon
+    // is a lead on the gem you'd want to fight it with.
+    const wanted = pick((poi.monsters || []).map((m) => weaknessesOf(m.name)[0]).filter(Boolean));
+    const damageType = wanted ? wanted.damageType : pick(WAR_DAMAGE_TYPES);
+    const materialId = gemForDamageType(damageType);
+    if (materialId) {
+      const qty = 1;
+      state.materials[materialId] = (state.materials[materialId] || 0) + qty;
+      rewards.push({ kind: 'gem', materialId, damageType, qty });
+    }
+  }
+
+  if (chance(SLAYER_CHANCE * luckMult)) {
+    const target = pick((poi.monsters || []).map((m) => speciesOf(m.name)));
+    const depth = waveDifficulty(WAVES_PER_POI);
+    const avgAtk = (poi.monsters || []).reduce((sum, m) => sum + monsterStatsForLevel(m.level).atk, 0) / Math.max(1, (poi.monsters || []).length);
+    const item = generateItem(Math.round(poiItemPower(avgAtk) * (1 + depth)), {
+      luckPct: luck,
+      rarityBoost: 2,
+      depth,
+      regionIdx,
+      forceSlot: 'weapon',
+    });
+    item.slayer = { species: target };
+    item.name = `${item.name} of ${speciesLabel(target)} Slaying`;
+    // A slayer weapon that also rends is the top of the loot table, so it can
+    // happen — rarely, and only in the deeper regions.
+    if (regionIdx > 0 && chance(0.25)) {
+      const cls = weaponClass(item.baseType);
+      const pool = cls === 'magic' ? ['acid', 'cold', 'fire', 'lightning'] : null;
+      const damageType = pool ? pick(pool) : null;
+      if (damageType) item.imbue = { damageType, level: rendingLevelFor(regionIdx) };
+    }
+    state.inventory.push(item);
+    rewards.push({ kind: 'slayer', item });
+  }
+
+  return rewards;
 }
 
 // Trophies a monster leaves behind. Each entry rolls independently, so a rat can

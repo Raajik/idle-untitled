@@ -24,7 +24,7 @@ function inTown(poiId = null) {
   s.hero.name = 'Probe';
   s.progress.unlockedRegions = ['holtburg'];
   s.location = { regionId: 'holtburg', poiId };
-  takeTour(s, 'town-hall');
+  takeTour(s, 'holtburg:town-hall');
   tickBuildings(s);
   return s;
 }
@@ -93,8 +93,13 @@ test('sites get their own band, listed first', () => {
     poisInTier(getRegion('holtburg'), 'sites').map((p) => p.id),
     ['budding-lifestone']
   );
-  // A region with no sites simply doesn't get the band.
-  assert.ok(!tiersForRegion(getRegion('glenden-wood')).some((t) => t.id === 'sites'));
+  // Every region keeps a Lifestone in some state of repair, so every region has
+  // a Sites band — and it always leads.
+  for (const region of REGIONS) {
+    const tiers = tiersForRegion(region);
+    assert.equal(tiers[0].id, 'sites', `${region.name} should lead with its sites`);
+    assert.ok(poisInTier(region, 'sites').some((p) => p.site === 'lifestone'), `${region.name} has no Lifestone`);
+  }
 });
 
 test('a band means the same level everywhere, so its colour can too', () => {
@@ -103,9 +108,10 @@ test('a band means the same level everywhere, so its colour can too', () => {
   const glenden = band('glenden-wood', 'Lv 11–20');
   assert.ok(holtburg && glenden, 'both regions should carry a Lv 11-20 band');
   assert.equal(holtburg.tone, glenden.tone, 'the same band must key the same colour in every region');
-  // And it is NOT its position in the region's own list — in Holtburg it's third.
+  // And it is NOT its position in the region's own list: Holtburg lists it third
+  // (Sites, Lv 1-10, Lv 11-20) and Glenden Wood second (Sites, Lv 11-20).
   assert.equal(tiersForRegion(getRegion('holtburg')).indexOf(holtburg), 2);
-  assert.equal(tiersForRegion(getRegion('glenden-wood')).indexOf(glenden), 0);
+  assert.equal(tiersForRegion(getRegion('glenden-wood')).indexOf(glenden), 1);
 });
 
 test('the bands reach well past anything in the game yet', () => {

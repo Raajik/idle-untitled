@@ -5,7 +5,7 @@
 // Which buildings exist, what they stock, and when that stock rotates all live in
 // data/buildings.js + game/buildings.js; this module only moves items and pyreals.
 
-import { getBuilding, buildingBonus } from '../data/buildings.js';
+import { getBuilding, buildingBonus, buildingIn } from '../data/buildings.js';
 import { getConsumable } from '../data/consumables.js';
 import { getMaterial } from '../data/materials.js';
 import { grantConsumable } from './consumables.js';
@@ -96,7 +96,7 @@ export function healCost(state) {
 }
 
 export function healService(state) {
-  if (!isUnlocked(state, 'physician')) return false;
+  if (!isUnlocked(state, buildingIn(state.location.regionId, 'physician'))) return false;
   const stats = derivedStats(state);
   const cost = healCost(state);
   if (cost <= 0) return false;

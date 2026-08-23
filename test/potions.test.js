@@ -23,7 +23,7 @@ const POTION = 'stamina-potion';
 
 function townWithStore() {
   const s = createInitialState();
-  takeTour(s, 'town-hall');
+  takeTour(s, 'holtburg:town-hall');
   tickBuildings(s);
   return s;
 }
@@ -78,7 +78,7 @@ test('drinking one actually raises stamina regeneration', () => {
 
 test('the General Store stocks potions sometimes, not always', () => {
   const s = townWithStore();
-  const counts = shelfCounts(s, 'general-store', 400);
+  const counts = shelfCounts(s, 'holtburg:general-store', 400);
   const seen = counts[POTION] || 0;
   assert.ok(seen > 40, `potions turned up only ${seen} times in 400 deliveries`);
   assert.ok(seen < 360, `potions turned up ${seen} times in 400 — that is "always", not "occasionally"`);
@@ -88,9 +88,9 @@ test('the Physician always has them, which is what opening it buys you', () => {
   const s = townWithStore();
   s.pyreals = 10_000_000;
   s.materials['linen'] = 1000;
-  assert.equal(investToOpen(s, 'physician'), true);
+  assert.equal(investToOpen(s, 'holtburg:physician'), true);
 
-  const counts = shelfCounts(s, 'physician', 40);
+  const counts = shelfCounts(s, 'holtburg:physician', 40);
   assert.equal(counts[POTION], 40, 'the healer should never be out of stock');
   assert.equal(counts['healing-kit'], 40);
 });
@@ -99,32 +99,32 @@ test('you can buy one from either counter, and it lands in your pack', () => {
   const s = townWithStore();
   s.pyreals = 10_000_000;
   s.materials['linen'] = 1000;
-  investToOpen(s, 'physician');
+  investToOpen(s, 'holtburg:physician');
 
   const before = charges(s, POTION);
-  assert.equal(buyConsumable(s, 'physician', POTION), true);
+  assert.equal(buyConsumable(s, 'holtburg:physician', POTION), true);
   assert.equal(charges(s, POTION), before + getConsumable(POTION).startingCharges);
 
   // And the Store sells the same thing when it happens to have it in.
-  const store = s.buildings['general-store'];
+  const store = s.buildings['holtburg:general-store'];
   store.sells = [{ id: POTION, price: getConsumable(POTION).price }];
-  assert.equal(buyConsumable(s, 'general-store', POTION), true);
+  assert.equal(buyConsumable(s, 'holtburg:general-store', POTION), true);
 });
 
 test('a shop with nothing in stock refuses to sell what it does not have', () => {
   const s = townWithStore();
   s.pyreals = 10_000_000;
-  s.buildings['general-store'].sells = [];
-  assert.equal(buyConsumable(s, 'general-store', POTION), false);
+  s.buildings['holtburg:general-store'].sells = [];
+  assert.equal(buyConsumable(s, 'holtburg:general-store', POTION), false);
 });
 
 test('investing shortens the wait for the next potion delivery', () => {
   const s = townWithStore();
   s.pyreals = 10_000_000;
   s.materials['linen'] = 1000;
-  investToOpen(s, 'physician');
-  assert.ok(rotationSeconds(s.buildings['physician'].level + 3) < rotationSeconds(1));
-  assert.ok(getBuilding('physician').sells.length > 0);
+  investToOpen(s, 'holtburg:physician');
+  assert.ok(rotationSeconds(s.buildings['holtburg:physician'].level + 3) < rotationSeconds(1));
+  assert.ok(getBuilding('holtburg:physician').sells.length > 0);
 });
 
 test('auto-upkeep keeps a tonic running, one charge at a time', () => {

@@ -13,16 +13,15 @@ import {
 import { derivedStats } from '../src/game/hero.js';
 import { MELEE_TRAITS, RANGED_TRAITS, meleeTrait, UNARMED_WEAPONS } from '../src/data/weaponTraits.js';
 import {
-  bestElementFor,
-  elementMultiplier,
-  elementDamageMult,
-  imbueOf,
-  weaknessOf,
-  CASTABLE_ELEMENTS,
-  WEAK_MULT,
-  RESIST_MULT,
-  IMBUE_MULT,
+  bestDamageTypeFor,
+  damageTypeMultiplier,
+  rendingMultiplier,
+  slayerMultiplier,
+  WAR_DAMAGE_TYPES,
+  SLAYER_MULT,
+  RENDING_PER_LEVEL,
 } from '../src/data/elements.js';
+import { weaknessMultiplier, weaknessesOf, speciesOf } from '../src/data/species.js';
 import { VOID_SPELLS, MAGIC_SPELLS, ROT_MAX_STACKS } from '../src/data/combatStances.js';
 import { activeWeaponSkill } from '../src/game/skills.js';
 import { DAMAGE_TYPES } from '../src/data/regions.js';
@@ -164,58 +163,91 @@ test('a mace meets less armour than the blow it lands', () => {
   assert.ok(faced < 40, `a mace should face ${faced} of 40 defence`);
 });
 
-// --- Elements --------------------------------------------------------------
+// --- Damage types, weaknesses, rendings, slayers ----------------------------
 
-test('the elemental wheel rewards the weakness and punishes the mirror', () => {
-  for (const el of CASTABLE_ELEMENTS) {
-    assert.equal(elementMultiplier(el, el), RESIST_MULT, `${el} should be resisted by its own kind`);
-  }
-  assert.equal(elementMultiplier('cold', 'fire'), WEAK_MULT);
-  assert.equal(elementMultiplier('fire', 'cold'), WEAK_MULT);
-  assert.equal(elementMultiplier('void', 'slash'), WEAK_MULT, 'physical things are soft to void');
-  assert.equal(elementMultiplier('acid', 'slash'), 1, 'and neutral to everything else');
-});
-
-test('every damage type in the game has an answer', () => {
-  for (const t of DAMAGE_TYPES) {
-    const weak = weaknessOf(t);
-    assert.ok(weak, `${t} has no weakness`);
-    assert.ok(CASTABLE_ELEMENTS.includes(weak), `${t}'s weakness (${weak}) is not castable`);
+test('a weakness is a bonus, never a penalty', () => {
+  // Nothing is outright resisted: the choice is "which is best here", not "this
+  // attack is wasted", so a build is never shut out of a dungeon it walked to.
+  for (const type of WAR_DAMAGE_TYPES) {
+    for (const name of ['Drudge', 'Skeleton', 'Brown Rat', 'Magma Golem']) {
+      assert.ok(weaknessMultiplier(type, name) >= 1, `${type} vs ${name} came out below 1`);
+    }
   }
 });
 
-test('Auto picks the weakness when nothing else is in play', () => {
-  assert.equal(bestElementFor('fire', null), 'cold');
-  assert.equal(bestElementFor('cold', null), 'fire');
-  assert.equal(bestElementFor('slash', null), 'void');
+test('the three tiers are worth 45, 30 and 15 percent', () => {
+  const tiers = weaknessesOf('Drudge');
+  assert.deepEqual(tiers.map((t) => t.bonusPct), [45, 30, 15]);
+  assert.equal(weaknessMultiplier(tiers[0].damageType, 'Drudge'), 1.45);
+  assert.equal(weaknessMultiplier(tiers[1].damageType, 'Drudge'), 1.3);
+  assert.equal(weaknessMultiplier(tiers[2].damageType, 'Drudge'), 1.15);
+  // Anything not on the list is plain.
+  const off = WAR_DAMAGE_TYPES.find((t) => !tiers.some((w) => w.damageType === t));
+  assert.equal(weaknessMultiplier(off, 'Drudge'), 1);
 });
 
-test('Auto prefers an imbued weapon when the imbue would land harder', () => {
-  // Against a neutral target, a weapon imbued with anything beats a bare cast.
-  assert.equal(bestElementFor('bludgeon', 'fire'), 'void', 'a plain weakness still beats a neutral imbue');
-  // 1.25 weakness vs 1.15 imbue: the weakness wins...
-  assert.ok(WEAK_MULT > IMBUE_MULT);
-  // ...but an imbue that IS the weakness compounds and is chosen outright.
-  assert.equal(bestElementFor('fire', 'cold'), 'cold');
-  assert.equal(elementDamageMult('cold', 'fire', 'cold'), WEAK_MULT * IMBUE_MULT);
+test('Auto picks the type that actually lands hardest', () => {
+  const best = bestDamageTypeFor('Drudge', speciesOf('Drudge'), null);
+  assert.equal(best, weaknessesOf('Drudge')[0].damageType, 'with no weapon, that is the primary');
 });
 
-test('a magic weapon takes its element from what it is made of', () => {
-  assert.equal(imbueOf({ material: 'opal' }), 'cold');
-  assert.equal(imbueOf({ material: 'ebony' }), 'void');
-  assert.equal(imbueOf({ material: 'iron' }), null, 'plain metal carries no element');
-  assert.equal(imbueOf(null), null);
+test('a rending weapon can beat a bare primary weakness', () => {
+  // Drudges are softest to their primary. A weapon rending their SECONDARY hard
+  // enough should overtake it — which is the point of rendings existing.
+  const [primary, secondary] = weaknessesOf('Drudge');
+  const weapon = { imbue: { damageType: secondary.damageType, level: 5 } };
+  const withRending = damageTypeMultiplier(secondary.damageType, 'Drudge', 'drudge', weapon);
+  const bare = damageTypeMultiplier(primary.damageType, 'Drudge', 'drudge', weapon);
+  assert.ok(withRending > bare, `${withRending.toFixed(2)} should beat ${bare.toFixed(2)}`);
+  assert.equal(bestDamageTypeFor('Drudge', 'drudge', weapon), secondary.damageType);
 });
 
-test('the chosen element is what gets cast, and Auto re-reads the target', () => {
+test('rending scales with its level and only helps its own type', () => {
+  for (let level = 1; level <= 5; level++) {
+    assert.equal(rendingMultiplier({ damageType: 'fire', level }, 'fire'), 1 + level * RENDING_PER_LEVEL);
+  }
+  assert.equal(rendingMultiplier({ damageType: 'fire', level: 5 }, 'cold'), 1, 'a fire rending does nothing for cold');
+  assert.equal(rendingMultiplier(null, 'fire'), 1);
+});
+
+test('a slayer doubles against its species and does nothing to anything else', () => {
+  const weapon = { slayer: { species: 'drudge' } };
+  assert.equal(slayerMultiplier(weapon.slayer, 'drudge'), SLAYER_MULT);
+  assert.equal(slayerMultiplier(weapon.slayer, 'shreth'), 1);
+  assert.equal(SLAYER_MULT, 2);
+
+  const vsDrudge = damageTypeMultiplier('fire', 'Drudge', 'drudge', weapon);
+  const vsShreth = damageTypeMultiplier('fire', 'Shreth', 'shreth', weapon);
+  assert.ok(vsDrudge > vsShreth * 1.5, 'the slayer should dominate the comparison');
+});
+
+test('weakness, rending and slayer all compound', () => {
+  const [primary] = weaknessesOf('Drudge');
+  const weapon = { imbue: { damageType: primary.damageType, level: 5 }, slayer: { species: 'drudge' } };
+  const mult = damageTypeMultiplier(primary.damageType, 'Drudge', 'drudge', weapon);
+  assert.ok(Math.abs(mult - 1.45 * 1.5 * 2) < 1e-9, `got ${mult}`);
+});
+
+test('War throws the seven ordinary types and never void', () => {
+  assert.equal(WAR_DAMAGE_TYPES.length, 7);
+  assert.ok(!WAR_DAMAGE_TYPES.includes('void'), 'void belongs to Void Magic');
+  for (const t of ['bludgeon', 'pierce', 'slash', 'acid', 'cold', 'fire', 'lightning']) {
+    assert.ok(WAR_DAMAGE_TYPES.includes(t), `${t} should be castable`);
+  }
+});
+
+test('the chosen type is what gets cast, and Auto re-reads the target', () => {
   const s = withWeapon('wand');
   s.hero.combat.mode = 'magic';
   s.hero.combat.warElement = 'fire';
-  assert.equal(activeElement(s, { dmgType: 'slash' }), 'fire', 'an explicit pick is honoured');
+  assert.equal(activeElement(s, { name: 'Brown Rat', species: 'vermin' }), 'fire', 'an explicit pick is honoured');
 
   s.hero.combat.warElement = 'auto';
-  assert.equal(activeElement(s, { dmgType: 'slash' }), 'void');
-  assert.equal(activeElement(s, { dmgType: 'fire' }), 'cold', 'a different target, a different answer');
+  const vsDrudge = activeElement(s, { name: 'Drudge', species: 'drudge' });
+  const vsRat = activeElement(s, { name: 'Brown Rat', species: 'vermin' });
+  assert.equal(vsDrudge, weaknessesOf('Drudge')[0].damageType);
+  assert.equal(vsRat, weaknessesOf('Brown Rat')[0].damageType);
+  assert.notEqual(vsDrudge, vsRat, 'a different target should give a different answer');
 });
 
 // --- Void ------------------------------------------------------------------
@@ -227,7 +259,7 @@ test('Void is War with one element and a rot in Volley\'s place', () => {
 
   const s = withWeapon('staff');
   s.hero.combat.mode = 'void';
-  assert.equal(activeElement(s, { dmgType: 'fire' }), 'void', 'Void casts void whatever it is looking at');
+  assert.equal(activeElement(s, { name: 'Drudge', species: 'drudge' }), 'void', 'Void casts void whatever it is looking at');
   s.hero.combat.voidSpell = 'corruption';
   assert.equal(activeSpell(s), VOID_SPELLS.corruption);
 });

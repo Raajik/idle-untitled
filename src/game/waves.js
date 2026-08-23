@@ -16,6 +16,7 @@ import { getMaterial } from '../data/materials.js';
 import { buildingBonus } from '../data/buildings.js';
 import { trainSkill, GATHERING_SKILLS } from './skills.js';
 import { addLog } from './state.js';
+import { rollChampionReward } from './loot.js';
 
 export const WAVES_PER_POI = 10;
 
@@ -157,6 +158,18 @@ function completeClears(state, poi, count) {
       : `${poi.name} cleared ${count} times over. You haul away ${amount} ${name}.`,
     'good'
   );
+  // What finishing the place is for, over and above its materials.
+  for (let i = 0; i < count; i++) {
+    for (const reward of rollChampionReward(state, poi)) {
+      if (reward.kind === 'gem') {
+        const gem = getMaterial(reward.materialId);
+        addLog(state, `Among the spoils: ${gem ? gem.name : reward.materialId} — it rends ${reward.damageType}.`, 'loot-line');
+      } else {
+        addLog(state, `⚔ ${reward.item.name} [${reward.item.rarity}]`, 'loot-line');
+      }
+    }
+  }
+
   const meta = GATHERING_SKILLS.find((g) => g.key === gather.skill);
   const skill = state.hero.skills.gathering[gather.skill];
   const before = skill.rank;

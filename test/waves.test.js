@@ -54,8 +54,9 @@ test('clearing all ten waves yields the POI\'s material and trains its gathering
 
 test('a Storehouse multiplies what a full clear pays out', () => {
   const s = createInitialState();
+  s.progress.unlockedRegions = ['holtburg'];
   assert.equal(clearYield(s), 1);
-  s.buildings['storehouse'].level = 4; // +100% materials
+  s.buildings['holtburg:storehouse'].level = 4; // +100% materials
   assert.equal(clearYield(s), 2);
 });
 

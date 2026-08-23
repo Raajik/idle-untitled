@@ -10,7 +10,7 @@ function inTown(poiId = null) {
   s.hero.name = 'Probe';
   s.progress.unlockedRegions = ['holtburg'];
   s.location = { regionId: 'holtburg', poiId };
-  takeTour(s, 'town-hall');
+  takeTour(s, 'holtburg:town-hall');
   tickBuildings(s);
   return s;
 }

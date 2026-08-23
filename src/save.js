@@ -42,6 +42,13 @@ function migrate(raw) {
   state.hero.skills.offense = { ...fresh.hero.skills.offense, ...(rawSkills.offense || {}) };
   state.hero.skills.gathering = { ...fresh.hero.skills.gathering, ...(rawSkills.gathering || {}) };
   state.hero.vitae = { ...fresh.hero.vitae, ...((raw.hero && raw.hero.vitae) || {}) };
+  // Vitae used to be counted in 5% stacks; it's a plain percentage now so it can
+  // tick back one point at a time.
+  if (typeof state.hero.vitae.stacks === 'number') {
+    state.hero.vitae.pct = Math.min(40, state.hero.vitae.stacks * 5);
+    delete state.hero.vitae.stacks;
+  }
+  if (typeof state.hero.vitae.pct !== 'number') state.hero.vitae.pct = 0;
   state.achievements = Array.isArray(raw.achievements) ? raw.achievements : [];
   state.trophies = { ...fresh.trophies, ...(raw.trophies || {}) };
   state.consumables = { ...fresh.consumables, ...(raw.consumables || {}) };
@@ -67,14 +74,20 @@ function migrate(raw) {
   // The General Store used to be the building you started with; the Town Hall is
   // now, and the Store is what its tour opens. Anyone who already had a Store
   // keeps it, and counts as having taken the tour.
-  state.buildings = { ...freshBuildings(), ...(raw.buildings || {}) };
+  // Buildings used to be a single flat town; every region has one now, keyed
+  // `<regionId>:<type>`. An old save's bare ids were all Holtburg's.
+  const rawBuildings = {};
+  for (const [id, entry] of Object.entries(raw.buildings || {})) {
+    rawBuildings[id.includes(':') ? id : `holtburg:${id}`] = entry;
+  }
+  state.buildings = { ...freshBuildings(), ...rawBuildings };
   for (const entry of Object.values(state.buildings)) {
     entry.sells = entry.sells || [];
     entry.exchange = entry.exchange || [];
   }
-  if (raw.buildings && raw.buildings['general-store'] && raw.buildings['general-store'].level > 0) {
+  if (state.buildings['holtburg:general-store'] && state.buildings['holtburg:general-store'].level > 0) {
     state.progress.tookTownTour = true;
-    if (state.buildings['town-hall'].level === 0) state.buildings['town-hall'].level = 1;
+    if (state.buildings['holtburg:town-hall'].level === 0) state.buildings['holtburg:town-hall'].level = 1;
   }
   state.training = { ...fresh.training, ...(raw.training || {}) };
   state.settings = { ...fresh.settings, ...(raw.settings || {}) };
@@ -111,6 +124,9 @@ function migrate(raw) {
   if (state.ui.activeShop !== undefined) {
     state.ui.activeBuilding = state.ui.activeShop;
     delete state.ui.activeShop;
+  }
+  if (state.ui.activeBuilding && !String(state.ui.activeBuilding).includes(':')) {
+    state.ui.activeBuilding = `holtburg:${state.ui.activeBuilding}`;
   }
 
   // Binding-on-death is new: a fresh character starts bound to the roadside stone and

@@ -4,6 +4,7 @@ import { createInitialState } from '../src/game/state.js';
 import { tickCombat } from '../src/game/combat.js';
 import { derivedStats } from '../src/game/hero.js';
 import { isSite, getPoiById } from '../src/data/regions.js';
+import { vitaePct, atMaxVitae, VITAE_PER_STACK, MAX_VITAE_STACKS } from '../src/game/vitae.js';
 import {
   sacrificeVitae,
   canSacrificeVitae,
@@ -50,31 +51,36 @@ test('a fresh hero is bound to the roadside stone, a full walk short of Holtburg
   assert.deepEqual(s.progress.boundLifestone, { regionId: null, poiId: null });
 });
 
-test('an offering costs a big bite of HP and mana and cannot be repeated on empty', () => {
+test('an offering costs vitae and nothing else', () => {
   const s = atSite();
-  const cost = offeringCost(s);
-  assert.ok(cost.hp > 0 && cost.mana > 0);
+  const d = derivedStats(s);
+  const hp = s.hero.hp;
+  const mana = s.hero.mana;
 
   assert.equal(sacrificeVitae(s, SITE), true);
   assert.equal(lifestoneGrowth(s, SITE), GROWTH_PER_OFFERING);
-  assert.ok(s.hero.hp < derivedStats(s).maxHp);
+  assert.equal(vitaePct(s), VITAE_PER_STACK, 'the price is vitae');
+  // The old version drank most of your health and mana, which turned the site
+  // into offer-then-stand-about-waiting.
+  assert.equal(s.hero.hp, hp, 'it should not have taken blood');
+  assert.equal(s.hero.mana, mana, 'or mana');
+  assert.equal(offeringCost(s).vitaePct, VITAE_PER_STACK);
+});
 
-  // 60% of each vital is gone, so a second offering has to wait for a refill.
-  assert.equal(canSacrificeVitae(s, SITE), false);
+test('offerings can be made back to back until there is nothing left to give', () => {
+  const s = atSite();
+  for (let i = 0; i < MAX_VITAE_STACKS; i++) {
+    assert.equal(sacrificeVitae(s, SITE), true, `offering ${i + 1} should be allowed straight away`);
+  }
+  assert.equal(atMaxVitae(s), true);
+  assert.equal(canSacrificeVitae(s, SITE), false, 'the stone can take no more');
   assert.equal(sacrificeVitae(s, SITE), false);
 });
 
-test('waiting at the stone refills vitals so the next offering can be made', () => {
+test('a body full of vitae is exactly enough to finish the stone', () => {
   const s = atSite();
-  sacrificeVitae(s, SITE);
-  assert.ok(!isRested(s));
-  assert.equal(canSacrificeVitae(s, SITE), false);
-
-  // A site has no fight in it, so the only thing that can refill these is passive
-  // regen — which has to run here, or the site is a dead end.
-  for (let i = 0; i < 2000 && !isRested(s); i++) tickCombat(s, 0.25);
-  assert.ok(isRested(s), 'standing at the stone should eventually restore you');
-  assert.equal(canSacrificeVitae(s, SITE), true);
+  for (let i = 0; i < MAX_VITAE_STACKS; i++) sacrificeVitae(s, SITE);
+  assert.ok(isGrown(s, SITE), 'spending every drop should complete it');
 });
 
 test('fully growing the Lifestone rebinds the hero to the region hub', () => {

@@ -8,15 +8,18 @@
 //     death costs that walk back. A budding Lifestone site (see data/regions.js)
 //     can be grown into a real one to move the bind point somewhere convenient.
 //     It creeps upward on its own once started, slowly enough that waiting it out
-//     is a real option but a dull one; Sacrificing Vitae is how you hurry it. That
-//     costs blood and mana on the spot, which passive regen refills in its own
-//     slow time,
-//     and leaves you carrying vitae afterwards, exactly as if you'd died for it.
+//     is a real option but a dull one; Sacrificing Vitae is how you hurry it.
+//
+//     A sacrifice costs vitae and nothing else. It used to drain most of your
+//     health and mana as well, which made the site a stop-start affair: offer,
+//     then stand about waiting to refill, then offer again. The vitae IS the
+//     price — you walk away weaker for as long as it takes to earn back, and you
+//     can keep giving until there's nothing left to give.
 
 import { getRegion, getPoiById } from '../data/regions.js';
-import { derivedStats } from './hero.js';
+
 import { recallCooldownSeconds, RECALL_XP_ON_USE, trainSkill, trainAttribute } from './skills.js';
-import { gainVitae, atMaxVitae, MAX_VITAE_STACKS } from './vitae.js';
+import { gainVitae, atMaxVitae, MAX_VITAE_STACKS, VITAE_PER_STACK } from './vitae.js';
 import { addLog } from './state.js';
 
 // Growth needed to finish a budding Lifestone, and what one offering gives —
@@ -27,8 +30,6 @@ export const LIFESTONE_GROWTH_REQUIRED = 100;
 // other number either strands the stone half-grown behind a cap you can't
 // exceed, or leaves sacrifices you're not allowed to make.
 export const GROWTH_PER_OFFERING = LIFESTONE_GROWTH_REQUIRED / MAX_VITAE_STACKS;
-export const OFFERING_HP_PCT = 0.6;
-export const OFFERING_MANA_PCT = 0.6;
 const OFFERING_ATTR_XP = 20; // Self/Focus, for giving so much of yourself away
 
 // A budding stone knits itself together on its own, just slowly — about fifty
@@ -83,23 +84,69 @@ export function respawnAtLifestone(state) {
   return true;
 }
 
+// The stone a region keeps, if it has one.
+export function lifestoneSiteIn(regionId) {
+  const region = getRegion(regionId);
+  if (!region) return null;
+  return region.pois.find((p) => p.site === 'lifestone') || null;
+}
+
+// Called on first arrival in a region. Binds you to its stone straight away —
+// even a dead one will catch you — so dying while working a region drops you
+// beside it rather than a region away, and opens the standing job of restoring
+// it. Binding to the SITE rather than the hub is the point: it sits among the
+// dungeons, which is where you'll be dying.
+export function claimRegionLifestone(state, regionId) {
+  const site = lifestoneSiteIn(regionId);
+  if (!site) return false;
+  const already = state.progress.quests[site.id];
+  state.progress.boundLifestone = { regionId, poiId: site.id };
+  if (already) return false;
+  state.progress.quests[site.id] = isGrown(state, site.id) ? 'done' : 'active';
+  addLog(
+    state,
+    `Something here is pulling at you — ${site.name.toLowerCase()}, ${conditionOf(site).blurb}. You'll feel it from anywhere in ${getRegion(regionId).name} now, and you'll wake beside it.`,
+    'good'
+  );
+  return true;
+}
+
+// Whether a POI is currently showing a quest marker.
+export function hasOpenQuest(state, poiId) {
+  return state.progress.quests[poiId] === 'active';
+}
+
 // --- Growing a budding Lifestone ---
 
+// How intact a stone already is when you find it. Every region has one, and how
+// far gone it is says something about how far out you've walked: Holtburg's is
+// young and merely unfinished, the Direlands' is a dead thing that has to be
+// rebuilt from nothing.
+export const LIFESTONE_CONDITIONS = {
+  budding: { start: 0, label: 'budding', blurb: 'unfinished, and still trying' },
+  cracked: { start: 35, label: 'cracked', blurb: 'broken, but most of it is still here' },
+  shattered: { start: 15, label: 'shattered', blurb: 'in pieces, and only just holding together' },
+  dead: { start: 0, label: 'dead', blurb: 'gone out entirely — there is nothing left in it' },
+};
+
+export function conditionOf(poi) {
+  return LIFESTONE_CONDITIONS[(poi && poi.condition) || 'budding'] || LIFESTONE_CONDITIONS.budding;
+}
+
 export function lifestoneGrowth(state, poiId) {
-  return state.progress.lifestoneGrowth[poiId] || 0;
+  const recorded = state.progress.lifestoneGrowth[poiId];
+  if (typeof recorded === 'number') return recorded;
+  // Never touched: it's however intact its own condition left it.
+  return conditionOf(getPoiById(poiId)).start;
 }
 
 export function isGrown(state, poiId) {
   return lifestoneGrowth(state, poiId) >= LIFESTONE_GROWTH_REQUIRED;
 }
 
-// What one offering costs right now, in absolute HP/Mana.
+// What one offering costs: vitae, and only vitae.
 export function offeringCost(state) {
-  const d = derivedStats(state);
-  return {
-    hp: Math.ceil(d.maxHp * OFFERING_HP_PCT),
-    mana: Math.ceil(d.maxMana * OFFERING_MANA_PCT),
-  };
+  return { vitaePct: VITAE_PER_STACK };
 }
 
 export function canSacrificeVitae(state, poiId) {
@@ -109,8 +156,7 @@ export function canSacrificeVitae(state, poiId) {
   if (state.hero.dead || state.travel) return false;
   if (isGrown(state, poiId)) return false;
   if (atMaxVitae(state)) return false; // nothing left to give — the stone can't take more
-  const cost = offeringCost(state);
-  return state.hero.hp >= cost.hp && state.hero.mana >= cost.mana;
+  return true;
 }
 
 // Growth the stone makes on its own, once it's been started. Called every tick
@@ -129,6 +175,7 @@ export function tickLifestoneGrowth(state, dt) {
 function completeLifestone(state, poiId) {
   const poi = getPoiById(poiId);
   if (!poi) return;
+  state.progress.quests[poiId] = 'done';
   // A grown stone sits at a POI you'd rather not respawn inside, so it binds you
   // to the hub town of the region it's in.
   state.progress.boundLifestone = { regionId: poi.regionId, poiId: null };
@@ -137,13 +184,10 @@ function completeLifestone(state, poiId) {
   addLog(state, `The Lifestone flares awake, full-grown at last. Its light knows you now — you'll wake at ${region.name} from here on.`, 'good');
 }
 
-// Spends blood, mana and a lasting 5% of yourself to hurry the stone along.
+// Spends a lasting 5% of yourself to hurry the stone along.
 export function sacrificeVitae(state, poiId) {
   if (!canSacrificeVitae(state, poiId)) return false;
-  const cost = offeringCost(state);
 
-  state.hero.hp -= cost.hp;
-  state.hero.mana -= cost.mana;
   trainAttribute(state, 'self', OFFERING_ATTR_XP);
   trainAttribute(state, 'focus', OFFERING_ATTR_XP);
   gainVitae(state, 'The stone drinks deep.');
