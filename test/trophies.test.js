@@ -7,6 +7,8 @@ import { derivedStats } from '../src/game/hero.js';
 import { rollTrophies } from '../src/game/loot.js';
 import { TROPHIES, getTrophy } from '../src/data/trophies.js';
 import { TUTORIAL_ROAD, TUTORIAL_MONSTER_WEIGHTS } from '../src/data/tutorial.js';
+import { POIS } from '../src/data/regions.js';
+import { monsterLabel } from '../src/ui/tabs.js';
 import { ATTRIBUTE_BASE } from '../src/game/skills.js';
 
 test('a fresh hero starts at 1 in everything', () => {
@@ -85,4 +87,43 @@ test('trophies survive nothing special — they just stack', () => {
   assert.equal(s.trophies['rat-tail'], 4);
   rollTrophies(s, {});
   assert.equal(s.trophies['rat-tail'], 4, 'a monster with no drops changes nothing');
+});
+
+test('every monster in the game announces itself with a level', () => {
+  // The roadside critters carry explicit stat blocks rather than deriving them
+  // from a level, and an early version of them dropped `level` entirely — which
+  // spawned "Rabbit (Lv undefined)" into the combat panel.
+  for (const monster of TUTORIAL_ROAD.monsters) {
+    assert.equal(typeof monster.level, 'number', `${monster.name} has no level`);
+    assert.ok(monster.level > 0);
+  }
+  for (const poi of POIS) {
+    for (const monster of poi.monsters || []) {
+      assert.equal(typeof monster.level, 'number', `${poi.id}: ${monster.name} has no level`);
+    }
+  }
+});
+
+test('a spawned monster carries its level through to its label', () => {
+  const s = createInitialState();
+  s.hero.name = 'Probe';
+  s.onboarding.step = 'done';
+  s.onboarding.tutorialPending = true;
+  startTravelToRegion(s, 'holtburg');
+  let elapsed = 0;
+  while (!s.monster && elapsed < 200) {
+    tickCombat(s, 0.25);
+    elapsed += 0.25;
+  }
+  assert.ok(s.monster, 'something should have turned up on the road');
+  assert.equal(typeof s.monster.level, 'number');
+  const label = monsterLabel(s.monster);
+  assert.ok(!label.includes('undefined'), `rendered "${label}"`);
+  assert.match(label, /\(Lv \d+\)$/);
+});
+
+test('a monster with no level at all is labelled without one, not with "undefined"', () => {
+  assert.equal(monsterLabel({ name: 'Mystery' }), 'Mystery');
+  assert.equal(monsterLabel({ name: 'Drudge', level: 3 }), 'Drudge (Lv 3)');
+  assert.equal(monsterLabel(null), '');
 });

@@ -4,7 +4,7 @@
 //   - frame():  per-animation-frame in-place updates for live combat + fx
 
 import { topLevelEntries, childTabs, drainNewUnlocks, UNLOCKS } from './unlocks.js';
-import { battleTab, attributesTab, skillsTab, inventoryTab, trainingTab, enlightenmentTab, recallTab, tinkeringTab, overviewTab, settingsTab, battleDockHtml, waveLine, attackBarLabel } from './tabs.js';
+import { battleTab, attributesTab, skillsTab, inventoryTab, trainingTab, enlightenmentTab, recallTab, tinkeringTab, overviewTab, settingsTab, battleDockHtml, waveLine, attackBarLabel, monsterLabel } from './tabs.js';
 import { startTravelToRegion, startTravelToPoi } from '../game/travel.js';
 import { derivedStats, xpForLevel, totalXpForLevel } from '../game/hero.js';
 import { equipItem, salvageItem } from '../game/loot.js';
@@ -297,7 +297,7 @@ export function createRenderer(state, { onImport }) {
 
     if (m) {
       const nameEl = document.getElementById('m-name');
-      if (nameEl) nameEl.textContent = state.meditating ? 'Resting — the fight can wait.' : `${m.name} (Lv ${m.level})`;
+      if (nameEl) nameEl.textContent = state.meditating ? 'Resting — the fight can wait.' : monsterLabel(m);
       setBar('m-hp', (m.hp / m.maxHp) * 100, `${Math.max(0, Math.ceil(m.hp))} / ${m.maxHp}`);
       setText('m-meta', `ATK ${m.atk} · DEF ${m.def} · ${m.dmgType}`);
     }

@@ -246,6 +246,14 @@ function upkeepHtml(state) {
   </div>`;
 }
 
+// How a monster is announced. The level is appended only when there is one —
+// roadside critters carry explicit stat blocks, and an early version of them had
+// no level at all, which rendered a cheerful "Rabbit (Lv undefined)".
+export function monsterLabel(monster) {
+  if (!monster) return '';
+  return monster.level == null ? monster.name : `${monster.name} (Lv ${monster.level})`;
+}
+
 // Meditation is the only way to get stamina back at any speed, and fighting is
 // tuned to run you out of it, so this control has to be within reach wherever
 // you might run dry — not just at the Lifestone that introduced it.
@@ -269,7 +277,7 @@ function combatDisplayHtml(state, headerHtml, extraHtml = '') {
   return `
     <div class="panel">
       ${headerHtml}
-      <div><b id="m-name">${state.meditating ? 'Resting — the fight can wait.' : m ? esc(m.name) + ` (Lv ${m.level})` : 'Searching...'}</b></div>
+      <div><b id="m-name">${state.meditating ? 'Resting — the fight can wait.' : m ? esc(monsterLabel(m)) : 'Searching...'}</b></div>
       ${bar('hp', m ? (m.hp / m.maxHp) * 100 : 0, m ? `${Math.max(0, Math.ceil(m.hp))} / ${m.maxHp}` : '...', 'm-hp', 'monster')}
       <div id="m-meta" class="muted">${m ? `ATK ${m.atk} · DEF ${m.def} · ${esc(m.dmgType)}` : ''}</div>
       ${extraHtml}
@@ -977,7 +985,7 @@ export function overviewTab(state) {
 
   const poi = state.location.poiId ? getPoiById(state.location.poiId) : null;
   tiles.push(`<div class="panel"><h2>Battle — ${poi ? esc(poi.name) : 'Town'}</h2>
-    <b id="m-name">${m ? esc(m.name) + ` (Lv ${m.level})` : state.travel ? 'Travelling...' : 'Searching...'}</b>
+    <b id="m-name">${m ? esc(monsterLabel(m)) : state.travel ? 'Travelling...' : 'Searching...'}</b>
     ${bar('hp', m ? (m.hp / m.maxHp) * 100 : 0, m ? `${Math.ceil(m.hp)} / ${m.maxHp}` : '...', 'm-hp', 'monster')}
     <div id="ov-kills" class="muted">${poi ? esc(waveLine(state, poi)) : ''}</div></div>`);
 
@@ -1034,7 +1042,7 @@ export function battleDockHtml(state) {
 
   const monsterHtml = m
     ? `<div class="dock-monster">
-        <b>${esc(m.name)} (Lv ${m.level})</b>
+        <b>${esc(monsterLabel(m))}</b>
         ${bar('hp mini', (m.hp / m.maxHp) * 100, `${Math.max(0, Math.ceil(m.hp))}/${m.maxHp}`, 'dock-m-hp')}
       </div>`
     : `<div class="dock-monster muted">—</div>`;
