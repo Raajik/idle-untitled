@@ -169,11 +169,20 @@ export function engageWave(state) {
 const DAMAGE_VARIANCE_LOW = 0.9;
 const DAMAGE_VARIANCE_HIGH = 1.1;
 
-function dealDamage(rawAtk, targetDef, critChance, critMult = 2, minDamagePct = 0) {
+// Rolls one blow somewhere inside a damage BAND, rather than taking a single
+// number and jittering it. The band is the weapon's own min-max (see
+// data/items.js), which is what makes a displayed "8-14" honest: that is the
+// range, not a label over an average.
+//
+// `minDamagePct` (Tempering, granite) lifts the bottom of the band toward the
+// top, so a tempered weapon rolls closer to its best hit every time; at 100 it
+// always does. `scale` multiplies the whole band — stances, weapon traits and
+// damage-type multipliers all arrive that way.
+function dealDamage(min, max, targetDef, critChance, critMult = 2, minDamagePct = 0, scale = 1) {
   const lift = Math.max(0, Math.min(100, minDamagePct)) / 100;
-  const low = DAMAGE_VARIANCE_LOW + (DAMAGE_VARIANCE_HIGH - DAMAGE_VARIANCE_LOW) * lift;
-  const variance = low + Math.random() * (DAMAGE_VARIANCE_HIGH - low);
-  let dmg = Math.max(1, Math.round((rawAtk - targetDef) * variance));
+  const low = min + (max - min) * lift;
+  const rolled = (low + Math.random() * (max - low)) * scale;
+  let dmg = Math.max(1, Math.round(rolled - targetDef));
   const crit = Math.random() * 100 < critChance;
   if (crit) dmg *= critMult;
   return { dmg, crit };
@@ -664,7 +673,7 @@ export function tickCombat(state, dt) {
 
       const trait = activeTrait(state);
       const typeMult = damageTypeMultiplier(physicalDamageType(state), m.name, m.species, state.equipment.weapon);
-      const { dmg, crit } = dealDamage(stats.atk * (trait.dmgMult ?? 1) * typeMult, m.def, stats.critChance, 2, stats.minDamagePct);
+      const { dmg, crit } = dealDamage(stats.damageMin, stats.damageMax, m.def, stats.critChance, 2, stats.minDamagePct, (trait.dmgMult ?? 1) * typeMult);
       // A bolt doesn't stop at the first body. Everything behind the target takes
       // a share, which is what makes a crossbow worth its slower crank when the
       // wave came in six deep.
@@ -721,8 +730,8 @@ export function tickCombat(state, dt) {
       // The element is picked per cast, so Auto re-reads the target every time
       // the group in front of you changes.
       const element = activeElement(state, m);
-      const power = stats.magicAtk * spell.dmgMult * damageTypeMultiplier(element, m.name, m.species, weapon);
-      const { dmg, crit } = dealDamage(power, m.def, stats.critChance, spell.critMult, stats.minDamagePct);
+      const scale = spell.dmgMult * damageTypeMultiplier(element, m.name, m.species, weapon);
+      const { dmg, crit } = dealDamage(stats.magicMin, stats.magicMax, m.def, stats.critChance, spell.critMult, stats.minDamagePct, scale);
 
       // Volley catches the rest of the group for a share, each rolled against
       // its own element multiplier — a mixed wave takes uneven damage from one
@@ -730,8 +739,8 @@ export function tickCombat(state, dt) {
       const hits = [{ monster: m, dmg, crit }];
       if (spell.aoe) {
         for (const other of state.monsters.filter((o) => o !== m)) {
-          const otherPower = stats.magicAtk * spell.dmgMult * (spell.aoeMult ?? 0.6) * damageTypeMultiplier(element, other.name, other.species, weapon);
-          const hit = dealDamage(otherPower, other.def, stats.critChance, spell.critMult, stats.minDamagePct);
+          const otherScale = spell.dmgMult * (spell.aoeMult ?? 0.6) * damageTypeMultiplier(element, other.name, other.species, weapon);
+          const hit = dealDamage(stats.magicMin, stats.magicMax, other.def, stats.critChance, spell.critMult, stats.minDamagePct, otherScale);
           hits.push({ monster: other, dmg: hit.dmg, crit: hit.crit });
         }
       }
@@ -772,7 +781,7 @@ export function tickCombat(state, dt) {
       // What this weapon deals, against what this creature is soft to, through
       // whatever the weapon rends and whatever it slays.
       const typeMult = damageTypeMultiplier(physicalDamageType(state), m.name, m.species, state.equipment.weapon);
-      const { dmg, crit } = dealDamage(stats.atk * stance.dmgMult * (trait.dmgMult ?? 1) * typeMult, facedDef, stats.critChance, critMult, stats.minDamagePct);
+      const { dmg, crit } = dealDamage(stats.damageMin, stats.damageMax, facedDef, stats.critChance, critMult, stats.minDamagePct, stance.dmgMult * (trait.dmgMult ?? 1) * typeMult);
       if (stance.bleed || trait.alwaysBleed) applyBleed(state, m, stats.atk);
       // No heal on kill — the Lifestone (respawn) is how you recover. Skills (Healing,
       // Cooking, Life Magic) will add in-fight recovery later.
@@ -812,7 +821,12 @@ export function tickCombat(state, dt) {
           (stats.resistanceBonus[attacker.dmgType] || 0)
       );
 
-      const { dmg: rawDmg } = dealDamage(attacker.atk, stats.def, 0);
+      // Armour is what you're wearing, and it only stops something solid. An
+      // acid drudge goes straight through a breastplate; Mitigation is what
+      // answers that (and is applied just below).
+      const physical = !isMagicDamageType(attacker.dmgType);
+      const facedByAttacker = stats.def + (physical ? stats.armour : 0);
+      const { dmg: rawDmg } = dealDamage(attacker.atk, attacker.atk, facedByAttacker, 0);
       const dmg = Math.max(1, Math.round(rawDmg * (1 - mitigation / 100)));
       h.hp -= dmg;
       trainAttribute(state, 'end', HIT_TAKEN_END_XP);

@@ -68,7 +68,19 @@ const BUILDING_TEMPLATES = [
     // Deliberately the steepest curve in town: a generalist that keeps pace with
     // the specialists has to be paid for like one of each.
     upgrade: { pyreals: 1400, growth: 2.1, materialKind: 'metal', materials: 4 },
-    stock: { slots: SLOTS, min: 4, max: 6, perLevel: 1, luckPerLevel: 4 },
+    // A general store is a shelf, not a warehouse: a couple of weapons, a couple
+    // of pieces of armour, a couple of trinkets. `categories` rolls a small count
+    // per kind rather than a big pile drawn from every slot at once, which is
+    // what made it read as having one of everything.
+    stock: {
+      categories: [
+        { slots: ['weapon'], min: 2, max: 3 },
+        { slots: [...ARMOR_SLOTS, 'shield'], min: 2, max: 3 },
+        { slots: [...UNDERCLOTHING_SLOTS, 'amulet', 'bracelet', 'ring'], min: 2, max: 3 },
+      ],
+      perLevel: 1,
+      luckPerLevel: 4,
+    },
     // Neither is guaranteed: the Store is where you find out a potion exists and
     // learn to resent its supply, which is the argument for opening a Physician.
     sells: [

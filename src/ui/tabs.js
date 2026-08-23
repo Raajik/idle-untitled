@@ -50,7 +50,7 @@ import { charges, canAutoHeal, isAutoDrink, upkeepConsumables, STAMINA_PER_HP } 
 import { vitaePct, atMaxVitae, xpToClearStack, VITAE_PER_STACK, MAX_VITAE_PCT } from '../game/vitae.js';
 import { ACHIEVEMENTS } from '../data/achievements.js';
 import { availableShortcutsFrom, canJump } from '../game/shortcuts.js';
-import { getMaterial, materialsForSlot, MATERIALS, RENDING_MATERIALS, totalOfKind, heldOfKind, kindLabel } from '../data/materials.js';
+import { getMaterial, materialsForSlot, MATERIALS, RENDING_MATERIALS, totalOfKind, heldOfKind, kindLabel, materialKind, materialIcon } from '../data/materials.js';
 import { creatureArt } from './creatureArt.js';
 import { kindOf } from '../data/bestiary.js';
 import { TROPHIES } from '../data/trophies.js';
@@ -623,8 +623,8 @@ function stockHtml(state, buildingId, entry, filter = () => true) {
       const price = buyPrice(item);
       const spells = item.spells.map((sp) => sp.label).join(', ');
       return `<div class="item">
-        <div class="name rarity-${item.rarity}">${esc(item.name)} <span class="muted">[${item.rarity} ${item.slot}]</span></div>
-        <div class="stats">${item.power} power${spells ? ' · ' + esc(spells) : ''}</div>
+        <div class="name rarity-${item.rarity}"><span class="item-icon" title="${esc(slotLabel(item.slot))}">${itemIcon(item)}</span>${esc(item.name)}</div>
+        <div class="stats">${itemStatLine(item)}${spells ? ' · ' + esc(spells) : ''}</div>
         <div class="actions"><button class="btn" data-action="buy-item" data-arg="${buildingId}:${i}" ${state.pyreals >= price ? '' : 'disabled'}>Buy — ${fmt(price)}p</button></div>
       </div>`;
     })
@@ -676,16 +676,26 @@ function exchangeHtml(state, buildingId, entry) {
   const rows = entry.exchange
     .slice()
     .sort((a, b) => a.price - b.price)
-    .map(({ materialId, price }) => {
+    .map(({ materialId, price, stock }) => {
       const m = getMaterial(materialId);
       const held = state.materials[materialId] || 0;
-      return `<div class="upgrade-row">
-        <div><b>${esc(m ? m.name : materialId)}</b> <span class="muted">${fmt(held)} held</span></div>
-        <button class="btn small" data-action="buy-material" data-arg="${buildingId}:${materialId}" ${state.pyreals >= price ? '' : 'disabled'}>${fmt(price)}p each</button>
+      const kind = materialKind(materialId);
+      const left = stock === undefined ? null : stock;
+      const soldOut = left !== null && left <= 0;
+      // The kind icon is the point of the row: investment asks for "8 metal", so
+      // a material has to say what it counts as without a lookup elsewhere.
+      return `<div class="upgrade-row${soldOut ? ' spent' : ''}">
+        <div>
+          <span class="kind-icon" title="${esc(kindLabel(kind))}">${materialIcon(materialId)}</span>
+          <b>${esc(m ? m.name : materialId)}</b>
+          <span class="muted">${esc(kindLabel(kind))} · ${fmt(held)} held</span>
+          ${left !== null ? `<div class="desc">${soldOut ? 'Sold out until the next delivery.' : `${fmt(left)} in stock`}</div>` : ''}
+        </div>
+        <button class="btn small" data-action="buy-material" data-arg="${buildingId}:${materialId}" ${state.pyreals >= price && !soldOut ? '' : 'disabled'}>${fmt(price)}p each</button>
       </div>`;
     })
     .join('');
-  return `<p class="muted" style="margin-bottom:6px">Rates move every time the shelves turn over.</p>${rows}`;
+  return `<p class="muted" style="margin-bottom:6px">What came in on the last cart. Rates and stock both turn over with the shelves.</p>${rows}`;
 }
 
 function shopTabsHtml(state, buildingId, entry) {
@@ -1261,18 +1271,19 @@ function filterBtn(key, value, label, current) {
   return `<button class="btn small${current === value ? ' active' : ''}" data-action="set-inventory-filter" data-arg="${key}:${value}">${esc(label)}</button>`;
 }
 
+// What a piece of gear does, in the terms its own kind is measured in. One
+// place, so a shop shelf, an inventory row and a detail panel never disagree.
+export function itemStatLine(item) {
+  const damage = itemDamage(item);
+  if (damage) return `${damage.min}–${damage.max} damage`;
+  const armour = itemArmour(item);
+  if (armour) return `${armour} armour`;
+  return item.spells && item.spells.length ? 'enchantment only' : 'no innate stats';
+}
+
 function itemHtml(state, item, equipped) {
   const spells = item.spells.map((s) => s.label).join(', ');
-  const base =
-    item.slot === 'weapon'
-      ? `${item.power} ATK`
-      : isArmorSlot(item.slot)
-      ? `${item.power} armor value`
-      : item.slot === 'shield'
-      ? `${Math.floor(item.power * 0.5)} DEF`
-      : isUnderclothing(item.slot)
-      ? 'no armor value — worn for what is on it'
-      : `${item.power} power`;
+  const base = itemStatLine(item);
   let cmp = '';
   if (!equipped) {
     const cur = state.equipment[item.slot];
@@ -1285,8 +1296,10 @@ function itemHtml(state, item, equipped) {
         <button class="btn" data-action="equip" data-arg="${item.id}">Equip</button>
         <button class="btn" data-action="salvage-item" data-arg="${item.id}">Salvage</button>
       </div>`;
+  // The icon says what it is and the colour says how good it is, so "[Rare ring]"
+  // was the same two facts written out a second time.
   return `<div class="item">
-    <div class="name rarity-${item.rarity}">${esc(item.name)} <span class="muted">[${item.rarity} ${item.slot}]</span> ${cmp}</div>
+    <div class="name rarity-${item.rarity}"><span class="item-icon" title="${esc(slotLabel(item.slot))}">${itemIcon(item)}</span>${esc(item.name)} ${cmp}</div>
     <div class="stats">${base}${spells ? ' · ' + esc(spells) : ''}</div>
     ${action}</div>`;
 }
@@ -1300,10 +1313,12 @@ function slotCellHtml(state, { item, slot, equipped = false, selected = false, e
     const icon = slot ? slotIcon(slot) : '';
     return `<div class="${classes.join(' ')}"><span class="slot-icon">${icon}</span></div>`;
   }
-  const title = `${item.name} — ${item.rarity} ${item.slot}, ${item.power} power`;
+  const title = `${item.name} — ${item.rarity} ${slotLabel(item.slot)}, ${itemStatLine(item)}`;
+  const damage = itemDamage(item);
+  const corner = damage ? damage.max : itemArmour(item) || item.spells.length || '';
   return `<button class="${classes.join(' ')}" title="${esc(title)}" data-action="select-item" data-arg="${item.id}">
     <span class="slot-icon">${itemIcon(item)}</span>
-    <span class="slot-power">${item.power}</span>
+    <span class="slot-power">${corner}</span>
   </button>`;
 }
 

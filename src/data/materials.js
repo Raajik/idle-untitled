@@ -107,6 +107,30 @@ export const MATERIAL_KIND = {
   granite: 'stone', porcelain: 'stone', hematite: 'stone', malachite: 'stone',
 };
 
+// One glyph per kind, so a material says what it counts as at a glance. Building
+// investment asks for "8 metal" (see data/buildings.js), and knowing that copper
+// counts as metal shouldn't mean reading a table somewhere else.
+export const KIND_ICONS = {
+  metal: '\u2692',
+  wood: '\u{1F332}',
+  cloth: '\u{1F9F5}',
+  hide: '\u{1F43E}',
+  stone: '\u{1FAA8}',
+  gem: '\u{1F48E}',
+  rending: '\u25C8', // the rending gems, which are boss loot and never spendable
+};
+
+export function kindIcon(kind) {
+  return KIND_ICONS[kind] || '';
+}
+
+// The icon for a specific material, by what kind it counts as.
+export function materialIcon(id) {
+  const m = getMaterial(id);
+  if (m && m.category === 'rending') return KIND_ICONS.rending;
+  return kindIcon(materialKind(id));
+}
+
 export function materialKind(id) {
   // Anything not named above is a gem: the magic-item pool is almost entirely
   // stones-you-set rather than stones-you-build-with.

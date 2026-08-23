@@ -80,6 +80,10 @@ export function buyMaterial(state, buildingId, materialId) {
   const entry = state.buildings[buildingId];
   const offer = (entry.exchange || []).find((o) => o.materialId === materialId);
   if (!offer || state.pyreals < offer.price) return false;
+  // Limited stock: you can top up what you're short of, not buy your way past
+  // gathering entirely.
+  if (offer.stock !== undefined && offer.stock <= 0) return false;
+  if (offer.stock !== undefined) offer.stock -= 1;
 
   state.pyreals -= offer.price;
   state.materials[materialId] = (state.materials[materialId] || 0) + 1;

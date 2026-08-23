@@ -209,3 +209,73 @@ export function slotIcon(slot) {
 export function poiItemPower(avgMonsterAtk) {
   return Math.max(2, Math.round(avgMonsterAtk * 0.5));
 }
+
+// --- What a piece of gear is actually worth ---
+//
+// "Power" used to be one number that meant something different in every slot and
+// was never explained anywhere. Gear now carries the stat its own kind is
+// actually about:
+//
+//   weapons          a damage band, min to max. The band IS the damage roll (see
+//                    game/combat.js dealDamage), so a displayed "6-9" is what
+//                    the weapon really does rather than a label over an average.
+//   armour, shields  an Armour Value, subtracted from physical damage only.
+//                    Mitigation skills answer the elements; armour answers the
+//                    sword.
+//   clothing, jewelry  nothing innate at all. They are worth exactly the spells
+//                    on them, which is why they roll toward the top of their
+//                    rarity's spell count (see game/loot.js).
+//
+// Numbers are kept deliberately small. A Common weapon at the power a starting
+// dungeon produces should read like a weapon a person owns, not like a number
+// going up.
+
+// A weapon's average damage per point of power, and how wide its band is.
+const WEAPON_DAMAGE_PER_POWER = 0.9;
+const WEAPON_BAND = 0.3; // +/- this share of the average
+
+// Fists, when you have nothing better.
+export const UNARMED_DAMAGE = { min: 1, max: 3 };
+
+export function weaponDamageFor(power) {
+  const avg = Math.max(1, power * WEAPON_DAMAGE_PER_POWER);
+  const min = Math.max(1, Math.round(avg * (1 - WEAPON_BAND)));
+  const max = Math.max(min + 1, Math.round(avg * (1 + WEAPON_BAND)));
+  return { min, max };
+}
+
+// Armour is spread across ten slots, so one piece is a tenth of a suit.
+const ARMOUR_PER_POWER = 0.45;
+
+export function armourValueFor(slot, power) {
+  if (slot === 'shield') return Math.max(1, Math.round(power * ARMOUR_PER_POWER * 1.6));
+  return Math.max(1, Math.round(power * ARMOUR_PER_POWER));
+}
+
+// Reading a piece of gear's stats, whether or not it was generated with them.
+//
+// Items used to carry a single `power` number and nothing else. Everything in an
+// existing save is still shaped that way, so rather than rewriting saves these
+// derive the real stat from the old scale on the fly — which is exactly right,
+// since `power` WAS that scale. Anything generated since carries its stats
+// directly and these just hand them back.
+export function itemDamage(item) {
+  if (!item) return null;
+  if (item.damage) return item.damage;
+  if (slotKind(item.slot) === 'weapon' && item.power) return weaponDamageFor(item.power);
+  return null;
+}
+
+export function itemArmour(item) {
+  if (!item) return 0;
+  if (typeof item.armour === 'number') return item.armour;
+  const kind = slotKind(item.slot);
+  if (kind === 'weapon' || isSpellOnlySlot(item.slot)) return 0;
+  return item.power ? armourValueFor(item.slot, item.power) : 0;
+}
+
+// Slots whose only worth is what's written on them.
+export function isSpellOnlySlot(slot) {
+  const kind = slotKind(slot);
+  return UNDERCLOTHING_SLOTS.includes(kind) || ['amulet', 'bracelet', 'ring'].includes(kind);
+}

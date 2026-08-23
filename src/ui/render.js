@@ -519,6 +519,15 @@ export function createRenderer(state, { onImport }) {
     return !!loaded;
   }
 
+  // Splits a "<buildingId>:<thing>" data-arg. Building ids contain a colon of
+  // their own now (holtburg:general-store), so a plain split(':') tore them in
+  // half and handed Number() a shop name — which silently broke every Buy button
+  // in the game. Split at the LAST colon, which is always the separator.
+  function splitBuildingArg(arg) {
+    const at = String(arg).lastIndexOf(':');
+    return at === -1 ? [arg, ''] : [arg.slice(0, at), arg.slice(at + 1)];
+  }
+
   // Event delegation
   document.getElementById('app').addEventListener('click', (e) => {
     const tabBtn = e.target.closest('[data-tab]');
@@ -591,17 +600,17 @@ export function createRenderer(state, { onImport }) {
       case 'set-shop-tab': state.ui.activeShopTab = arg; break;
       case 'toggle-section': state.ui.collapsed[arg] = !state.ui.collapsed[arg]; break;
       case 'buy-consumable': {
-        const [buildingId, id] = arg.split(':');
+        const [buildingId, id] = splitBuildingArg(arg);
         buyConsumable(state, buildingId, id);
         break;
       }
       case 'buy-material': {
-        const [buildingId, materialId] = arg.split(':');
+        const [buildingId, materialId] = splitBuildingArg(arg);
         buyMaterial(state, buildingId, materialId);
         break;
       }
       case 'buy-item': {
-        const [buildingId, idx] = arg.split(':');
+        const [buildingId, idx] = splitBuildingArg(arg);
         buyItem(state, buildingId, Number(idx));
         break;
       }

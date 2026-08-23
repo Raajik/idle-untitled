@@ -57,12 +57,20 @@ test('a second ring fills the other hand rather than replacing the first', () =>
 
 test('once both hands are full, a ring displaces the worse of the two', () => {
   const s = createInitialState();
-  const weak = { id: 1, slot: 'ring', power: 5, spells: [], rarity: 'Common', name: 'Jet Loop' };
-  const strong = { id: 2, slot: 'ring', power: 50, spells: [], rarity: 'Rare', name: 'Opal Signet' };
+  // Jewelry has no innate stats now, so a ring is worth exactly its spells.
+  const ringWith = (id, value, name) => ({
+    id,
+    slot: 'ring',
+    spells: value ? [{ id: 'attribute', level: 1, value, meta: { attr: 'end' }, label: 'Endurance' }] : [],
+    rarity: 'Common',
+    name,
+  });
+  const weak = ringWith(1, 2, 'Jet Loop');
+  const strong = ringWith(2, 20, 'Opal Signet');
   s.equipment.ring1 = strong;
   s.equipment.ring2 = weak;
 
-  const better = { id: 3, slot: 'ring', power: 80, spells: [], rarity: 'Epic', name: 'Gold Band' };
+  const better = ringWith(3, 40, 'Gold Band');
   assert.equal(bestSlotFor(s, 'ring'), 'ring2', 'should target the weaker hand');
   assert.equal(maybeAutoEquip(s, better), true);
   assert.equal(s.equipment.ring1, strong);
@@ -80,22 +88,25 @@ test('items are named for what they are made of', () => {
   }
 });
 
-test('a full set of armor is worth about what the single armor slot used to be', () => {
-  // Ten pieces sharing one slot's worth, rather than ten times it.
+test('armour adds up across the suit, and only answers steel', () => {
+  // Every piece carries its own Armour Value now, so a full set really is worth
+  // ten pieces rather than a tenth each. What keeps that from running away is
+  // that armour does nothing at all against the elements.
+  const piece = (slot) => ({ id: 1, slot, armour: 6, spells: [], rarity: 'Common', name: 'Iron Piece' });
   const one = createInitialState();
-  one.equipment.chest = { id: 1, slot: 'chest', power: 90, spells: [], rarity: 'Common', name: 'Iron Cuirass' };
+  one.equipment.chest = piece('chest');
   const full = createInitialState();
-  for (const slot of ARMOR_SLOTS) {
-    full.equipment[slot] = { id: 1, slot, power: 90, spells: [], rarity: 'Common', name: 'Iron Piece' };
-  }
+  for (const slot of ARMOR_SLOTS) full.equipment[slot] = piece(slot);
+
   const bare = derivedStats(createInitialState());
   const oneStats = derivedStats(one);
   const fullStats = derivedStats(full);
 
-  assert.ok(fullStats.def > oneStats.def, 'a full set should beat a single piece');
-  // But not by ten times: the whole set is worth roughly one old slot.
-  assert.ok(fullStats.def - bare.def <= 90, `a full set gave ${fullStats.def - bare.def} DEF from 90-power pieces`);
-  assert.ok(fullStats.maxHp - bare.maxHp <= 100, `a full set gave ${fullStats.maxHp - bare.maxHp} HP`);
+  assert.equal(bare.armour, 0, 'a naked hero has none');
+  assert.equal(oneStats.armour, 6, 'one piece is worth its own value');
+  assert.equal(fullStats.armour, 6 * ARMOR_SLOTS.length, 'and a suit is worth all of them');
+  // Armour is kept apart from DEF, which is the body's own toughness.
+  assert.equal(fullStats.def, bare.def, 'wearing armour is not the same as being tough');
 });
 
 test('underclothing turns nothing but still carries enchantment', () => {
@@ -110,6 +121,7 @@ test('underclothing turns nothing but still carries enchantment', () => {
     const before = derivedStats(bare);
     const after = derivedStats(clothed);
     assert.equal(after.def, before.def, `${slot} should add no defense`);
+    assert.equal(after.armour, before.armour, `${slot} should add no armour`);
     assert.equal(after.maxHp, before.maxHp, `${slot} should add no health`);
   }
 });

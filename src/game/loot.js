@@ -1,6 +1,18 @@
 // Loot: drop rolls, item generation, rarity rolls, inventory/equip helpers.
 
-import { SLOTS, RARITIES, BASE_NAMES, poiItemPower, equipSlotsForKind, weaponClass } from '../data/items.js';
+import {
+  SLOTS,
+  RARITIES,
+  BASE_NAMES,
+  poiItemPower,
+  equipSlotsForKind,
+  weaponClass,
+  weaponDamageFor,
+  armourValueFor,
+  isSpellOnlySlot,
+  itemDamage,
+  itemArmour,
+} from '../data/items.js';
 import {
   getMaterial,
   materialsForSlot,
@@ -78,7 +90,11 @@ export function generateItem(powerLevel, { luckPct = 0, rarityBoost = 0, forceSl
   // Uncommon always has at least one spell and a Legendary always has at least
   // four. How GOOD they are is the level, which depth and region still gate.
   const [minSpells, maxSpells] = rarity.spells;
-  const wanted = randInt(minSpells, maxSpells);
+  // Clothing and jewelry have no innate stats — they're worth exactly what's
+  // written on them — so they roll toward the top of their rarity's band rather
+  // than the middle. A Rare ring with two spells and nothing else was a
+  // disappointment in a way a Rare breastplate never was.
+  const wanted = isSpellOnlySlot(slot) ? Math.max(minSpells, maxSpells - (Math.random() < 0.35 ? 1 : 0)) : randInt(minSpells, maxSpells);
   const ceiling = spellLevelCeiling(depth, regionIdx);
   const spells = [];
   const taken = new Set();
@@ -112,12 +128,15 @@ export function generateItem(powerLevel, { luckPct = 0, rarityBoost = 0, forceSl
     id: nextItemId++,
     slot,
     rarity: rarity.name,
-    power,
+    power, // kept as the generator's internal scale; nothing user-facing reads it
     spells,
     name: materialName ? `${materialName} ${base}` : base,
     baseType: slot === 'weapon' ? base.toLowerCase() : undefined,
     material,
   };
+  // The stat this kind of gear is actually about (see data/items.js).
+  if (slot === 'weapon') item.damage = weaponDamageFor(power);
+  else if (!isSpellOnlySlot(slot)) item.armour = armourValueFor(slot, power);
   return item;
 }
 
@@ -233,11 +252,19 @@ export function rollTrophies(state, monsterDef) {
 }
 
 // Rough item "score" for auto-equip and comparison.
+// Rough "is this better" number for auto-equip and the comparison arrows. Reads
+// the stats a piece actually has rather than the generator's internal scale, so
+// a spell-only ring is judged on its spells and a weapon on its damage.
 export function itemScore(item) {
   if (!item) return 0;
-  let score = item.power;
-  for (const s of item.spells) score += s.value * 0.5;
-  return score;
+  let score = 0;
+  const damage = itemDamage(item);
+  if (damage) score += (damage.min + damage.max) / 2;
+  score += itemArmour(item) * 1.5;
+  for (const s of item.spells || []) score += s.value * 0.5;
+  // A spell-only piece is worth exactly its spells, and an empty one really is
+  // worth nothing — but it should still be worth SOMETHING to a shop.
+  return Math.max(score, item.power ? 1 : 0);
 }
 
 // Where an item of this kind should go: an empty instance if there is one,

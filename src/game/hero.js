@@ -8,7 +8,7 @@
 
 import { ENLIGHTENMENT_UPGRADES } from '../data/enlightenment.js';
 import { heroBuildingBonuses } from '../data/buildings.js';
-import { weaponClass, isArmorSlot, slotKind, skillForWeapon, ARMOR_SLOTS } from '../data/items.js';
+import { weaponClass, isArmorSlot, slotKind, skillForWeapon, itemDamage, itemArmour, UNARMED_DAMAGE, ARMOR_SLOTS } from '../data/items.js';
 import { achievementBonuses } from '../data/achievements.js';
 import { spellBonusKeys } from '../data/spells.js';
 import { vitaeMultiplier, workOffVitae } from './vitae.js';
@@ -54,6 +54,7 @@ export function levelFromTotalXp(xp) {
 export function getBonuses(state) {
   const b = {
     atkPct: 0, atkFlat: 0, hpFlat: 0, hpPct: 0, pyrealsPct: 0, xpPct: 0, luckPct: 0,
+    weaponMin: 0, weaponMax: 0, magicMin: 0, magicMax: 0, armour: 0,
     weaponAtk: 0, armorDef: 0, armorFlat: 0, maxManaFlat: 0, startStats: 0,
     hpRegenFlat: 0, staminaRegenFlat: 0, manaRegenFlat: 0,
     magicAtkFlat: 0, hitChancePct: 0, attackSpeedPct: 0, manaCostPct: 0, minDamagePct: 0,
@@ -67,21 +68,22 @@ export function getBonuses(state) {
     const item = state.equipment[equipSlot];
     if (!item) continue;
     const slot = slotKind(equipSlot);
-    // A weapon's power feeds whatever it's actually for: a blade or a bow sharpens
-    // your ATK, a wand or an orb sharpens what you channel through it. Holding a
-    // casting device in melee stance is therefore holding nothing much at all.
-    if (slot === 'weapon') {
-      if (weaponClass(item.baseType) === 'magic') b.magicAtkFlat += item.power;
-      else b.weaponAtk += item.power;
+    // A weapon's damage band feeds whatever it's actually for: a blade or a bow
+    // is the damage you swing, a wand or an orb is the damage you channel.
+    // Holding a casting device in melee stance is therefore holding nothing.
+    const damage = itemDamage(item);
+    if (slot === 'weapon' && damage) {
+      if (weaponClass(item.baseType) === 'magic') {
+        b.magicMin += damage.min;
+        b.magicMax += damage.max;
+      } else {
+        b.weaponMin += damage.min;
+        b.weaponMax += damage.max;
+      }
     }
-    // Nine armor slots share what one used to carry, so a full set lands roughly
-    // where a single piece did rather than nine-timesing it. A shield is one
-    // thing you either have or don't, so it keeps its own larger share.
-    if (isArmorSlot(slot)) {
-      b.armorDef += item.power * ARMOR_DEF_PER_POWER;
-      b.hpFlat += item.power * ARMOR_HP_PER_POWER;
-    }
-    if (slot === 'shield') b.armorDef += Math.floor(item.power * 0.5);
+    // Armour is one number that means one thing: how much of a physical blow
+    // never reaches you. Ten pieces and a shield add up to a suit.
+    b.armour += itemArmour(item);
     for (const spell of item.spells) {
       for (const key of spellBonusKeys(spell)) {
         if (key.includes('.')) {
@@ -152,9 +154,23 @@ export function derivedStats(state) {
   // same as having earned the points.
   const attr = (id) => h[id] + (b.attrBonus[id] || 0);
   const maxHp = Math.floor((21.5 + attr('end') * 3.5 + b.hpFlat) * (1 + b.hpPct / 100) * vitae);
-  const atk = Math.floor((3 + attr('str') * 1.5 + b.weaponAtk + b.atkFlat) * (1 + b.atkPct / 100) * vitae);
-  const magicAtk = Math.floor((3 + attr('focus') * 1.5 + b.magicAtkFlat) * vitae); // Magic's own damage baseline, off Focus not Strength
-  const def = Math.floor((attr('end') * 0.5 + b.armorDef + b.armorFlat) * vitae);
+  // Damage is a band, not a point. The weapon's own min/max IS the roll (see
+  // game/combat.js dealDamage), so what an item says it does is what it does.
+  // Bare-handed you swing UNARMED_DAMAGE.
+  const bodily = 3 + attr('str') * 1.5;
+  const scale = (1 + b.atkPct / 100) * vitae;
+  const hasWeapon = b.weaponMax > 0;
+  const damageMin = Math.max(1, Math.floor((bodily + (hasWeapon ? b.weaponMin : UNARMED_DAMAGE.min) + b.atkFlat) * scale));
+  const damageMax = Math.max(damageMin + 1, Math.floor((bodily + (hasWeapon ? b.weaponMax : UNARMED_DAMAGE.max) + b.atkFlat) * scale));
+  const atk = Math.floor((damageMin + damageMax) / 2); // the average, for display and the offline sim
+  const magicBase = 3 + attr('focus') * 1.5;
+  const magicMin = Math.max(1, Math.floor((magicBase + b.magicMin) * vitae));
+  const magicMax = Math.max(magicMin + 1, Math.floor((magicBase + b.magicMax) * vitae));
+  const magicAtk = Math.floor((magicMin + magicMax) / 2);
+  // Endurance is the body's own toughness; armour is what you're wearing. They
+  // are kept apart because armour only answers physical damage.
+  const def = Math.floor((attr('end') * 0.5 + b.armorFlat) * vitae);
+  const armour = Math.floor((b.armour + b.armorDef) * vitae);
   const spd = 1 + attr('quick') * 0.04; // attacks per second
   // Crit is earned, not bought. Nothing in the game grants crit chance directly —
   // no spell, no tinker, no shop perk. It scales off the rank of whatever weapon
@@ -166,8 +182,13 @@ export function derivedStats(state) {
   return {
     maxHp,
     atk,
+    damageMin,
+    damageMax,
     magicAtk,
+    magicMin,
+    magicMax,
     def,
+    armour,
     spd,
     critChance,
     maxStamina,

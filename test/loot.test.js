@@ -74,11 +74,30 @@ test('later waves drop more powerful gear than wave 1', () => {
   assert.ok(avgPowerAtWave(10) > avgPowerAtWave(1));
 });
 
-test('itemScore ranks power and spells', () => {
-  const plain = { power: 10, spells: [] };
-  const fancy = { power: 10, spells: [{ id: 'atkPct', value: 10 }] };
-  assert.ok(itemScore(fancy) > itemScore(plain));
+test('itemScore reads the stat a piece actually has', () => {
+  // Weapons are judged on damage, armour on its value, and jewelry — which has
+  // no innate stats at all — purely on what is written on it.
+  const sword = { slot: 'weapon', damage: { min: 8, max: 12 }, spells: [] };
+  const betterSword = { slot: 'weapon', damage: { min: 14, max: 18 }, spells: [] };
+  assert.ok(itemScore(betterSword) > itemScore(sword));
+
+  const chest = { slot: 'chest', armour: 6, spells: [] };
+  assert.ok(itemScore(chest) > 0);
+
+  const plainRing = { slot: 'ring', spells: [] };
+  const spelledRing = { slot: 'ring', spells: [{ id: 'atkPct', value: 10 }] };
+  assert.ok(itemScore(spelledRing) > itemScore(plainRing), 'a ring is worth its spells');
+
   assert.equal(itemScore(null), 0);
+});
+
+test('an item saved before stats existed is still worth what it was', () => {
+  // Everything in an existing save carries only `power`. Rather than rewriting
+  // saves, the stats are derived from that old scale on the fly.
+  const oldSword = { slot: 'weapon', power: 20, spells: [] };
+  const oldChest = { slot: 'chest', power: 20, spells: [] };
+  assert.ok(itemScore(oldSword) > 0, 'an old weapon still has damage');
+  assert.ok(itemScore(oldChest) > 0, 'an old breastplate still has armour');
 });
 
 test('every slot and weapon base type has an inventory icon', () => {

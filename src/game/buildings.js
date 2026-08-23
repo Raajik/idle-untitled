@@ -55,11 +55,16 @@ export function rollBuildingStock(state, building, level) {
   // A generalist's shelves grow with investment where a specialist's don't —
   // that steeper cost buys quantity and quality, not just a faster caravan.
   const grown = (level - 1) * (spec.perLevel || 0);
-  const count = randInt(spec.min + grown, spec.max + grown);
   const luckPct = (level - 1) * (spec.luckPerLevel || 0);
+  // Either a flat pool (a specialist deals in one thing) or a few per category
+  // (a generalist carries a little of each rather than a pile of anything).
+  const groups = spec.categories || [{ slots: spec.slots, min: spec.min, max: spec.max, weaponFilter: spec.weaponFilter }];
   const items = [];
-  for (let i = 0; i < count; i++) {
-    items.push(rollForSlot(state, level, pick(spec.slots), spec.weaponFilter, luckPct));
+  for (const group of groups) {
+    const count = randInt(group.min + grown, group.max + grown);
+    for (let i = 0; i < count; i++) {
+      items.push(rollForSlot(state, level, pick(group.slots), group.weaponFilter ?? spec.weaponFilter, luckPct));
+    }
   }
   return items;
 }
@@ -70,11 +75,25 @@ export function rollBuildingStock(state, building, level) {
 const EXCHANGE_BASE_PRICE = 90;
 const EXCHANGE_SWING = 0.55; // +/- this share of the base
 
+// How many KINDS of material are on the counter, and how much of each. A general
+// store has what came in on the last cart, not the contents of the earth.
+const EXCHANGE_KINDS_BASE = 3;
+const EXCHANGE_QTY_MIN = 2;
+const EXCHANGE_QTY_MAX = 10;
+
 function rollExchangeRates(level) {
   const invested = 1 - Math.min(0.4, (level - 1) * 0.04); // investing narrows the markup
-  return MATERIALS.map((m) => ({
+  const kinds = EXCHANGE_KINDS_BASE + (level - 1);
+  // Never rending gems: those are boss loot with one use, and a shop that sold
+  // them would undo the reason to finish a dungeon.
+  const sellable = MATERIALS.filter((m) => m.category !== 'rending');
+  const shuffled = [...sellable].sort(() => Math.random() - 0.5).slice(0, kinds);
+  return shuffled.map((m) => ({
     materialId: m.id,
     price: Math.max(5, Math.round(EXCHANGE_BASE_PRICE * (1 + (Math.random() * 2 - 1) * EXCHANGE_SWING) * invested)),
+    // Limited stock, which is the point: you can't simply buy your way past
+    // gathering, only top up what you're short of.
+    stock: randInt(EXCHANGE_QTY_MIN, EXCHANGE_QTY_MAX + (level - 1) * 2),
   }));
 }
 

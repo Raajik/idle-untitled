@@ -21,7 +21,7 @@ import {
   rotationRemaining,
 } from '../src/game/buildings.js';
 import { derivedStats } from '../src/game/hero.js';
-import { totalOfKind } from '../src/data/materials.js';
+import { totalOfKind, RENDING_MATERIALS } from '../src/data/materials.js';
 
 // The Town Hall is the only thing standing when you arrive; its tour is what
 // opens the General Store.
@@ -105,20 +105,42 @@ test('the General Store cannot be bought open, only toured into', () => {
   assert.equal(isUnlocked(s, 'holtburg:general-store'), false);
 });
 
-test('the General Store stocks a little of everything, and more as you invest', () => {
+test('the General Store keeps a shelf, not a warehouse', () => {
+  // A couple of each kind rather than a big pile drawn from every slot at once,
+  // which is what made it read as having one of everything.
   const s = townWithStore();
   const spec = getBuilding('holtburg:general-store').stock;
-  const atLevel1 = s.buildings['holtburg:general-store'].stock.length;
-  assert.ok(atLevel1 >= spec.min && atLevel1 <= spec.max, `stocked ${atLevel1}`);
+  const entry = s.buildings['holtburg:general-store'];
+  const min = spec.categories.reduce((n, c) => n + c.min, 0);
+  const max = spec.categories.reduce((n, c) => n + c.max, 0);
+  assert.ok(entry.stock.length >= min && entry.stock.length <= max, `stocked ${entry.stock.length}, wanted ${min}-${max}`);
+  assert.ok(entry.stock.length <= 9, 'a fresh general store should be small');
   assert.ok(rotationRemaining(s, 'holtburg:general-store') > 0);
 
-  s.buildings['holtburg:general-store'].level = MAX_BUILDING_LEVEL;
-  s.buildings['holtburg:general-store'].rotatesAt = 0;
+  // Every category it deals in shows up.
+  const weapons = entry.stock.filter((it) => it.slot === 'weapon').length;
+  assert.ok(weapons >= 2 && weapons <= 3, `${weapons} weapons on the shelf`);
+
+  entry.level = MAX_BUILDING_LEVEL;
+  entry.rotatesAt = 0;
   tickBuildings(s);
   assert.ok(
-    s.buildings['holtburg:general-store'].stock.length > spec.max,
+    s.buildings['holtburg:general-store'].stock.length > max,
     'a fully grown generalist should carry more than a fresh one could'
   );
+});
+
+test('materials are a limited counter, not an infinite tap', () => {
+  const s = townWithStore();
+  const entry = s.buildings['holtburg:general-store'];
+  assert.ok(entry.exchange.length <= 4, `${entry.exchange.length} kinds on a fresh counter`);
+  for (const offer of entry.exchange) {
+    assert.ok(offer.stock >= 2 && offer.stock <= 10, `${offer.materialId} had ${offer.stock} in stock`);
+  }
+  // And never a rending gem, which is boss loot with exactly one use.
+  for (const offer of entry.exchange) {
+    assert.ok(!RENDING_MATERIALS.some((m) => m.id === offer.materialId), `${offer.materialId} should not be for sale`);
+  }
 });
 
 test('the General Store deals in consumables and raw materials; specialists do not', () => {
