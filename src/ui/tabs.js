@@ -221,6 +221,23 @@ function vitalTextClass(effect) {
   return '';
 }
 
+// A panel you can fold away. The Battle tab stacks travel, town, the fight and
+// the log all at once, and most of that is navigation you only touch between
+// runs -- so each section remembers whether you left it open. A folded header
+// still carries a summary, so closing something never costs you the information,
+// only the space.
+function section(state, id, title, body, { summary = '', defaultOpen = true } = {}) {
+  const open = state.ui.collapsed[id] === undefined ? defaultOpen : !state.ui.collapsed[id];
+  return `<div class="panel section${open ? '' : ' folded'}">
+    <button class="section-head" data-action="toggle-section" data-arg="${id}">
+      <span class="caret">${open ? '\u25be' : '\u25b8'}</span>
+      <h2>${title}</h2>
+      ${summary ? `<span class="section-summary muted">${esc(summary)}</span>` : ''}
+    </button>
+    ${open ? `<div class="section-body">${body}</div>` : ''}
+  </div>`;
+}
+
 // Everything you can keep running or keep drinking: the three self-buffs, the
 // automation toggles they and the Healing Kit unlock, and whatever is in your
 // pack. Lives next to the vitals because that's what all of it is for.
@@ -265,12 +282,24 @@ function upkeepHtml(state) {
     : '';
 
   if (!spellRows && !packRows && !autoHealRow) return '';
-  return `<div class="panel">
-    <h2>Upkeep</h2>
-    ${autoHealRow}
-    ${spellRows}
-    ${packRows}
-  </div>`;
+  const running = state.buffs.length;
+  const kit = charges(state, 'healing-kit');
+  const summary = [
+    running ? `${running} running` : 'nothing running',
+    state.settings.autoHeal && kit ? 'auto-heal on' : null,
+  ]
+    .filter(Boolean)
+    .join(' \u00b7 ');
+  return section(
+    state,
+    'upkeep',
+    'Upkeep',
+    `<div class="actions" style="margin-bottom:8px">${meditateButtonHtml(state)}</div>
+     ${autoHealRow}
+     ${spellRows}
+     ${packRows}`,
+    { summary, defaultOpen: false }
+  );
 }
 
 // How a monster is announced. The level is appended only when there is one —
@@ -517,6 +546,9 @@ function buildingPanelHtml(state) {
 
 // The vitals + Meditate control shown wherever resting matters. Meditation is the
 // only way to recover outside a fight, so it lives next to whatever spends vitals.
+// Vitals plus the Meditate control. Only the Lifestone site draws this on its
+// own now; everywhere else the vitals live in the combat panel and the Meditate
+// button lives in Upkeep, rather than being repeated in a third place.
 function restHtml(state) {
   const d = derivedStats(state);
   const h = state.hero;
@@ -642,7 +674,14 @@ export function battleTab(state) {
         return travelBtn + jumpBtn;
       })
       .join('');
-    poiSection = `<div class="panel"><h2>${esc(region.name)} &gt; Points of Interest</h2><div class="tile-list">${poiTiles}</div></div>`;
+    const here = state.location.poiId ? getPoiById(state.location.poiId) : null;
+    poiSection = section(
+      state,
+      'pois',
+      `${esc(region.name)} &gt; Points of Interest`,
+      `${here ? '' : '<p class="muted" style="margin-bottom:6px">Pick a point of interest to start hunting.</p>'}<div class="tile-list">${poiTiles}</div>`,
+      { summary: here ? `at ${here.name}` : 'in town' }
+    );
 
     if (!state.location.poiId) {
       const buildingTiles = buildingsForRegion(region.id)
@@ -661,8 +700,15 @@ export function battleTab(state) {
           return `<button class="${cls}" data-action="open-building" data-arg="${building.id}">${esc(building.name)}${sub}</button>`;
         })
         .join('');
-      townSection = `<div class="panel"><h2>Town — ${esc(region.name)}</h2><div class="tile-list">${buildingTiles}</div>${buildingPanelHtml(state)}</div>
-        <div class="panel"><h2>Rest</h2>${restHtml(state)}</div>`;
+      const open = buildingsForRegion(region.id).filter((b) => (state.buildings[b.id] || {}).level > 0).length;
+      const total = buildingsForRegion(region.id).length;
+      townSection = section(
+        state,
+        'town',
+        `Town — ${esc(region.name)}`,
+        `<div class="tile-list">${buildingTiles}</div>${buildingPanelHtml(state)}`,
+        { summary: `${open} of ${total} open for business` }
+      );
     }
   }
 
@@ -672,7 +718,9 @@ export function battleTab(state) {
     combatPanel = `<div class="panel"><h2>On the Road</h2>
       <p class="muted">Walking to ${esc(label)}... <span id="travel-remaining">${formatDuration(travel.remaining)}</span> remaining.</p></div>`;
   } else if (!state.location.poiId) {
-    combatPanel = `<div class="panel"><h2>Town</h2><p class="muted">Pick a point of interest to start hunting.</p></div>`;
+    // Standing in town needs no panel of its own — the Town section is right
+    // there, and the Points of Interest list carries the nudge to go fight.
+    combatPanel = '';
   } else {
     const poi = getPoiById(state.location.poiId);
     if (isSite(poi)) {
@@ -683,13 +731,26 @@ export function battleTab(state) {
     }
   }
 
+  // The fight itself is never foldable -- it's the thing you came to watch.
+  // Everything around it is travel and housekeeping, and starts folded once
+  // you're somewhere, so the default view is the fight and the log.
+  const away = !!state.location.poiId;
+  const regionSummary = state.location.regionId
+    ? getRegion(state.location.regionId).name
+    : travel
+    ? 'on the road'
+    : 'nowhere yet';
+
   return `
-    <div class="panel"><h2>Regions</h2><div class="tile-list">${regionTiles}</div></div>
+    ${section(state, 'regions', 'Regions', `<div class="tile-list">${regionTiles}</div>`, {
+      summary: regionSummary,
+      defaultOpen: !state.location.regionId,
+    })}
     ${poiSection}
     ${townSection}
     ${combatPanel}
     ${upkeepHtml(state)}
-    <div class="panel"><h2>Combat Log</h2><div class="log" id="combat-log">${logHtml(state)}</div></div>`;
+    ${section(state, 'log', 'Combat Log', `<div class="log" id="combat-log">${logHtml(state)}</div>`)}`;
 }
 
 // --- Hero / Attributes ---

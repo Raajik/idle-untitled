@@ -59,7 +59,12 @@ function battleStructureKey(state) {
   // Upkeep rows change between "Cast" and a countdown as they come and go.
   const buffKey = state.buffs.map((b) => b.id).join(',');
   const engaged = state.monsters.length;
-  return `${state.onboarding.step}|${t ? t.kind + ':' + t.id : ''}|${state.location.regionId}|${state.location.poiId}|${tutorialMonster}|${buildingKey}|${state.meditating ? 'med' : ''}|${buffKey}|${engaged}`;
+  // Folding a section adds and removes whole panels, so it's part of the shape.
+  const folded = Object.keys(state.ui.collapsed)
+    .filter((k) => state.ui.collapsed[k])
+    .sort()
+    .join(',');
+  return `${state.onboarding.step}|${t ? t.kind + ':' + t.id : ''}|${state.location.regionId}|${state.location.poiId}|${tutorialMonster}|${buildingKey}|${state.meditating ? 'med' : ''}|${buffKey}|${engaged}|${folded}`;
 }
 
 function toast(text) {
@@ -454,6 +459,7 @@ export function createRenderer(state, { onImport }) {
       case 'invest-building': investInBuilding(state, arg); break;
       case 'take-tour': takeTour(state, arg); break;
       case 'set-shop-tab': state.ui.activeShopTab = arg; break;
+      case 'toggle-section': state.ui.collapsed[arg] = !state.ui.collapsed[arg]; break;
       case 'buy-consumable': {
         const [buildingId, id] = arg.split(':');
         buyConsumable(state, buildingId, id);

@@ -151,6 +151,7 @@ export function createInitialState() {
       activeTab: 'battle',
       activeBuilding: null, // which building panel is expanded in the Battle tab's town view
       activeShopTab: 'weapons', // which shelf of an open shop you're looking at
+      collapsed: {}, // sectionId -> true when folded away (see `section` in ui/tabs.js)
       inventoryFilter: { slot: 'all', rarity: 'all', spellId: 'all' },
       selectedItemId: null, // which slot in the Inventory grid is open in the detail panel
     },

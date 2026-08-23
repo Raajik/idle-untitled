@@ -396,6 +396,29 @@ button.btn.primary { border-color: var(--accent); color: var(--accent); }
 .slot-detail { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 .doll-slot .slot-name { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); margin-top: 3px; }
 
+/* Folding sections (Battle tab). The header is the whole click target, and a
+   folded one still shows a summary so closing it costs space, not information. */
+.panel.section { padding: 0; }
+.section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+.section-head:hover h2 { color: var(--accent); }
+.section-head h2 { margin: 0; }
+.section-head .caret { color: var(--text-dim); font-size: 11px; line-height: 1.6; }
+.section-summary { font-size: 11px; margin-left: auto; }
+.panel.section .section-body { padding: 0 14px 12px; }
+.panel.section.folded .section-head { padding-bottom: 12px; }
+
 /* Stat rows */
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px 18px; }
 .stat-row { display: flex; justify-content: space-between; border-bottom: 1px dotted var(--border); padding: 2px 0; }
