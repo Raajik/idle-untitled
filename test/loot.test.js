@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateItem, itemScore, equipItem, maybeAutoEquip, rollDrop } from '../src/game/loot.js';
 import { createInitialState } from '../src/game/state.js';
-import { SLOTS, RARITIES } from '../src/data/items.js';
+import { SLOTS, RARITIES, BASE_NAMES, ITEM_ICONS, itemIcon, slotIcon } from '../src/data/items.js';
 
 test('generateItem produces valid items', () => {
   for (let i = 0; i < 100; i++) {
@@ -72,4 +72,18 @@ test('itemScore ranks power and spells', () => {
   const fancy = { power: 10, spells: [{ id: 'atkPct', value: 10 }] };
   assert.ok(itemScore(fancy) > itemScore(plain));
   assert.equal(itemScore(null), 0);
+});
+
+test('every slot and weapon base type has an inventory icon', () => {
+  // The Inventory grid distinguishes items by glyph alone, so a slot or weapon
+  // added without an icon would render as an indistinguishable fallback.
+  for (const slot of SLOTS) {
+    assert.ok(ITEM_ICONS[slot] || slot === 'weapon', `no icon for slot ${slot}`);
+  }
+  for (const base of BASE_NAMES.weapon) {
+    assert.ok(ITEM_ICONS[base.toLowerCase()], `no icon for weapon type ${base}`);
+  }
+  assert.equal(itemIcon({ slot: 'weapon', baseType: 'bow' }), ITEM_ICONS.bow);
+  assert.equal(itemIcon({ slot: 'ring' }), ITEM_ICONS.ring);
+  assert.equal(slotIcon('aetheria1'), ITEM_ICONS.aetheria);
 });

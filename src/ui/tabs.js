@@ -44,7 +44,7 @@ import { buyPrice, sellPrice, healCost } from '../game/shop.js';
 import { TRAINING_TRACKS, trainingCost } from '../game/training.js';
 import { soulsAvailable, canEnlighten, ENLIGHTENMENT_UPGRADES } from '../game/enlightenment.js';
 import { itemScore } from '../game/loot.js';
-import { STARTING_SLOTS, AETHERIA_SLOTS, RARITIES } from '../data/items.js';
+import { STARTING_SLOTS, AETHERIA_SLOTS, RARITIES, itemIcon, slotIcon } from '../data/items.js';
 import { UNLOCKS } from './unlocks.js';
 import { fmt, formatDuration, plural } from '../engine/format.js';
 
@@ -657,36 +657,83 @@ function itemHtml(state, item, equipped) {
     ${action}</div>`;
 }
 
-export function inventoryTab(state) {
+// A gear slot: the icon carries the item type, the frame's color carries rarity,
+// and the corner number carries power. Clicking one selects it; the full stat
+// block lives in a single detail panel below rather than repeated in every cell.
+function slotCellHtml(state, { item, slot, equipped = false, selected = false, empty = false }) {
+  const classes = ['slot', empty ? 'empty' : `rarity-${item.rarity}`, equipped ? 'equipped' : '', selected ? 'selected' : ''];
+  if (empty) {
+    const icon = slot ? slotIcon(slot) : '';
+    return `<div class="${classes.join(' ')}"><span class="slot-icon">${icon}</span></div>`;
+  }
+  const title = `${item.name} — ${item.rarity} ${item.slot}, ${item.power} power`;
+  return `<button class="${classes.join(' ')}" title="${esc(title)}" data-action="select-item" data-arg="${item.id}">
+    <span class="slot-icon">${itemIcon(item)}</span>
+    <span class="slot-power">${item.power}</span>
+  </button>`;
+}
+
+// The paper doll: one labelled cell per equipment slot, filled or not.
+function equippedGridHtml(state) {
   const slots = [...STARTING_SLOTS, ...AETHERIA_SLOTS.slice(0, state.progress.aetheriaSlots)];
-  const equippedGrid = slots
-    .map((s) => {
-      const it = state.equipment[s];
-      const label = s.startsWith('aetheria') ? `Aetheria ${s.slice(-1)}` : s;
-      return `<div class="equip-slot"><div class="slot-name">${esc(label)}</div>${it ? itemHtml(state, it, true) : '<div class="muted">— empty —</div>'}</div>`;
+  return slots
+    .map((slot) => {
+      const item = state.equipment[slot];
+      const label = slot.startsWith('aetheria') ? `Aetheria ${slot.slice(-1)}` : slot;
+      const cell = item
+        ? slotCellHtml(state, { item, equipped: true, selected: state.ui.selectedItemId === item.id })
+        : slotCellHtml(state, { slot, empty: true });
+      return `<div class="doll-slot">${cell}<div class="slot-name">${esc(label)}</div></div>`;
     })
     .join('');
+}
 
+// Pads the loot grid out to full rows of empty frames so it reads as an
+// inventory rather than a ragged handful of tiles.
+const MIN_INVENTORY_CELLS = 24;
+const INVENTORY_ROW = 8;
+
+function inventoryGridHtml(state, items) {
+  const cells = items.map((item) =>
+    slotCellHtml(state, { item, selected: state.ui.selectedItemId === item.id })
+  );
+  const target = Math.max(MIN_INVENTORY_CELLS, Math.ceil(cells.length / INVENTORY_ROW) * INVENTORY_ROW);
+  while (cells.length < target) cells.push(slotCellHtml(state, { empty: true }));
+  return `<div class="slot-grid">${cells.join('')}</div>`;
+}
+
+// Full stats for whichever slot is selected, plus its actions. Selecting an
+// equipped item shows it without Equip/Salvage, same as the old inline card.
+function selectedItemHtml(state) {
+  const id = state.ui.selectedItemId;
+  if (!id) return '<p class="muted">Select an item to see what it does.</p>';
+  const equipped = Object.values(state.equipment).find((it) => it && it.id === id);
+  const item = equipped || state.inventory.find((it) => it.id === id);
+  if (!item) return '<p class="muted">Select an item to see what it does.</p>';
+  return itemHtml(state, item, !!equipped);
+}
+
+export function inventoryTab(state) {
   const filter = state.ui.inventoryFilter;
   const filtered = state.inventory.filter((it) => {
     if (filter.slot !== 'all' && it.slot !== filter.slot) return false;
     if (filter.rarity !== 'all' && it.rarity !== filter.rarity) return false;
-    if (filter.spellId !== 'all' && !it.spells.some((s) => s.id === filter.spellId)) return false;
+    if (filter.spellId !== 'all' && !it.spells.some((sp) => sp.id === filter.spellId)) return false;
     return true;
   });
 
-  const presentSpellIds = [...new Set(state.inventory.flatMap((it) => it.spells.map((s) => s.id)))];
+  const presentSpellIds = [...new Set(state.inventory.flatMap((it) => it.spells.map((sp) => sp.id)))];
   const filterRowHtml = `<div class="filter-row">
-    <div class="filter-group">${['all', ...STARTING_SLOTS].map((s) => filterBtn('slot', s, s === 'all' ? 'All slots' : s, filter.slot)).join('')}</div>
+    <div class="filter-group">${['all', ...STARTING_SLOTS].map((sl) => filterBtn('slot', sl, sl === 'all' ? 'All slots' : sl, filter.slot)).join('')}</div>
     <div class="filter-group">${['all', ...RARITIES.map((r) => r.name)].map((r) => filterBtn('rarity', r, r === 'all' ? 'All rarities' : r, filter.rarity)).join('')}</div>
     ${presentSpellIds.length ? `<div class="filter-group">${['all', ...presentSpellIds].map((id) => filterBtn('spellId', id, id === 'all' ? 'All spells' : SPELL_ID_LABELS[id] || id, filter.spellId)).join('')}</div>` : ''}
   </div>`;
 
-  const inv = state.inventory.length
-    ? filtered.length
-      ? filtered.map((it) => itemHtml(state, it, false)).join('')
-      : '<div class="muted">No items match the current filters.</div>'
-    : '<div class="muted">No loot yet. Monsters drop equipment as you fight.</div>';
+  const emptyNote = !state.inventory.length
+    ? '<p class="muted">No loot yet. Monsters drop equipment as you fight.</p>'
+    : !filtered.length
+    ? '<p class="muted">No items match the current filters.</p>'
+    : '';
 
   const heldMaterials = Object.entries(state.materials)
     .filter(([, count]) => count > 0)
@@ -697,17 +744,18 @@ export function inventoryTab(state) {
     .join('');
 
   return `
-    <div class="panel"><h2>Equipped</h2><div class="equip-grid">${equippedGrid}</div></div>
+    <div class="panel"><h2>Equipped</h2><div class="doll-grid">${equippedGridHtml(state)}</div></div>
     <div class="panel">
       <h2>Inventory (${state.inventory.length})</h2>
       <div style="margin-bottom:8px"><button class="btn" data-action="toggle-autoequip">Auto-equip: ${state.settings.autoEquip ? 'ON' : 'OFF'}</button></div>
       ${filterRowHtml}
-      ${inv}
+      ${emptyNote}
+      ${inventoryGridHtml(state, filtered)}
+      <div class="slot-detail">${selectedItemHtml(state)}</div>
     </div>
     <div class="panel"><h2>Materials</h2>${heldMaterials || '<p class="muted">None gathered or salvaged yet.</p>'}</div>`;
 }
 
-// --- Training ---
 export function trainingTab(state) {
   const rows = TRAINING_TRACKS.map((t) => {
     const rank = state.training[t.id];

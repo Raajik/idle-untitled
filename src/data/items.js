@@ -28,6 +28,38 @@ export const BASE_NAMES = {
   ring: ['Ring', 'Band', 'Signet', 'Loop'],
 };
 
+// One glyph per kind of gear, so a slot grid reads at a glance without art
+// assets. Weapons key off `baseType` (a Sword and a Bow shouldn't look alike);
+// everything else keys off its slot. Kept beside BASE_NAMES so a new base type
+// can't be added without an icon showing up missing right below it.
+export const ITEM_ICONS = {
+  sword: '⚔',
+  axe: '🪓',
+  mace: '🔨',
+  spear: '🔱',
+  bow: '🏹',
+  crossbow: '🎯',
+  armor: '🧥',
+  shield: '🛡',
+  amulet: '📿',
+  ring: '💍',
+  aetheria: '✦',
+};
+
+export function itemIcon(item) {
+  if (!item) return '';
+  if (item.slot === 'weapon' && item.baseType) return ITEM_ICONS[item.baseType] || ITEM_ICONS.sword;
+  return ITEM_ICONS[item.slot] || '◈';
+}
+
+// The icon shown in an empty equipment slot, so the paper doll still reads as a
+// row of places things go rather than a row of blanks.
+export function slotIcon(slot) {
+  if (slot.startsWith('aetheria')) return ITEM_ICONS.aetheria;
+  if (slot === 'weapon') return ITEM_ICONS.sword;
+  return ITEM_ICONS[slot] || '◈';
+}
+
 export const PREFIXES = {
   Common: ['Worn', 'Plain', 'Sturdy'],
   Uncommon: ['Fine', 'Keen', 'Gleaming'],

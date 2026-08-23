@@ -381,6 +381,11 @@ export function createRenderer(state, { onImport }) {
     switch (action) {
       case 'travel-region': startTravelToRegion(state, arg); break;
       case 'travel-poi': startTravelToPoi(state, arg); break;
+      case 'select-item': {
+        const id = Number(arg);
+        state.ui.selectedItemId = state.ui.selectedItemId === id ? null : id; // click again to close
+        break;
+      }
       case 'equip': equipItem(state, Number(arg)); break;
       case 'toggle-autoequip': state.settings.autoEquip = !state.settings.autoEquip; break;
       case 'train': buyTraining(state, arg); break;
@@ -436,6 +441,7 @@ export function createRenderer(state, { onImport }) {
         break;
       }
       case 'salvage-item': {
+        if (state.ui.selectedItemId === Number(arg)) state.ui.selectedItemId = null;
         const result = salvageItem(state, Number(arg));
         if (result) {
           const material = getMaterial(result.material);
