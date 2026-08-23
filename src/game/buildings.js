@@ -19,8 +19,15 @@ import {
 } from '../data/buildings.js';
 import { generateItem } from './loot.js';
 import { WEAPON_CLASSES } from '../data/items.js';
+import { MATERIALS } from '../data/materials.js';
+import { getConsumable } from '../data/consumables.js';
 import { pick, randInt } from '../engine/rng.js';
 import { addLog } from './state.js';
+
+// What the clerk actually says, and the reason the whole town works this way:
+// nothing here gets handed to you, it gets invested in.
+const TOUR_LINE =
+  'The clerk walks you round the ledger. Every trade in Holtburg is somebody\'s business, he says, and a business only grows when somebody puts money into it. "That includes you, now."';
 
 
 
@@ -30,13 +37,13 @@ function stockPower(state, level) {
   return Math.max(4, Math.round((4 + state.hero.level * 1.4) * (1 + (level - 1) * 0.08)));
 }
 
-function rollForSlot(state, level, slot, weaponFilter) {
+function rollForSlot(state, level, slot, weaponFilter, luckPct = 0) {
   const power = stockPower(state, level);
   if (slot === 'weapon' && weaponFilter) {
     const wanted = WEAPON_CLASSES[weaponFilter] || WEAPON_CLASSES.melee;
-    return generateItem(power, { forceSlot: 'weapon', forceBaseType: pick(wanted) });
+    return generateItem(power, { forceSlot: 'weapon', forceBaseType: pick(wanted), luckPct });
   }
-  return generateItem(power, { forceSlot: slot });
+  return generateItem(power, { forceSlot: slot, luckPct });
 }
 
 // A fresh catalog for one building: a random count within its min/max, each item
@@ -44,17 +51,37 @@ function rollForSlot(state, level, slot, weaponFilter) {
 export function rollBuildingStock(state, building, level) {
   const spec = building.stock;
   if (!spec) return [];
-  const count = randInt(spec.min, spec.max);
+  // A generalist's shelves grow with investment where a specialist's don't —
+  // that steeper cost buys quantity and quality, not just a faster caravan.
+  const grown = (level - 1) * (spec.perLevel || 0);
+  const count = randInt(spec.min + grown, spec.max + grown);
+  const luckPct = (level - 1) * (spec.luckPerLevel || 0);
   const items = [];
   for (let i = 0; i < count; i++) {
-    items.push(rollForSlot(state, level, pick(spec.slots), spec.weaponFilter));
+    items.push(rollForSlot(state, level, pick(spec.slots), spec.weaponFilter, luckPct));
   }
   return items;
+}
+
+// What the shop will sell a unit of each material for this rotation. Rates wander
+// every restock, so something dear this hour may be cheap the next — a pyreal
+// sink with a reason to check back, rather than a fixed price list.
+const EXCHANGE_BASE_PRICE = 90;
+const EXCHANGE_SWING = 0.55; // +/- this share of the base
+
+function rollExchangeRates(level) {
+  const invested = 1 - Math.min(0.4, (level - 1) * 0.04); // investing narrows the markup
+  return MATERIALS.map((m) => ({
+    materialId: m.id,
+    price: Math.max(5, Math.round(EXCHANGE_BASE_PRICE * (1 + (Math.random() * 2 - 1) * EXCHANGE_SWING) * invested)),
+  }));
 }
 
 function restock(state, def, entry, now, { quiet = false } = {}) {
   const firstRoll = !entry.rotatesAt;
   entry.stock = rollBuildingStock(state, def, entry.level);
+  entry.sells = (def.sells || []).map((id) => ({ id, price: getConsumable(id).price }));
+  entry.exchange = def.exchange ? rollExchangeRates(entry.level) : [];
   entry.rotatesAt = now + rotationSeconds(entry.level) * 1000;
   if (!firstRoll && !quiet) addLog(state, `The ${def.name} has restocked.`, 'dim');
 }
@@ -72,7 +99,7 @@ export function rotationRemaining(state, buildingId, now = Date.now()) {
 // comparisons unless something actually rotated.
 export function tickBuildings(state, now = Date.now()) {
   for (const def of BUILDINGS) {
-    if (!def.stock) continue;
+    if (!def.stock && !def.sells && !def.exchange) continue;
     const entry = state.buildings[def.id];
     if (!entry || entry.level === 0) continue;
     if (now >= (entry.rotatesAt || 0)) restock(state, def, entry, now);
@@ -84,34 +111,60 @@ export function isUnlocked(state, buildingId) {
   return !!entry && entry.level > 0;
 }
 
-export function unlockBuilding(state, buildingId, now = Date.now()) {
+// Opens a business with no money changing hands — the Town Hall's tour does
+// this for the General Store.
+export function openBuilding(state, buildingId, now = Date.now()) {
   const def = getBuilding(buildingId);
   const entry = def && state.buildings[buildingId];
   if (!entry || entry.level > 0) return false;
-  const cost = unlockCost(def);
-  if (!canAfford(state, cost)) return false;
-
-  payCost(state, cost);
   entry.level = 1;
   entry.rotatesAt = 0;
-  if (def.stock) restock(state, def, entry, now, { quiet: true });
-  const perk = perkText(def, 1);
-  addLog(state, `The ${def.name} opens its doors to you${perk ? ` — ${perk}` : ''}.`, 'good');
+  restock(state, def, entry, now, { quiet: true });
   return true;
 }
 
-export function upgradeBuilding(state, buildingId, now = Date.now()) {
+// The Town Hall's tour: sit through it once and the General Store will deal with
+// you. Nothing to pay — the town is selling itself, not the other way round.
+export function takeTour(state, buildingId, now = Date.now()) {
+  const def = getBuilding(buildingId);
+  if (!def || def.service !== 'tour') return false;
+  if (!isUnlocked(state, buildingId)) return false;
+  if (state.progress.tookTownTour) return false;
+
+  state.progress.tookTownTour = true;
+  addLog(state, TOUR_LINE, 'good');
+  if (def.unlocksOnService && openBuilding(state, def.unlocksOnService, now)) {
+    addLog(state, `The ${getBuilding(def.unlocksOnService).name} opens its doors to you.`, 'good');
+  }
+  return true;
+}
+
+export function investToOpen(state, buildingId, now = Date.now()) {
+  const def = getBuilding(buildingId);
+  const entry = def && state.buildings[buildingId];
+  if (!entry || entry.level > 0) return false;
+  const cost = unlockCost(def, state);
+  if (!cost || !canAfford(state, cost)) return false;
+
+  payCost(state, cost);
+  openBuilding(state, buildingId, now);
+  const perk = perkText(def, 1);
+  addLog(state, `You put up the money and the ${def.name} opens its doors${perk ? ` — ${perk}` : ''}.`, 'good');
+  return true;
+}
+
+export function investInBuilding(state, buildingId, now = Date.now()) {
   const def = getBuilding(buildingId);
   const entry = def && state.buildings[buildingId];
   if (!entry || entry.level === 0 || entry.level >= MAX_BUILDING_LEVEL) return false;
-  const cost = upgradeCost(def, entry.level);
+  const cost = upgradeCost(def, entry.level, state);
   if (!canAfford(state, cost)) return false;
 
   payCost(state, cost);
   entry.level += 1;
-  // A fresh catalog on the spot, so the shorter rotation is felt immediately.
-  if (def.stock) restock(state, def, entry, now, { quiet: true });
+  // A fresh catalog on the spot, so the investment is felt immediately.
+  restock(state, def, entry, now, { quiet: true });
   const perk = perkText(def, entry.level);
-  addLog(state, `${def.name} upgraded to level ${entry.level}${perk ? ` — now ${perk}` : ''}.`, 'good');
+  addLog(state, `Your investment takes — the ${def.name} is a level ${entry.level} business now${perk ? `, ${perk}` : ''}.`, 'good');
   return true;
 }

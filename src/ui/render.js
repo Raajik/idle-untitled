@@ -16,7 +16,7 @@ import { TICK_MS } from '../engine/loop.js';
 import { fmt, formatDuration } from '../engine/format.js';
 import { fleeTutorialEncounter, activeAttackInterval, activeAttackResource } from '../game/combat.js';
 import { isSite, getPoiById, REGIONS } from '../data/regions.js';
-import { unlockBuilding, upgradeBuilding, rotationRemaining } from '../game/buildings.js';
+import { investToOpen, investInBuilding, takeTour, rotationRemaining } from '../game/buildings.js';
 import { activeWeaponSkill } from '../game/skills.js';
 import { vitaePct } from '../game/vitae.js';
 import { setHeroName, answerSeenLifestone, acknowledgeAlcottIntro } from '../game/onboarding.js';
@@ -26,7 +26,7 @@ import { castBuffSpell, toggleAutoCast } from '../game/buffs.js';
 import { useConsumable } from '../game/consumables.js';
 import { jumpTo } from '../game/shortcuts.js';
 import { applyTinkering } from '../game/tinkering.js';
-import { buyItem, sellItem, healService } from '../game/shop.js';
+import { buyItem, sellItem, healService, buyConsumable, buyMaterial } from '../game/shop.js';
 import { getMaterial } from '../data/materials.js';
 import { addLog } from '../game/state.js';
 
@@ -54,7 +54,7 @@ function battleStructureKey(state) {
   // The open building's restock timestamp is part of the shape: when its stock
   // rotates out from under an open panel, the panel has to be rebuilt.
   const open = state.ui.activeBuilding;
-  const buildingKey = open ? `${open}:${state.buildings[open] ? state.buildings[open].rotatesAt : ''}` : '';
+  const buildingKey = open ? `${open}:${state.buildings[open] ? state.buildings[open].rotatesAt : ''}:${state.ui.activeShopTab}` : '';
   // Which buffs are up (not how long they have left) is part of the shape: the
   // Upkeep rows change between "Cast" and a countdown as they come and go.
   const buffKey = state.buffs.map((b) => b.id).join(',');
@@ -450,8 +450,20 @@ export function createRenderer(state, { onImport }) {
       case 'jump-shortcut': jumpTo(state, arg); break;
       case 'open-building': state.ui.activeBuilding = arg; break;
       case 'close-building': state.ui.activeBuilding = null; break;
-      case 'unlock-building': unlockBuilding(state, arg); break;
-      case 'upgrade-building': upgradeBuilding(state, arg); break;
+      case 'invest-open': investToOpen(state, arg); break;
+      case 'invest-building': investInBuilding(state, arg); break;
+      case 'take-tour': takeTour(state, arg); break;
+      case 'set-shop-tab': state.ui.activeShopTab = arg; break;
+      case 'buy-consumable': {
+        const [buildingId, id] = arg.split(':');
+        buyConsumable(state, buildingId, id);
+        break;
+      }
+      case 'buy-material': {
+        const [buildingId, materialId] = arg.split(':');
+        buyMaterial(state, buildingId, materialId);
+        break;
+      }
       case 'buy-item': {
         const [buildingId, idx] = arg.split(':');
         buyItem(state, buildingId, Number(idx));

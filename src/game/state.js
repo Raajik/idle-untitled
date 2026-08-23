@@ -117,6 +117,7 @@ export function createInitialState() {
       boundLifestone: { regionId: null, poiId: null },
       lifestoneGrowth: {}, // poiId -> 0..LIFESTONE_GROWTH_REQUIRED for each budding Lifestone
       recallUnlocked: false,
+      tookTownTour: false, // the Town Hall tour, which is what opens the General Store
       autoHealUnlocked: false, // set by receiving a Healing Kit
       alchemyUnlocked: false, // set by drinking your first potion
       recallCooldown: 0, // seconds remaining until Recall can be used again
@@ -149,6 +150,7 @@ export function createInitialState() {
       seenUnlocks: [], // ids the player has been toasted about
       activeTab: 'battle',
       activeBuilding: null, // which building panel is expanded in the Battle tab's town view
+      activeShopTab: 'weapons', // which shelf of an open shop you're looking at
       inventoryFilter: { slot: 'all', rarity: 'all', spellId: 'all' },
       selectedItemId: null, // which slot in the Inventory grid is open in the detail panel
     },

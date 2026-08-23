@@ -1,17 +1,23 @@
-// Town buildings. Every building except the General Store starts locked; unlocking
-// one costs pyreals plus materials farmed from POI clears, and every level after
-// that upgrades what it gives you. Levels/stock live in `state.buildings[id]` —
-// see game/buildings.js for the unlock/upgrade/restock logic. This file is pure
-// data plus the cost/bonus math, so it can be imported from anywhere (notably
-// game/hero.js) without dragging in the loot generator.
+// Town buildings. You don't buy these for yourself — you invest in them, and the
+// town grows around you. Only the Town Hall is standing when you arrive; opening
+// anything else costs pyreals plus materials farmed from POI clears, and every
+// level after that is another investment in the same business.
 //
-// A building offers up to three things:
-//   - `stock`: a rotating catalog of generated gear. Every stock-bearing building
-//     restocks on its own timer, and levelling it shortens that timer — that IS
-//     the General Store's perk, which is why it has no `perk` of its own.
-//   - `service`: a one-off action (currently only the Physician's heal).
+// Levels and stock live in `state.buildings[id]` — see game/buildings.js for the
+// invest/restock logic. This file is pure data plus the cost/bonus math, so it
+// can be imported from anywhere (notably game/hero.js) without dragging in the
+// loot generator.
+//
+// A building offers up to four things:
+//   - `stock`: a rotating catalog of generated gear. Every stock-bearing business
+//     restocks on its own timer, and investing shortens that timer.
+//   - `sells`: consumable ids it keeps behind the counter.
+//   - `exchange`: true if it deals in raw materials at rates that move with the
+//     stock (see game/buildings.js rollExchangeRates) — a pyreal sink for anyone
+//     short of one particular thing.
+//   - `service`: a one-off action (the Physician's heal, the Town Hall's tour).
 //   - `perk`: one bonus that scales with level. Most `perk.key`s are getBonuses()
-//     keys from game/hero.js and apply to the hero automatically; the two in
+//     keys from game/hero.js and apply to the hero automatically; the ones in
 //     LOCAL_PERK_KEYS are read directly by the system that cares about them.
 
 import { SLOTS, ARMOR_SLOTS, UNDERCLOTHING_SLOTS } from './items.js';
@@ -20,7 +26,7 @@ export const MAX_BUILDING_LEVEL = 10;
 
 // Perk keys that are NOT hero bonuses — each is read by one specific caller:
 // `materialMult` by game/waves.js (clear payout), `healCostPct` by game/shop.js.
-const LOCAL_PERK_KEYS = ['materialMult', 'healCostPct'];
+const LOCAL_PERK_KEYS = ['materialMult', 'healCostPct', 'investmentPct'];
 
 const BASE_ROTATION_SECONDS = 3600; // one hour at level 1
 const MIN_ROTATION_SECONDS = 300;
@@ -33,14 +39,32 @@ export function rotationSeconds(level) {
 
 export const BUILDINGS = [
   {
+    id: 'town-hall',
+    regionId: 'holtburg',
+    name: 'Town Hall',
+    blurb: "Holtburg's ledger, its arguments, and the man who decides which of them matter.",
+    startsUnlocked: true,
+    upgrade: { pyreals: 500, growth: 1.6, materialId: 'copper', materials: 2 },
+    // Sitting through the tour is what opens the General Store — the town has to
+    // explain itself before it will take your money.
+    service: 'tour',
+    unlocksOnService: 'general-store',
+    perk: { key: 'investmentPct', perLevel: -3, text: (v) => `${v}% to invest in any business` },
+  },
+  {
     id: 'general-store',
     regionId: 'holtburg',
     name: 'General Store',
-    blurb: 'A bit of everything, restocked whenever a caravan rolls through.',
-    startsUnlocked: true,
-    upgrade: { pyreals: 600, growth: 1.75, materialId: 'copper', materials: 2 },
-    stock: { slots: SLOTS, min: 5, max: 10 },
-    perk: null, // its perk is the rotation timer itself
+    blurb: 'A bit of everything and a great deal of nothing in particular.',
+    // Opened by the Town Hall's tour rather than bought (see unlocksOnService).
+    unlock: null,
+    // Deliberately the steepest curve in town: a generalist that keeps pace with
+    // the specialists has to be paid for like one of each.
+    upgrade: { pyreals: 1400, growth: 2.1, materialId: 'copper', materials: 4 },
+    stock: { slots: SLOTS, min: 4, max: 6, perLevel: 1, luckPerLevel: 4 },
+    sells: ['healing-kit', 'stamina-potion'],
+    exchange: true,
+    perk: null, // more of everything, better, faster — that IS the perk
   },
   {
     id: 'physician',
@@ -146,7 +170,7 @@ export function buildingsForRegion(regionId) {
 export function freshBuildings() {
   const map = {};
   for (const def of BUILDINGS) {
-    map[def.id] = { level: def.startsUnlocked ? 1 : 0, stock: [], rotatesAt: 0 };
+    map[def.id] = { level: def.startsUnlocked ? 1 : 0, stock: [], sells: [], exchange: [], rotatesAt: 0 };
   }
   return map;
 }
@@ -155,21 +179,40 @@ export function freshBuildings() {
 // A cost is { pyreals, materialId, materials }; `materialId` is null when a
 // building's next step costs pyreals only.
 
-export function unlockCost(building) {
+// What it costs to open this business, after the Town Hall's discount. Null when
+// there's nothing to buy — it either starts open or is opened some other way.
+export function unlockCost(building, state) {
   const u = building.unlock;
-  if (!u) return null; // starts unlocked
-  return { pyreals: u.pyreals, materialId: u.materialId || null, materials: u.materials || 0 };
+  if (!u) return null;
+  const raw = { pyreals: u.pyreals, materialId: u.materialId || null, materials: u.materials || 0 };
+  return state ? discounted(state, raw) : raw;
 }
 
 // Cost to go from `level` to `level + 1`. Pyreals grow geometrically, materials
 // linearly, so late levels are gated on pyreals rather than on grinding one node.
-export function upgradeCost(building, level) {
+export function upgradeCost(building, level, state) {
   const u = building.upgrade;
   if (!u || level >= MAX_BUILDING_LEVEL) return null;
-  return {
+  const raw = {
     pyreals: Math.floor(u.pyreals * Math.pow(u.growth, level - 1)),
     materialId: u.materialId || null,
     materials: (u.materials || 0) * level,
+  };
+  return state ? discounted(state, raw) : raw;
+}
+
+// The Town Hall's perk discounts every investment in town, including its own.
+export function investmentDiscount(state) {
+  return Math.max(0.25, 1 + buildingBonus(state, 'investmentPct') / 100);
+}
+
+function discounted(state, cost) {
+  if (!cost) return null;
+  const scale = investmentDiscount(state);
+  return {
+    pyreals: Math.max(1, Math.round(cost.pyreals * scale)),
+    materialId: cost.materialId,
+    materials: cost.materialId ? Math.max(1, Math.round(cost.materials * scale)) : 0,
   };
 }
 

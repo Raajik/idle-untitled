@@ -6,6 +6,9 @@
 // data/buildings.js + game/buildings.js; this module only moves items and pyreals.
 
 import { getBuilding, buildingBonus } from '../data/buildings.js';
+import { getConsumable } from '../data/consumables.js';
+import { getMaterial } from '../data/materials.js';
+import { grantConsumable } from './consumables.js';
 import { isUnlocked } from './buildings.js';
 import { itemScore } from './loot.js';
 import { derivedStats } from './hero.js';
@@ -50,6 +53,41 @@ export function sellItem(state, itemId) {
 }
 
 // Cost to heal to full, discounted by the Physician's own level (its perk).
+
+// Consumables are bought by the packet: one purchase is however many charges the
+// thing comes with, so a Healing Kit is fifty patch-ups rather than one.
+export function buyConsumable(state, buildingId, consumableId) {
+  const building = getBuilding(buildingId);
+  if (!building || !isUnlocked(state, buildingId)) return false;
+  const entry = state.buildings[buildingId];
+  const offer = (entry.sells || []).find((o) => o.id === consumableId);
+  if (!offer || state.pyreals < offer.price) return false;
+  const def = getConsumable(consumableId);
+  if (!def) return false;
+
+  state.pyreals -= offer.price;
+  grantConsumable(state, consumableId);
+  if (def.unlocks === 'autoHealUnlocked') state.progress.autoHealUnlocked = true;
+  addLog(state, `Bought a ${def.name} from the ${building.name} for ${offer.price} pyreals.`, 'good');
+  return true;
+}
+
+// Buying raw material outright: slower than farming it, but it turns pyreals —
+// which pile up — into the one thing you happen to be short of.
+export function buyMaterial(state, buildingId, materialId) {
+  const building = getBuilding(buildingId);
+  if (!building || !isUnlocked(state, buildingId)) return false;
+  const entry = state.buildings[buildingId];
+  const offer = (entry.exchange || []).find((o) => o.materialId === materialId);
+  if (!offer || state.pyreals < offer.price) return false;
+
+  state.pyreals -= offer.price;
+  state.materials[materialId] = (state.materials[materialId] || 0) + 1;
+  const m = getMaterial(materialId);
+  addLog(state, `Bought 1 ${m ? m.name : materialId} for ${offer.price} pyreals.`, 'dim');
+  return true;
+}
+
 export function healCost(state) {
   const stats = derivedStats(state);
   const missing = Math.max(0, stats.maxHp - state.hero.hp);

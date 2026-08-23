@@ -60,7 +60,18 @@ function migrate(raw) {
   // idea) — carry an old save's souls, run count, and upgrades over intact.
   state.enlightenment = { ...fresh.enlightenment, ...(raw.enlightenment || raw.rebirth || {}) };
   delete state.rebirth;
+  // The General Store used to be the building you started with; the Town Hall is
+  // now, and the Store is what its tour opens. Anyone who already had a Store
+  // keeps it, and counts as having taken the tour.
   state.buildings = { ...freshBuildings(), ...(raw.buildings || {}) };
+  for (const entry of Object.values(state.buildings)) {
+    entry.sells = entry.sells || [];
+    entry.exchange = entry.exchange || [];
+  }
+  if (raw.buildings && raw.buildings['general-store'] && raw.buildings['general-store'].level > 0) {
+    state.progress.tookTownTour = true;
+    if (state.buildings['town-hall'].level === 0) state.buildings['town-hall'].level = 1;
+  }
   state.training = { ...fresh.training, ...(raw.training || {}) };
   state.settings = { ...fresh.settings, ...(raw.settings || {}) };
   state.ui = { ...fresh.ui, ...(raw.ui || {}) };

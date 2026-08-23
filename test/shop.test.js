@@ -2,12 +2,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createInitialState } from '../src/game/state.js';
 import { buyItem, sellItem, healService, buyPrice, healCost } from '../src/game/shop.js';
-import { tickBuildings, unlockBuilding } from '../src/game/buildings.js';
+import { tickBuildings, investToOpen, takeTour } from '../src/game/buildings.js';
 
-// The General Store is the one building that starts open, and its stock is rolled
-// by the first tick rather than at character creation.
+// The Town Hall's tour is what opens the General Store; its stock is rolled then
+// rather than at character creation.
 function stockedStore() {
   const s = createInitialState();
+  takeTour(s, 'town-hall');
   tickBuildings(s);
   return s;
 }
@@ -59,7 +60,7 @@ test('the Physician heals the hero to full for pyreals, once unlocked', () => {
 
   s.pyreals = 100000;
   s.materials['linen'] = 100;
-  assert.equal(unlockBuilding(s, 'physician'), true);
+  assert.equal(investToOpen(s, 'physician'), true);
 
   const cost = healCost(s);
   assert.ok(cost > 0);

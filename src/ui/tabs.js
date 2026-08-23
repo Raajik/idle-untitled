@@ -29,7 +29,7 @@ import {
 import { canMeditate, isRested } from '../game/meditation.js';
 import { BUFF_SPELLS } from '../data/buffSpells.js';
 import { knowsSpell, canCastBuffSpell, isAutoCast } from '../game/buffs.js';
-import { CONSUMABLES } from '../data/consumables.js';
+import { CONSUMABLES, getConsumable } from '../data/consumables.js';
 import { charges, canAutoHeal, STAMINA_PER_HP } from '../game/consumables.js';
 import { vitaePct, atMaxVitae, xpToClearStack, VITAE_PER_STACK, MAX_VITAE_PCT } from '../game/vitae.js';
 import { ACHIEVEMENTS } from '../data/achievements.js';
@@ -360,10 +360,11 @@ function costHtml(state, cost) {
   return parts.join(' · ');
 }
 
-function stockHtml(state, buildingId, entry) {
-  if (!entry.stock.length) return '<p class="muted">Sold out — wait for the next restock.</p>';
-  return entry.stock
-    .map((item, i) => {
+function stockHtml(state, buildingId, entry, filter = () => true) {
+  const shown = entry.stock.map((item, i) => ({ item, i })).filter(({ item }) => filter(item));
+  if (!shown.length) return '<p class="muted">Nothing of that sort on the shelves today.</p>';
+  return shown
+    .map(({ item, i }) => {
       const price = buyPrice(item);
       const spells = item.spells.map((sp) => sp.label).join(', ');
       return `<div class="item">
@@ -387,6 +388,72 @@ function sellHtml(state) {
     .join('');
 }
 
+// A shop's shelves, split by what you'd actually be looking for. A generalist
+// carries all of it, which is exactly why it needs tabs; a specialist shows the
+// one tab it has stock for and no chrome around it.
+const SHOP_TABS = [
+  { id: 'weapons', label: 'Weapons', has: (state, entry) => entry.stock.some((it) => it.slot === 'weapon') },
+  { id: 'armor', label: 'Armor', has: (state, entry) => entry.stock.some((it) => it.slot !== 'weapon') },
+  { id: 'consumables', label: 'Consumables', has: (state, entry) => entry.sells.length > 0 },
+  { id: 'materials', label: 'Materials', has: (state, entry) => entry.exchange.length > 0 },
+  { id: 'sell', label: 'Sell', has: (state) => state.inventory.length > 0 },
+];
+
+function consumablesHtml(state, entry) {
+  if (!entry.sells.length) return '<p class="muted">Nothing behind the counter today.</p>';
+  return entry.sells
+    .map(({ id, price }) => {
+      const def = getConsumable(id);
+      return `<div class="item">
+        <div class="name rarity-${def.rarity}">${esc(def.name)}</div>
+        <div class="stats">${esc(def.desc)}</div>
+        <div class="actions"><button class="btn" data-action="buy-consumable" data-arg="${entry === state.buildings['general-store'] ? 'general-store' : ''}:${id}" ${state.pyreals >= price ? '' : 'disabled'}>Buy ${plural(def.startingCharges, 'charge')} — ${fmt(price)}p</button></div>
+      </div>`;
+    })
+    .join('');
+}
+
+function exchangeHtml(state, buildingId, entry) {
+  if (!entry.exchange.length) return '<p class="muted">No trade in raw goods here.</p>';
+  const rows = entry.exchange
+    .slice()
+    .sort((a, b) => a.price - b.price)
+    .map(({ materialId, price }) => {
+      const m = getMaterial(materialId);
+      const held = state.materials[materialId] || 0;
+      return `<div class="upgrade-row">
+        <div><b>${esc(m ? m.name : materialId)}</b> <span class="muted">${fmt(held)} held</span></div>
+        <button class="btn small" data-action="buy-material" data-arg="${buildingId}:${materialId}" ${state.pyreals >= price ? '' : 'disabled'}>${fmt(price)}p each</button>
+      </div>`;
+    })
+    .join('');
+  return `<p class="muted" style="margin-bottom:6px">Rates move every time the shelves turn over.</p>${rows}`;
+}
+
+function shopTabsHtml(state, buildingId, entry) {
+  const available = SHOP_TABS.filter((t) => t.has(state, entry));
+  if (!available.length) return '';
+  const active = available.some((t) => t.id === state.ui.activeShopTab)
+    ? state.ui.activeShopTab
+    : available[0].id;
+
+  const buttons =
+    available.length > 1
+      ? `<div class="filter-group" style="margin:10px 0 6px">${available
+          .map((t) => `<button class="btn small${t.id === active ? ' active' : ''}" data-action="set-shop-tab" data-arg="${t.id}">${t.label}</button>`)
+          .join('')}</div>`
+      : `<div class="muted" style="margin:10px 0 4px">${available[0].label}</div>`;
+
+  let body;
+  if (active === 'weapons') body = stockHtml(state, buildingId, entry, (it) => it.slot === 'weapon');
+  else if (active === 'armor') body = stockHtml(state, buildingId, entry, (it) => it.slot !== 'weapon');
+  else if (active === 'consumables') body = consumablesHtml(state, entry);
+  else if (active === 'materials') body = exchangeHtml(state, buildingId, entry);
+  else body = sellHtml(state);
+
+  return buttons + body;
+}
+
 function buildingPanelHtml(state) {
   const buildingId = state.ui.activeBuilding;
   if (!buildingId) return '';
@@ -398,48 +465,51 @@ function buildingPanelHtml(state) {
     <p class="muted">${esc(building.blurb)}</p>`;
 
   if (entry.level === 0) {
-    const cost = unlockCost(building);
+    const cost = unlockCost(building, state);
     const perk = perkText(building, 1);
-    const opening = building.stock ? 'Stocks gear that rotates every hour, faster as it grows.' : null;
+    if (!cost) {
+      return `<div class="shop-panel">${head}
+        <p class="muted" style="margin-top:8px">Not open to you yet. The Town Hall decides who trades here.</p>
+      </div>`;
+    }
+    const opening = building.stock ? 'Stocks gear that turns over on its own clock.' : null;
     return `<div class="shop-panel">${head}
       <div class="muted" style="margin:8px 0 4px">Closed. ${esc([perk && `Opening it grants ${perk}.`, opening].filter(Boolean).join(' '))}</div>
-      <button class="btn primary" data-action="unlock-building" data-arg="${buildingId}" ${canAfford(state, cost) ? '' : 'disabled'}>Unlock — ${costHtml(state, cost)}</button>
+      <button class="btn primary" data-action="invest-open" data-arg="${buildingId}" ${canAfford(state, cost) ? '' : 'disabled'}>Invest to open — ${costHtml(state, cost)}</button>
     </div>`;
   }
 
   const perk = perkText(building, entry.level);
-  const next = upgradeCost(building, entry.level);
+  const next = upgradeCost(building, entry.level, state);
   const nextPerk = perkText(building, entry.level + 1);
   const rotationLine = building.stock
-    ? `<div class="muted">Restocks in <span id="rotation-timer">${formatDuration(rotationRemaining(state, buildingId))}</span>.</div>`
+    ? `<div class="muted">Shelves turn over in <span id="rotation-timer">${formatDuration(rotationRemaining(state, buildingId))}</span>.</div>`
     : '';
-  const upgradeLine = next
+  const investLine = next
     ? `<div class="upgrade-row">
-        <div><b>Upgrade to level ${entry.level + 1}</b><div class="desc">${esc([nextPerk, building.stock ? 'faster restocks' : null].filter(Boolean).join(' · '))}</div></div>
-        <button class="btn" data-action="upgrade-building" data-arg="${buildingId}" ${canAfford(state, next) ? '' : 'disabled'}>${costHtml(state, next)}</button>
+        <div><b>Invest in the business</b><div class="desc">${esc([nextPerk, building.stock ? 'more stock, better stock, sooner' : null].filter(Boolean).join(' \u00b7 ')) || 'Grows the business'}</div></div>
+        <button class="btn" data-action="invest-building" data-arg="${buildingId}" ${canAfford(state, next) ? '' : 'disabled'}>${costHtml(state, next)}</button>
       </div>`
-    : `<p class="muted">Fully upgraded.</p>`;
+    : `<p class="muted">Grown as far as it goes.</p>`;
 
-  const service =
-    building.service === 'heal'
-      ? (() => {
-          const cost = healCost(state);
-          return `<div class="muted" style="margin:10px 0 4px">Services</div>
-            <button class="btn primary" data-action="heal-service" ${cost > 0 && state.pyreals >= cost ? '' : 'disabled'}>Heal to full — ${fmt(cost)}p</button>`;
-        })()
-      : '';
-
-  const shopSection = building.stock
-    ? `<div class="muted" style="margin:10px 0 4px">For sale</div>${stockHtml(state, buildingId, entry)}
-       <div class="muted" style="margin:10px 0 4px">Sell your gear</div>${sellHtml(state)}`
-    : '';
+  let service = '';
+  if (building.service === 'heal') {
+    const cost = healCost(state);
+    service = `<div class="muted" style="margin:10px 0 4px">Services</div>
+      <button class="btn primary" data-action="heal-service" ${cost > 0 && state.pyreals >= cost ? '' : 'disabled'}>Heal to full — ${fmt(cost)}p</button>`;
+  } else if (building.service === 'tour' && !state.progress.tookTownTour) {
+    service = `<div class="upgrade-row">
+        <div><b>Ask how the town works</b><div class="desc">The clerk has time for you, and the General Store won't trade with a stranger.</div></div>
+        <button class="btn primary" data-action="take-tour" data-arg="${buildingId}">Take the tour</button>
+      </div>`;
+  }
 
   return `<div class="shop-panel">${head}
     <div class="muted" style="margin:6px 0 2px">Level ${entry.level}/${MAX_BUILDING_LEVEL}${perk ? ` — ${esc(perk)}` : ''}</div>
     ${rotationLine}
-    ${upgradeLine}
+    ${investLine}
     ${service}
-    ${shopSection}
+    ${shopTabsHtml(state, buildingId, entry)}
   </div>`;
 }
 
@@ -580,9 +650,14 @@ export function battleTab(state) {
           const entry = state.buildings[building.id] || { level: 0 };
           const locked = entry.level === 0;
           const cls = ['tile', 'shop-tile', locked ? 'locked' : '', state.ui.activeBuilding === building.id ? 'current' : ''].join(' ');
-          const sub = locked
-            ? `<span class="sub">Locked — ${fmt(unlockCost(building).pyreals)}p</span>`
-            : `<span class="sub">Level ${entry.level}</span>`;
+          // A business with no price isn't for sale — the Town Hall decides when it
+          // opens — so it says so rather than quoting a figure that doesn't exist.
+          const cost = locked ? unlockCost(building, state) : null;
+          const sub = !locked
+            ? `<span class="sub">Level ${entry.level}</span>`
+            : cost
+            ? `<span class="sub">Invest ${fmt(cost.pyreals)}p</span>`
+            : `<span class="sub">Not open yet</span>`;
           return `<button class="${cls}" data-action="open-building" data-arg="${building.id}">${esc(building.name)}${sub}</button>`;
         })
         .join('');

@@ -10,7 +10,7 @@
 //     keys are getBonuses() keys from game/hero.js.
 //
 // `unlocks` names a progress flag the first use sets, which is how a single
-// potion opens a whole system up.
+// potion opens a whole system up. `price` is what a shop asks for one charge.
 
 export const CONSUMABLES = [
   {
@@ -20,6 +20,7 @@ export const CONSUMABLES = [
     startingCharges: 50,
     passive: 'autoHeal',
     unlocks: 'autoHealUnlocked',
+    price: 220,
     desc: 'Bandages, a needle, and a paste that smells worse than the wound. Lets you patch yourself up mid-fight, at the cost of the breath you were using to swing.',
   },
   {
@@ -28,6 +29,7 @@ export const CONSUMABLES = [
     rarity: 'Common',
     startingCharges: 1,
     unlocks: 'alchemyUnlocked',
+    price: 90,
     buff: {
       id: 'stamina-tonic',
       name: 'Stamina Tonic',
