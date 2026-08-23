@@ -165,6 +165,13 @@ test('magic casting drains mana, trains War Magic, and deals damage', () => {
   s.hero.combat.mode = 'magic';
   s.hero.combat.magicSpell = 'streak'; // fast and cheap, easy to land several casts
   s.hero.focus = 30;
+  // This is about mana, training and damage — not about whether a cast connects.
+  // At rank 0 every cast is a coin flip, and a hero starting with 1 Self only has
+  // the mana for a handful, so roughly one run in fifty saw them all miss and no
+  // damage land. Enough Self to keep casting and enough War Magic to hit, while
+  // staying under the rank cap so the skill can still gain xp.
+  s.hero.self = 20;
+  s.hero.skills.offense.war.rank = 80;
   spawnMonster(s);
   s.monster.hp = 100000;
   s.monster.maxHp = 100000;
