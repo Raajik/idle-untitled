@@ -147,6 +147,7 @@ export function createInitialState() {
       autoHeal: false, // spend Stamina and Healing Kit charges to stay standing
       autoCastSpells: [], // self-buff spell ids kept up automatically
       autoDrink: [], // consumable ids re-drunk when their buff lapses
+      autoSalvage: 'off', // 'off' or a rarity name: drops at or below it are broken down on sight
     },
     log: [], // recent combat log lines (newest last)
     ui: {

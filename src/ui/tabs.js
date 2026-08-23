@@ -28,7 +28,7 @@ import {
 } from '../game/skills.js';
 import { activeAttackInterval, activeAttackResource, activeAttackCost, canAffordAttack, activeElement, activeTrait } from '../game/combat.js';
 import { CASTABLE_ELEMENTS, elementLabel, elementNote, imbueOf } from '../data/elements.js';
-import { WAVES_PER_POI, waveDifficulty, clearYield } from '../game/waves.js';
+import { WAVES_PER_POI, waveDifficulty, clearYield, gatherMultiplier, nextMilestone } from '../game/waves.js';
 import { MELEE_STANCES, ARCHERY_STANCES, MAGIC_SPELLS, VOID_SPELLS, ROT_MAX_STACKS, staminaCostForWindup } from '../data/combatStances.js';
 import {
   canRecall,
@@ -46,6 +46,8 @@ import { vitaePct, atMaxVitae, xpToClearStack, VITAE_PER_STACK, MAX_VITAE_PCT } 
 import { ACHIEVEMENTS } from '../data/achievements.js';
 import { availableShortcutsFrom, canJump } from '../game/shortcuts.js';
 import { getMaterial, materialsForSlot, MATERIALS } from '../data/materials.js';
+import { creatureArt } from './creatureArt.js';
+import { kindOf } from '../data/bestiary.js';
 import { TROPHIES } from '../data/trophies.js';
 import { canTinker, tinkerEffectFor, tinkerCostFor, tinkerCostAtLevel, TINKER_BASE_COST } from '../game/tinkering.js';
 import { TINKER_RECIPES } from '../data/tinkering.js';
@@ -62,7 +64,7 @@ import { rotationRemaining } from '../game/buildings.js';
 import { buyPrice, sellPrice, healCost } from '../game/shop.js';
 import { TRAINING_TRACKS, trainingCost } from '../game/training.js';
 import { soulsAvailable, canEnlighten, ENLIGHTENMENT_UPGRADES } from '../game/enlightenment.js';
-import { itemScore, salvageYield } from '../game/loot.js';
+import { itemScore, expectedSalvageYield, AUTO_SALVAGE_OFF } from '../game/loot.js';
 import {
   STARTING_SLOTS,
   EQUIP_SLOTS,
@@ -390,11 +392,17 @@ function engagedMonstersHtml(state) {
       const pct = (m.hp / m.maxHp) * 100;
       const hp = `${Math.max(0, Math.ceil(m.hp))} / ${m.maxHp}`;
       if (i === 0) {
-        return `<div><b id="m-name">${esc(monsterLabel(m))}</b></div>
-          ${bar('hp', pct, hp, 'm-hp', 'monster')}
-          <div id="m-meta" class="muted">ATK ${m.atk} · DEF ${m.def} · ${esc(m.dmgType)}</div>`;
+        return `<div class="monster-head">
+            ${creatureArt(m.name, { className: `kind-${kindOf(m.name)}` })}
+            <div class="monster-head-text">
+              <div><b id="m-name">${esc(monsterLabel(m))}</b></div>
+              ${bar('hp', pct, hp, 'm-hp', 'monster')}
+              <div id="m-meta" class="muted">ATK ${m.atk} · DEF ${m.def} · ${esc(m.dmgType)}</div>
+            </div>
+          </div>`;
       }
       return `<div class="also-engaged">
+        ${creatureArt(m.name, { className: `kind-${kindOf(m.name)} tiny` })}
         <span class="muted">${esc(monsterLabel(m))}</span>
         ${bar('hp mini', pct, hp, `m-hp-${i}`)}
       </div>`;
@@ -753,7 +761,7 @@ export function waveLine(state, poi) {
   const p = state.progress;
   const material = poi.gather ? getMaterial(poi.gather.material) : null;
   const parts = [`Wave ${p.wave}/${WAVES_PER_POI}`, `+${Math.round(waveDifficulty(p.wave) * 100)}% difficulty`];
-  if (material) parts.push(`clear for ${clearYield(state)} ${material.name}`);
+  if (material) parts.push(`clear for ${clearYield(state, poi.gather.skill)} ${material.name}`);
   return parts.join(' · ');
 }
 
@@ -988,7 +996,12 @@ export function skillsTab(state) {
     })
     .join('');
 
-  const gatherRows = GATHERING_SKILLS.map((g) => skillRow(g.label, skills.gathering[g.key])).join('');
+  const gatherRows = GATHERING_SKILLS.map((g) => {
+    const rank = skills.gathering[g.key].rank;
+    const next = nextMilestone(rank);
+    const note = `${gatherMultiplier(rank).toFixed(2)}x haul${next ? ` · next milestone at ${next.rank}` : ' · fully mastered'}`;
+    return skillRow(g.label, skills.gathering[g.key], note);
+  }).join('');
 
   // Every skill in the game on one scroll was several screens tall. Split by what
   // you'd have come here to look at; the group you're reading is the only one
@@ -1027,7 +1040,7 @@ export function skillsTab(state) {
       body: `<div class="panel">
           ${skillRow('Tinkering', skills.tinkering)}
           <p class="muted" style="margin-top:4px">Consumes materials to add or boost an affix on equipped gear. See the Tinkering tab.</p>
-          ${skillRow('Salvaging', skills.salvaging, `about ${fmt(salvageYield('Common', skills.salvaging.rank))}x from a Common item`)}
+          ${skillRow('Salvaging', skills.salvaging, `about ${expectedSalvageYield('Common', skills.salvaging.rank).toFixed(1)}x from a Common item`)}
           <p class="muted" style="margin-top:4px">Breaking gear down returns its material. Each rank compounds the haul, so the same drop is worth far more to a trained salvager.</p>
         </div>`,
     },
@@ -1223,6 +1236,30 @@ function selectedItemHtml(state) {
   return itemHtml(state, item, !!equipped);
 }
 
+// Breaking down a bagful, and deciding what never makes it into the bag.
+//
+// "Salvage shown" rather than "salvage all" on purpose: the filters above are
+// already how you say what you mean, so the destructive button obeys them
+// instead of being a second, separate way to choose. With no filters set it IS
+// salvage-all, and it says how many it's about to take either way.
+function salvageControlsHtml(state, filtered) {
+  const breakable = filtered.filter((it) => it.material);
+  const rank = state.hero.skills.salvaging.rank;
+  const setting = state.settings.autoSalvage || AUTO_SALVAGE_OFF;
+  const options = [AUTO_SALVAGE_OFF, ...RARITIES.map((r) => r.name)];
+  const label = (v) => (v === AUTO_SALVAGE_OFF ? 'Auto-salvage: OFF' : `Auto-salvage: ${v} and below`);
+
+  const cycle = options[(options.indexOf(setting) + 1) % options.length];
+  return `
+    <button class="btn" data-action="salvage-shown" ${breakable.length ? '' : 'disabled'} title="Each item is broken down in turn, so Salvaging ranks up partway through the pile and the last of it is worth more than the first.">
+      Salvage ${filtered.length === state.inventory.length ? 'all' : 'shown'}${breakable.length ? ` (${breakable.length})` : ''}
+    </button>
+    <button class="btn${setting === AUTO_SALVAGE_OFF ? '' : ' active'}" data-action="cycle-auto-salvage" data-arg="${cycle}" title="Drops at or below this rarity are broken down as they land. Never touches anything auto-equip wanted.">
+      ${esc(label(setting))}
+    </button>
+    <span class="muted" style="align-self:center">Salvaging ${rank} · about ${expectedSalvageYield('Common', rank).toFixed(1)}x a Common</span>`;
+}
+
 export function inventoryTab(state) {
   const filter = state.ui.inventoryFilter;
   const filtered = state.inventory.filter((it) => {
@@ -1263,7 +1300,10 @@ export function inventoryTab(state) {
     <div class="panel"><h2>Equipped</h2><div class="doll-grid">${equippedGridHtml(state)}</div></div>
     <div class="panel">
       <h2>Inventory (${state.inventory.length})</h2>
-      <div style="margin-bottom:8px"><button class="btn" data-action="toggle-autoequip">Auto-equip: ${state.settings.autoEquip ? 'ON' : 'OFF'}</button></div>
+      <div class="filter-group" style="margin-bottom:8px">
+        <button class="btn" data-action="toggle-autoequip">Auto-equip: ${state.settings.autoEquip ? 'ON' : 'OFF'}</button>
+        ${salvageControlsHtml(state, filtered)}
+      </div>
       ${filterRowHtml}
       ${emptyNote}
       ${inventoryGridHtml(state, filtered)}

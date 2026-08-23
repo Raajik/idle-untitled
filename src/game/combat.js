@@ -29,7 +29,8 @@ import { pick, pickWeighted } from '../engine/rng.js';
 import { pushFx } from '../engine/fx.js';
 import { fmt } from '../engine/format.js';
 import { derivedStats, grantXp } from './hero.js';
-import { rollDrop, rollTrophies, maybeAutoEquip } from './loot.js';
+import { rollDrop, rollTrophies, maybeAutoEquip, shouldAutoSalvage, salvageItem } from './loot.js';
+import { getMaterial } from '../data/materials.js';
 import { getTrophy } from '../data/trophies.js';
 import { addLog } from './state.js';
 import { tickTravel, arrive } from './travel.js';
@@ -390,14 +391,22 @@ function onMonsterDeath(state, m) {
 
   if (onTutorialRoad(state)) return; // roadside critters carry no gear, and aren't a wave
 
-  const drop = rollDrop(state);
+  const drop = rollDrop(state, m.name);
   if (drop) {
     p.totalDrops += 1;
     if (maybeAutoEquip(state, drop)) {
       addLog(state, `⚔ Auto-equipped ${drop.name} [${drop.rarity}]`, 'loot-line');
     } else {
       state.inventory.push(drop);
-      addLog(state, `⚔ Loot: ${drop.name} [${drop.rarity}]`, 'loot-line');
+      // Auto-salvage is only ever consulted for something auto-equip already
+      // passed over, so it can never destroy an upgrade.
+      const broken = shouldAutoSalvage(state, drop) ? salvageItem(state, drop.id) : null;
+      if (broken) {
+        const material = getMaterial(broken.material);
+        addLog(state, `⚙ Broke down ${drop.name} for ${broken.amount} ${material ? material.name : broken.material}.`, 'dim');
+      } else {
+        addLog(state, `⚔ Loot: ${drop.name} [${drop.rarity}]`, 'loot-line');
+      }
     }
   }
 

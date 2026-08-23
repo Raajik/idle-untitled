@@ -7,7 +7,7 @@ import { topLevelEntries, childTabs, drainNewUnlocks, UNLOCKS } from './unlocks.
 import { battleTab, attributesTab, skillsTab, inventoryTab, trainingTab, enlightenmentTab, recallTab, tinkeringTab, overviewTab, settingsTab, battleDockHtml, sidebarUpkeepHtml, waveLine, attackBarLabel, monsterLabel } from './tabs.js';
 import { startTravelToRegion, startTravelToPoi } from '../game/travel.js';
 import { derivedStats, xpForLevel, totalXpForLevel } from '../game/hero.js';
-import { equipItem, salvageItem } from '../game/loot.js';
+import { equipItem, salvageItem, salvageAll } from '../game/loot.js';
 import { buyTraining } from '../game/training.js';
 import { performEnlightenment, buyUpgrade } from '../game/enlightenment.js';
 import { exportSave, importSave, hardReset, saveGame, suppressSave } from '../save.js';
@@ -523,6 +523,25 @@ export function createRenderer(state, { onImport }) {
         break;
       }
       case 'equip': equipItem(state, Number(arg)); break;
+      case 'cycle-auto-salvage': state.settings.autoSalvage = arg; break;
+      case 'salvage-shown': {
+        const f = state.ui.inventoryFilter;
+        const summary = salvageAll(state, (it) => {
+          if (f.slot !== 'all' && it.slot !== f.slot) return false;
+          if (f.rarity !== 'all' && it.rarity !== f.rarity) return false;
+          if (f.spellId !== 'all' && !it.spells.some((sp) => sp.id === f.spellId)) return false;
+          return true;
+        });
+        if (summary) {
+          const haul = Object.entries(summary.materials)
+            .map(([id, n]) => `${n} ${(getMaterial(id) || {}).name || id}`)
+            .join(', ');
+          addLog(state, `Broke down ${summary.count} items for ${haul}.`, 'good');
+          if (summary.ranksGained > 0) toast(`Salvaging +${summary.ranksGained} while you worked.`);
+        }
+        state.ui.selectedItemId = null;
+        break;
+      }
       case 'toggle-autoequip': state.settings.autoEquip = !state.settings.autoEquip; break;
       case 'train': buyTraining(state, arg); break;
       case 'enlightenment': performEnlightenment(state); break;

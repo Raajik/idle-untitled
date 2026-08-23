@@ -57,10 +57,51 @@ export function waveDifficulty(wave) {
   return (Math.max(1, wave) - 1) * WAVE_DIFFICULTY_PER_WAVE;
 }
 
-// How many of its material a full clear pays out right now.
-export function clearYield(state) {
-  const mult = 1 + buildingBonus(state, 'materialMult') / 100;
-  return Math.max(1, Math.floor(BASE_CLEAR_YIELD * mult));
+// --- What a clear is worth ---
+//
+// Two curves stacked, because they answer different complaints. The steady one
+// means every rank is worth something; the milestones mean the long grind
+// between ranks has visible landmarks in it, and hitting one is a moment rather
+// than a rounding difference. Both are deliberately mild: at rank 100 with every
+// milestone banked a clear pays about four times what it did at rank 0, which is
+// the difference between farming a dungeon and living in it — not a different
+// economy.
+
+// The steady half: a flat share of the base yield per rank.
+export const GATHER_PER_RANK = 0.015; // +1.5% of base per rank, so +150% at rank 100
+
+// The lumpy half: reaching one of these ranks adds its bonus permanently.
+export const GATHER_MILESTONES = [
+  { rank: 10, bonus: 0.15, text: 'You know where to look.' },
+  { rank: 25, bonus: 0.25, text: 'You stop wasting what you cut.' },
+  { rank: 50, bonus: 0.35, text: 'You work a site properly now.' },
+  { rank: 75, bonus: 0.5, text: 'Very little is left behind.' },
+  { rank: 100, bonus: 0.75, text: 'You take everything worth taking.' },
+];
+
+// Total milestone bonus banked at a given rank.
+export function milestoneBonus(rank) {
+  return GATHER_MILESTONES.reduce((sum, m) => (rank >= m.rank ? sum + m.bonus : sum), 0);
+}
+
+// The next milestone a gatherer is working toward, or null once they're done.
+export function nextMilestone(rank) {
+  return GATHER_MILESTONES.find((m) => rank < m.rank) || null;
+}
+
+// Everything a rank is worth, as a multiplier on the base yield.
+export function gatherMultiplier(rank) {
+  return 1 + rank * GATHER_PER_RANK + milestoneBonus(rank);
+}
+
+// How many of its material a full clear pays out right now. The gathering skill
+// the POI trains is the one that scales its haul, so farming a dungeon makes
+// that dungeon (and everything sharing its skill) progressively worth more.
+export function clearYield(state, gatherSkillKey = null) {
+  const buildings = 1 + buildingBonus(state, 'materialMult') / 100;
+  const skill = gatherSkillKey ? state.hero.skills.gathering[gatherSkillKey] : null;
+  const skillMult = skill ? gatherMultiplier(skill.rank) : 1;
+  return Math.max(1, Math.floor(BASE_CLEAR_YIELD * buildings * skillMult));
 }
 
 // Rolls the next wave's group if the current one is spent. `waveMonstersLeft` is
@@ -105,7 +146,7 @@ function completeClears(state, poi, count) {
 
   const gather = poi.gather;
   if (!gather) return;
-  const amount = clearYield(state) * count;
+  const amount = clearYield(state, gather.skill) * count;
   state.materials[gather.material] = (state.materials[gather.material] || 0) + amount;
   const material = getMaterial(gather.material);
   const name = material ? material.name : gather.material;
@@ -117,7 +158,16 @@ function completeClears(state, poi, count) {
     'good'
   );
   const meta = GATHERING_SKILLS.find((g) => g.key === gather.skill);
-  trainSkill(state, state.hero.skills.gathering[gather.skill], meta ? meta.label : gather.skill, CLEAR_GATHER_XP * count);
+  const skill = state.hero.skills.gathering[gather.skill];
+  const before = skill.rank;
+  trainSkill(state, skill, meta ? meta.label : gather.skill, CLEAR_GATHER_XP * count);
+  // A milestone is a moment, so it gets its own line rather than being folded
+  // silently into the next haul.
+  for (const milestone of GATHER_MILESTONES) {
+    if (before < milestone.rank && skill.rank >= milestone.rank) {
+      addLog(state, `${meta ? meta.label : gather.skill} ${milestone.rank}: ${milestone.text} (+${Math.round(milestone.bonus * 100)}% haul)`, 'good');
+    }
+  }
 }
 
 // Offline equivalent of running `kills` monsters through the wave machine: waves
