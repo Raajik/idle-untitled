@@ -151,6 +151,7 @@ export function createInitialState() {
       activeTab: 'battle',
       activeBuilding: null, // which building panel is expanded in the Battle tab's town view
       activeShopTab: 'weapons', // which shelf of an open shop you're looking at
+      activeSkillTab: 'offense', // which group of skills the Skills tab is showing
       activePoiTier: null, // which level band of POIs is showing; null = wherever you are
       collapsed: {}, // sectionId -> true when folded away (see `section` in ui/tabs.js)
       inventoryFilter: { slot: 'all', rarity: 'all', spellId: 'all' },

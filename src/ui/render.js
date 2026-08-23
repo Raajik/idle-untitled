@@ -4,7 +4,7 @@
 //   - frame():  per-animation-frame in-place updates for live combat + fx
 
 import { topLevelEntries, childTabs, drainNewUnlocks, UNLOCKS } from './unlocks.js';
-import { battleTab, attributesTab, skillsTab, inventoryTab, trainingTab, enlightenmentTab, recallTab, tinkeringTab, overviewTab, settingsTab, battleDockHtml, waveLine, attackBarLabel, monsterLabel } from './tabs.js';
+import { battleTab, attributesTab, skillsTab, inventoryTab, trainingTab, enlightenmentTab, recallTab, tinkeringTab, overviewTab, settingsTab, battleDockHtml, sidebarUpkeepHtml, waveLine, attackBarLabel, monsterLabel } from './tabs.js';
 import { startTravelToRegion, startTravelToPoi } from '../game/travel.js';
 import { derivedStats, xpForLevel, totalXpForLevel } from '../game/hero.js';
 import { equipItem, salvageItem } from '../game/loot.js';
@@ -79,6 +79,7 @@ export function createRenderer(state, { onImport }) {
   const nav = document.getElementById('tab-nav');
   const summary = document.getElementById('hero-summary');
   const shortcuts = document.getElementById('nav-shortcuts');
+  const upkeepPanel = document.getElementById('sidebar-upkeep');
   const settingsBtn = document.getElementById('settings-btn');
   const main = document.getElementById('main');
   const dock = document.getElementById('battle-dock');
@@ -86,6 +87,15 @@ export function createRenderer(state, { onImport }) {
   let lastLogLen = 0;
   let menuRenderFrames = 0;
   let lastBattleKey = null;
+  // A full render() replaces #main wholesale. If that lands between a mousedown
+  // and its mouseup, the browser never fires the click at all — which reads as a
+  // button that needs pressing two or three times to take. The game re-renders
+  // on its own several times a second (menu tabs on a timer, the Battle tab
+  // whenever the fight changes shape), so this was hitting constantly. Automatic
+  // renders now wait for the pointer to come up, or for a text field to lose
+  // focus, rather than pulling the DOM out from under an interaction.
+  let pointerDown = false;
+  let renderQueued = false;
   // Wall-clock copy of hero.attackTimer, plus the last raw value we saw — a drop
   // between the two is how a landed swing is detected. See attackBarProgress.
   let smoothAttackTimer = 0;
@@ -140,6 +150,7 @@ export function createRenderer(state, { onImport }) {
       return `<button class="nav-shortcut" data-action="travel-region" data-arg="${r.id}" ${here || heading ? 'disabled' : ''}>${label}</button>`;
     });
     shortcuts.innerHTML = rows.join('');
+    upkeepPanel.innerHTML = sidebarUpkeepHtml(state);
     settingsBtn.classList.toggle('active', state.ui.activeTab === 'settings');
   }
 
@@ -165,6 +176,7 @@ export function createRenderer(state, { onImport }) {
     updateVitaeOverlay();
     lastLogLen = state.log.length;
     menuRenderFrames = 0;
+    renderQueued = false;
     lastBattleKey = battleStructureKey(state);
 
     const log = document.getElementById('combat-log');
@@ -353,7 +365,11 @@ export function createRenderer(state, { onImport }) {
   // is only rebuilt when a buff comes or goes (see battleStructureKey), so
   // without this the timers sit frozen at whatever they read when drawn.
   function updateBuffTimers() {
-    for (const buff of state.buffs) setText(`buff-timer-${buff.id}`, `${formatDuration(buff.remaining)} left`);
+    for (const buff of state.buffs) {
+      const text = formatDuration(buff.remaining);
+      setText(`buff-timer-${buff.id}`, `${text} left`);
+      setText(`sb-buff-timer-${buff.id}`, text); // the sidebar copy, if it's up
+    }
   }
 
   // The hero's three vitals bars, without any of the monster/attack-bar patching
@@ -377,10 +393,13 @@ export function createRenderer(state, { onImport }) {
 
   function frame(dtMs = 16) {
     applyFx();
+    // The sidebar is on screen whatever tab you're on, so its countdowns tick
+    // here rather than inside any one tab's update path.
+    updateBuffTimers();
     const fresh = drainNewUnlocks(state);
     if (fresh.length) {
       for (const u of fresh) toast(u.toast);
-      render();
+      renderUnlessBusy();
       return;
     }
     if (state.ui.activeTab !== 'battle') updateDock(); // dock is hidden on Battle itself
@@ -391,7 +410,7 @@ export function createRenderer(state, { onImport }) {
         // Travel started/finished, or arrived somewhere new: the set of panels and
         // tiles actually changed shape, so rebuild rather than patch.
         lastBattleKey = key;
-        render();
+        renderUnlessBusy();
       } else if (state.travel) {
         updateTravelCountdown();
         if (state.travel.tutorial) updateLive(dtMs);
@@ -411,7 +430,7 @@ export function createRenderer(state, { onImport }) {
     } else {
       // menu tabs: refresh periodically so gold/level stay current
       menuRenderFrames += 1;
-      if (menuRenderFrames >= 30) render();
+      if (menuRenderFrames >= 30) renderUnlessBusy();
     }
   }
 
@@ -421,6 +440,67 @@ export function createRenderer(state, { onImport }) {
       if (setHeroName(state, e.target.value)) render();
     }
   });
+
+  function isTyping() {
+    const el = document.activeElement;
+    return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
+  }
+
+  // Used by frame() for every render the player didn't ask for. Renders driven
+  // by an actual click go through render() directly — by then the interaction
+  // is over and rebuilding is exactly what's wanted.
+  function renderUnlessBusy() {
+    if (pointerDown || isTyping()) {
+      renderQueued = true;
+      return;
+    }
+    render();
+  }
+
+  function flushQueuedRender() {
+    if (!renderQueued) return;
+    renderQueued = false;
+    // After the click has been dispatched, not before — otherwise this is the
+    // very rebuild it's meant to avoid.
+    setTimeout(() => {
+      if (!pointerDown && !isTyping()) render();
+    }, 0);
+  }
+
+  document.addEventListener('pointerdown', () => { pointerDown = true; });
+  document.addEventListener('pointerup', () => { pointerDown = false; flushQueuedRender(); });
+  document.addEventListener('pointercancel', () => { pointerDown = false; flushQueuedRender(); });
+  document.addEventListener('focusout', () => { if (!isTyping()) flushQueuedRender(); });
+
+  // navigator.clipboard needs a secure context and a permission; both can be
+  // absent (plain http, an old browser), so every caller handles a false/null.
+  async function copyToClipboard(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function readClipboard() {
+    try {
+      return await navigator.clipboard.readText();
+    } catch {
+      return null;
+    }
+  }
+
+  function applyImport(text) {
+    const loaded = importSave(text);
+    if (loaded) {
+      onImport(loaded);
+      toast('Save imported!');
+    } else {
+      toast('Import failed — invalid save data.');
+    }
+    return !!loaded;
+  }
 
   // Event delegation
   document.getElementById('app').addEventListener('click', (e) => {
@@ -469,6 +549,7 @@ export function createRenderer(state, { onImport }) {
       case 'invest-building': investInBuilding(state, arg); break;
       case 'take-tour': takeTour(state, arg); break;
       case 'set-poi-tier': state.ui.activePoiTier = arg; break;
+      case 'set-skill-tab': state.ui.activeSkillTab = arg; break;
       case 'set-shop-tab': state.ui.activeShopTab = arg; break;
       case 'toggle-section': state.ui.collapsed[arg] = !state.ui.collapsed[arg]; break;
       case 'buy-consumable': {
@@ -520,32 +601,52 @@ export function createRenderer(state, { onImport }) {
         }
         break;
       }
+      // Export/Import work from the Settings textarea when it's on screen, and
+      // from the clipboard when they're clicked from the sidebar — same action,
+      // whichever surface you reached it from.
       case 'export': {
+        const text = exportSave(state);
         const ta = document.getElementById('save-io');
-        if (ta) ta.value = exportSave(state);
+        if (ta) ta.value = text;
+        copyToClipboard(text).then((ok) =>
+          toast(ok ? 'Save copied to the clipboard.' : 'Save exported to the Settings box.')
+        );
+        if (!ta) state.ui.activeTab = 'settings';
         break;
       }
       case 'import': {
         const ta = document.getElementById('save-io');
         if (ta && ta.value.trim()) {
-          const loaded = importSave(ta.value);
-          if (loaded) {
-            onImport(loaded);
-            toast('Save imported!');
-          } else {
-            toast('Import failed — invalid save data.');
-          }
+          applyImport(ta.value);
+          break;
         }
+        // No box in front of them (or an empty one): try what they've copied.
+        readClipboard().then((text) => {
+          if (text && text.trim()) {
+            applyImport(text);
+            render();
+            return;
+          }
+          state.ui.activeTab = 'settings';
+          render();
+          const box = document.getElementById('save-io');
+          if (box) box.focus();
+          toast('Paste your save into the box, then press Import.');
+        });
         break;
       }
+      // Wiping a save is the one irreversible thing in the game, and it now sits
+      // one click from every screen — so the Shift key IS the confirmation, and
+      // an unmodified click only explains itself.
       case 'hard-reset':
-        if (confirm('Really delete ALL progress? This cannot be undone.')) {
-          hardReset();
-          suppressSave();
-          location.reload();
-          return;
+        if (!e.shiftKey) {
+          toast('Hold Shift and click to wipe all progress.');
+          break;
         }
-        break;
+        hardReset();
+        suppressSave();
+        location.reload();
+        return;
     }
     render();
   });

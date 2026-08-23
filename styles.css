@@ -99,19 +99,29 @@ body {
 .nav-category-label { padding: 6px 10px 2px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); }
 .tab-btn.nav-child { padding-left: 20px; font-size: 13px; }
 
+/* Hero stats sit at the TOP of the sidebar: they're the numbers you glance at
+   constantly, and pinned to the bottom they were the easiest thing to miss. */
 #hero-summary {
-  margin-top: auto;
-  border-top: 1px solid var(--border);
-  padding-top: 10px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
   font-size: 12px;
   color: var(--text-dim);
   white-space: pre-line;
 }
 #hero-summary b { color: var(--text); }
 
+/* Everything you have running, without opening the Battle tab to find out.
+   Empty (nothing up, nothing to drink) it collapses away entirely. */
+#sidebar-upkeep { display: flex; flex-direction: column; gap: 3px; font-size: 11px; }
+#sidebar-upkeep:empty { display: none; }
+#sidebar-upkeep .up-row { display: flex; justify-content: space-between; gap: 6px; }
+#sidebar-upkeep .up-row .t { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+#sidebar-upkeep .up-head { color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; }
+#sidebar-upkeep .up-none { color: var(--text-dim); opacity: 0.7; }
+
 /* Quick-travel shortcuts under the tab nav — somewhere to click "back to town"
    from without hunting through the region list. */
-#nav-shortcuts { display: flex; flex-direction: column; gap: 4px; }
+#nav-shortcuts { display: flex; flex-direction: column; gap: 4px; margin-bottom: auto; }
 #nav-shortcuts:empty { display: none; }
 .nav-shortcut {
   background: none;
@@ -129,7 +139,10 @@ body {
 
 /* Settings is a gear in the corner rather than a nav entry — it's a place you go
    once, not part of the run. */
-#sidebar-footer { display: flex; justify-content: flex-end; padding-top: 8px; }
+#sidebar-footer { display: flex; justify-content: flex-end; gap: 4px; padding-top: 8px; }
+/* Hard reset lives one click from every screen now, so it reads as dangerous
+   before it's pressed and only arms with Shift held (see ui/render.js). */
+.icon-btn.danger:hover { border-color: var(--hp); color: var(--hp); }
 .icon-btn {
   background: none;
   border: 1px solid var(--border);
@@ -223,6 +236,8 @@ body {
 .skill-head { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; margin-bottom: 2px; }
 
 /* Persistent battle dock (bottom of window, shown on every tab but Battle) */
+/* What you're doing right now, pinned to the top of every tab that isn't the
+   fight itself — so leaving Battle to sort your bags never hides the fight. */
 #battle-dock {
   flex-shrink: 0;
   display: flex;
@@ -230,7 +245,7 @@ body {
   gap: 18px;
   padding: 8px 20px;
   background: var(--bg-panel);
-  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   font-size: 12px;
 }
 #battle-dock.hidden { display: none !important; }

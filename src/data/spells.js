@@ -104,7 +104,7 @@ const DEFS = {
   mitigation: {
     name: null, // named for whichever damage type it rolled
     roll: (level) => ({ value: level * PER_LEVEL, meta: { dmgType: DAMAGE_TYPES[Math.floor(Math.random() * DAMAGE_TYPES.length)] } }),
-    effectLabel: (v, meta) => `+${v}% ${cap(meta.dmgType)} Resistance`,
+    effectLabel: (v, meta) => `+${v}% ${cap(meta.dmgType)} Mitigation`,
     bonusKey: (meta) => `resistanceBonus.${meta.dmgType}`,
     displayName: (meta) => `${cap(meta.dmgType)} Ward`,
   },

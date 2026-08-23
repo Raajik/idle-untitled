@@ -598,7 +598,7 @@ export function tickCombat(state, dt) {
       }
 
       const resistSkill = h.skills.resistance[attacker.dmgType];
-      const resistName = `${attacker.dmgType[0].toUpperCase()}${attacker.dmgType.slice(1)} Resistance`;
+      const resistName = `${attacker.dmgType[0].toUpperCase()}${attacker.dmgType.slice(1)} Mitigation`;
       trainSkill(state, resistSkill, resistName, COMBAT_SKILL_XP);
       const mitigation = Math.min(
         95,

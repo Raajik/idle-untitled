@@ -13,16 +13,20 @@
         <span class="logo-badge">III</span>
         <span class="logo-text"><span>Immortal</span><span>Isparian</span><span>Incremental</span></span>
       </h1>
+      <div id="hero-summary"></div>
+      <div id="sidebar-upkeep"></div>
       <nav id="tab-nav"></nav>
       <div id="nav-shortcuts"></div>
-      <div id="hero-summary"></div>
       <div id="sidebar-footer">
+        <button class="icon-btn" data-action="export" title="Export save to the clipboard">⭳</button>
+        <button class="icon-btn" data-action="import" title="Import a save from the clipboard">⭱</button>
+        <button class="icon-btn danger" data-action="hard-reset" title="Hold Shift and click to wipe all progress. This cannot be undone.">☠</button>
         <button class="icon-btn" id="settings-btn" data-tab="settings" title="Settings">⚙</button>
       </div>
     </aside>
     <div id="content-col">
-      <main id="main"></main>
       <div id="battle-dock"></div>
+      <main id="main"></main>
     </div>
   </div>
   <div id="toasts"></div>

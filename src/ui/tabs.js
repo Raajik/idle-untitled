@@ -723,9 +723,9 @@ export function battleTab(state) {
   const travel = state.travel;
 
   if (travel && travel.tutorial) {
-    const header = `<h2>The Road to Holtburg <span class="muted" style="font-size:0.7em">${formatDuration(travel.remaining)} remaining</span></h2>
+    const header = `<h2>The Road to Holtburg <span class="muted" style="font-size:0.7em"><span id="travel-remaining">${formatDuration(travel.remaining)}</span> remaining</span></h2>
       <p class="muted" style="margin-bottom:8px">You're unarmed and alone out here. Fight if you must, or try to slip past.</p>`;
-    const fleeBtn = state.monsters.length ? `<div class="actions" style="margin:8px 0"><button class="btn" data-action="flee-tutorial">Try to run away</button></div>` : '';
+    const fleeBtn = state.monsters.length ? `<div class="actions" style="margin:8px 0"><button class="btn" data-action="flee-tutorial">Flee</button></div>` : '';
     return `
       ${combatDisplayHtml(state, header, fleeBtn)}
       ${upkeepHtml(state)}
@@ -948,30 +948,64 @@ export function skillsTab(state) {
 
   const gatherRows = GATHERING_SKILLS.map((g) => skillRow(g.label, skills.gathering[g.key])).join('');
 
-  return `
-    <div class="panel">
-      ${skillRow('Athletics', athletics, `${speedPct}% faster travel · ${formatDuration(jumpCooldownSeconds(athletics.rank))} Jump cooldown`)}
-      <p class="muted" style="margin-top:4px">Trained by walking (and by using Jump). Powers travel speed and shortcut Jumps.</p>
-    </div>
-    <div class="panel">
-      <h2>Defensives</h2>
-      <p class="muted" style="margin-bottom:8px">Each defends against any attack in sequence — Dodge, then Block (shield required), then Parry (melee weapon required). Each only trains while its gear requirement is met; an avoided hit costs Stamina, capping out at 95% avoidance at rank 100.</p>
-      ${defensiveRows}
-    </div>
-    <div class="panel">
-      <h2>Resistance — by damage type</h2>
-      <p class="muted" style="margin-bottom:8px">Doesn't avoid a hit — reduces its damage, once Dodge/Block/Parry have already failed. Trains on every hit of its type that connects, capping at 95% mitigation at rank 100.</p>
-      ${resistRows}
-    </div>
-    <div class="panel"><h2>Offense</h2><p class="muted">Whichever weapon you have equipped (or bare fists) trains its own skill and governs how often your attacks connect, from even odds untrained up to 95% at rank 100.</p></div>
-    ${offenseSections}
-    <div class="panel"><h2>Gathering</h2>${gatherRows}</div>
-    <div class="panel">
-      ${skillRow('Tinkering', skills.tinkering)}
-      <p class="muted" style="margin-top:4px">Consumes materials to add or boost an affix on equipped gear. See the Tinkering tab.</p>
-      ${skillRow('Salvaging', skills.salvaging, `about ${fmt(salvageYield('Common', skills.salvaging.rank))}x from a Common item`)}
-      <p class="muted" style="margin-top:4px">Breaking gear down returns its material. Each rank compounds the haul, so the same drop is worth far more to a trained salvager.</p>
-    </div>`;
+  // Every skill in the game on one scroll was several screens tall. Split by what
+  // you'd have come here to look at; the group you're reading is the only one
+  // drawn, so the page is always about a screen.
+  const groups = [
+    {
+      id: 'offense',
+      label: 'Offense',
+      body: `<div class="panel"><p class="muted">Whichever weapon you have equipped (or bare fists) trains its own skill and governs how often your attacks connect, from even odds untrained up to 95% at rank 100.</p></div>${offenseSections}`,
+    },
+    {
+      id: 'defense',
+      label: 'Defense',
+      body: `<div class="panel">
+          <h2>Defensives</h2>
+          <p class="muted" style="margin-bottom:8px">Each defends against any attack in sequence — Dodge, then Block (shield required), then Parry (melee weapon required). Each only trains while its gear requirement is met; an avoided hit costs Stamina, capping out at 95% avoidance at rank 100.</p>
+          ${defensiveRows}
+        </div>
+        <div class="panel">
+          <h2>Mitigation — by damage type</h2>
+          <p class="muted" style="margin-bottom:8px">Doesn't avoid a hit — reduces its damage, once Dodge/Block/Parry have already failed. Trains on every hit of its type that connects, capping at 95% mitigation at rank 100.</p>
+          ${resistRows}
+        </div>`,
+    },
+    {
+      id: 'gathering',
+      label: 'Gathering',
+      body: `<div class="panel"><h2>Gathering</h2>
+          <p class="muted" style="margin-bottom:8px">Trained by fully clearing a point of interest. Rank raises how much a clear yields, with a bigger step at every milestone.</p>
+          ${gatherRows}
+        </div>`,
+    },
+    {
+      id: 'crafting',
+      label: 'Crafting',
+      body: `<div class="panel">
+          ${skillRow('Tinkering', skills.tinkering)}
+          <p class="muted" style="margin-top:4px">Consumes materials to add or boost an affix on equipped gear. See the Tinkering tab.</p>
+          ${skillRow('Salvaging', skills.salvaging, `about ${fmt(salvageYield('Common', skills.salvaging.rank))}x from a Common item`)}
+          <p class="muted" style="margin-top:4px">Breaking gear down returns its material. Each rank compounds the haul, so the same drop is worth far more to a trained salvager.</p>
+        </div>`,
+    },
+    {
+      id: 'general',
+      label: 'General',
+      body: `<div class="panel">
+          ${skillRow('Athletics', athletics, `${speedPct}% faster travel · ${formatDuration(jumpCooldownSeconds(athletics.rank))} Jump cooldown`)}
+          <p class="muted" style="margin-top:4px">Trained by walking (and by using Jump). Powers travel speed and shortcut Jumps.</p>
+        </div>`,
+    },
+  ];
+
+  const active = groups.some((g) => g.id === state.ui.activeSkillTab) ? state.ui.activeSkillTab : groups[0].id;
+  const strip = groups
+    .map((g) => `<button class="btn small${g.id === active ? ' active' : ''}" data-action="set-skill-tab" data-arg="${g.id}">${g.label}</button>`)
+    .join('');
+
+  return `<div class="filter-group" style="margin-bottom:10px">${strip}</div>
+    ${groups.find((g) => g.id === active).body}`;
 }
 
 // --- Tinkering ---
@@ -1296,6 +1330,40 @@ export function recallTab(state) {
 }
 
 // --- Persistent battle dock (shown on every tab except Battle itself) ---
+// Everything currently running, for the sidebar. The Battle tab's Upkeep section
+// is where you *manage* these; this is the at-a-glance answer to "is my
+// Rejuvenation still up?" from any tab, which is the question that was making
+// people go back and unfold a panel to read one word.
+//
+// Timers carry their own sb- prefixed ids: the Battle tab's Upkeep rows can be on
+// screen at the same time, and two elements sharing an id means getElementById
+// only ever finds the first, leaving the other frozen.
+export function sidebarUpkeepHtml(state) {
+  const rows = [];
+  for (const buff of state.buffs) {
+    rows.push(`<div class="up-row"><span class="${vitalTextClass(buff.effect)}">${esc(buff.name)}</span><span class="t" id="sb-buff-timer-${buff.id}">${formatDuration(buff.remaining)}</span></div>`);
+  }
+
+  // Automation that's switched on is "running" too, and it's worth seeing that
+  // a kit is quietly draining before it runs out rather than after.
+  const kit = charges(state, 'healing-kit');
+  if (state.settings.autoHeal && kit > 0) {
+    rows.push(`<div class="up-row"><span class="hp-text">Auto-heal</span><span class="t">${fmt(kit)}</span></div>`);
+  }
+  for (const c of upkeepConsumables(state)) {
+    if (!isAutoDrink(state, c.id)) continue;
+    const left = charges(state, c.id);
+    if (state.buffs.some((b) => c.buff && b.id === c.buff.id)) continue; // already listed above
+    rows.push(`<div class="up-row"><span class="muted">${esc(c.name)}</span><span class="t">${left ? fmt(left) : 'none'}</span></div>`);
+  }
+
+  // Nothing running and nothing to run: say nothing at all rather than taking up
+  // room to report the absence.
+  const known = BUFF_SPELLS.some((sp) => knowsSpell(state, sp.id));
+  if (!rows.length && !known) return '';
+  return `<div class="up-head">Upkeep</div>${rows.join('') || '<div class="up-none">nothing running</div>'}`;
+}
+
 export function battleDockHtml(state) {
   const h = state.hero;
   const d = derivedStats(state);
