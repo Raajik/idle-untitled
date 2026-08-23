@@ -3,12 +3,19 @@
 // Interest (POI) is a specific place where you fight monsters and complete quests.
 //
 // POIs are endlessly huntable once their region is reached — there is no linear
-// unlock order. Difficulty instead scales with time+kills spent at a POI (see
-// game/combat.js `computeDepth`), and each POI's boss is a rare random encounter
-// once depth is high enough, not a one-time gate.
+// unlock order. A POI is fought in waves of 1-3 monsters (see game/waves.js);
+// difficulty rises with the wave number, and clearing the last wave is a "full
+// clear" that pays out the POI's `gather` material and restarts the waves. That
+// material is the reason to farm one POI over another.
 //
-// Monsters/bosses carry only a `level` (stats are derived — see monsterScaling.js)
-// and a `dmgType` (one of DAMAGE_TYPES, used by the Resistance skill).
+// `gather` is { skill, material }: which gathering skill a full clear trains and
+// which material it yields. The material must be a member of that skill's pool in
+// data/materials.js (GATHER_MATERIAL_POOLS) — test/waves.test.js enforces it.
+//
+// Monsters carry only a `level` (stats are derived — see monsterScaling.js) and a
+// `dmgType` (one of DAMAGE_TYPES, used by the Resistance skill). `boss` is data
+// only for now: bosses no longer spawn inside a POI's waves and will become their
+// own dedicated boss POIs.
 //
 // walkSeconds is the BASE travel time (before the Run skill's speed bonus) it
 // takes to reach a region from town, or a POI from its region's hub.
@@ -30,7 +37,17 @@ export const REGIONS = [
     walkSeconds: 180, // 3 minutes — matches TUTORIAL_JOURNEY_SECONDS for the "seen a Lifestone" path that skips the scripted journey
     pois: [
       {
+        // A "site": no monsters, so no waves and no combat — you go here to work on
+        // the Lifestone itself (see game/lifestone.js). Growing it moves your bind
+        // point from the far-off starting stone to Holtburg's town hub, which is what
+        // turns a death from a three-minute walk back into a few seconds.
+        id: 'budding-lifestone', name: 'A Budding Lifestone', coords: '42.9N, 33.4E', quest: 'Grow the Lifestone', walkSeconds: 8,
+        site: 'lifestone',
+        monsters: [],
+      },
+      {
         id: 'holtburg-meeting-hall', name: 'Holtburg Meeting Hall', coords: '42.2N, 33.9E', quest: 'None', walkSeconds: 6,
+        gather: { skill: 'foraging', material: 'linen' },
         monsters: [
           { name: 'Militia Recruit', level: 1, dmgType: 'bludgeon' },
           { name: 'Training Dummy', level: 1, dmgType: 'bludgeon' },
@@ -40,6 +57,7 @@ export const REGIONS = [
       },
       {
         id: 'drudge-hideout', name: 'Drudge Hideout', coords: '41.4N, 33.3E', quest: "Alfrin's Stolen Supplies", walkSeconds: 12,
+        gather: { skill: 'mining', material: 'copper' },
         monsters: [
           { name: 'Drudge Skulker', level: 2, dmgType: 'bludgeon' },
           { name: 'Drudge', level: 2, dmgType: 'bludgeon' },
@@ -49,6 +67,7 @@ export const REGIONS = [
       },
       {
         id: 'holtburg-redoubt', name: 'Holtburg Redoubt', coords: '40.4N, 34.4E', quest: "Worcer's Missing Heirlooms", walkSeconds: 14,
+        gather: { skill: 'mining', material: 'iron' },
         monsters: [
           { name: 'Banderling', level: 3, dmgType: 'slash' },
           { name: 'Banderling Guard', level: 3, dmgType: 'slash' },
@@ -58,6 +77,7 @@ export const REGIONS = [
       },
       {
         id: 'rat-nest', name: 'A Rat Nest', coords: '40.2N, 32.5E', quest: 'Rat Tails', walkSeconds: 16,
+        gather: { skill: 'foraging', material: 'porcelain' },
         monsters: [
           { name: 'Brown Rat', level: 4, dmgType: 'pierce' },
           { name: 'Grey Rat', level: 4, dmgType: 'pierce' },
@@ -67,6 +87,7 @@ export const REGIONS = [
       },
       {
         id: 'cave-of-alabree', name: 'Cave of Alabree', coords: '41.8N, 32.1E', quest: "Brogord's Demise", walkSeconds: 18,
+        gather: { skill: 'mining', material: 'granite' },
         monsters: [
           { name: 'Drudge Skulker', level: 5, dmgType: 'bludgeon' },
           { name: 'Drudge Mystic', level: 5, dmgType: 'lightning' },
@@ -76,6 +97,7 @@ export const REGIONS = [
       },
       {
         id: 'holtburg-dungeon', name: 'Holtburg Dungeon', coords: '43.6N, 33.0E', quest: 'Sword of Lost Light Quest', walkSeconds: 20,
+        gather: { skill: 'mining', material: 'silver' },
         monsters: [
           { name: 'Dungeon Drudge', level: 6, dmgType: 'bludgeon' },
           { name: 'Skeleton Lord', level: 6, dmgType: 'void' },
@@ -85,6 +107,7 @@ export const REGIONS = [
       },
       {
         id: 'asuger-temple', name: 'Asuger Temple', coords: '45.1N, 30.4E', quest: "Elysa's Favor", walkSeconds: 22,
+        gather: { skill: 'foraging', material: 'satin' },
         monsters: [
           { name: 'Temple Drudge', level: 7, dmgType: 'bludgeon' },
           { name: 'Skeleton', level: 7, dmgType: 'void' },
@@ -94,6 +117,7 @@ export const REGIONS = [
       },
       {
         id: 'banderling-ruin', name: 'Banderling Ruin', coords: '36.1N, 39.6E', quest: 'Runed Chest', walkSeconds: 26,
+        gather: { skill: 'mining', material: 'gold' },
         monsters: [
           { name: 'Banderling Scout', level: 8, dmgType: 'slash' },
           { name: 'Banderling Warrior', level: 8, dmgType: 'slash' },
@@ -103,6 +127,7 @@ export const REGIONS = [
       },
       {
         id: 'dungeon-fern', name: 'Dungeon Fern', coords: '43.3N, 37.2E', quest: 'Runed Chest', walkSeconds: 28,
+        gather: { skill: 'woodcutting', material: 'oak' },
         monsters: [
           { name: 'Shreth', level: 9, dmgType: 'pierce' },
           { name: 'Shreth Elder', level: 9, dmgType: 'pierce' },
@@ -112,6 +137,7 @@ export const REGIONS = [
       },
       {
         id: 'mukkir-nest', name: 'Small Fledgling Mukkir Nest', coords: '43.5N, 36.1E', quest: 'Small Fledgling Mukkir Kill Task', walkSeconds: 30,
+        gather: { skill: 'mining', material: 'jet' },
         monsters: [
           { name: 'Fledgling Mukkir', level: 10, dmgType: 'acid' },
           { name: 'Mukkir Drone', level: 10, dmgType: 'acid' },
@@ -121,6 +147,7 @@ export const REGIONS = [
       },
       {
         id: 'hunters-leap', name: "Hunter's Leap", coords: '35.7N, 32.6E', quest: "Lilitha's Lost Bow", walkSeconds: 34,
+        gather: { skill: 'skinning', material: 'gromnie-hide' },
         monsters: [
           { name: 'Shreth', level: 11, dmgType: 'pierce' },
           { name: 'Shreth Hunter', level: 11, dmgType: 'pierce' },
@@ -130,6 +157,7 @@ export const REGIONS = [
       },
       {
         id: 'daiklos', name: 'Daiklos', coords: '33.7N, 29.2E', quest: 'Runed Chest', walkSeconds: 38,
+        gather: { skill: 'woodcutting', material: 'ebony' },
         monsters: [
           { name: 'Skeleton', level: 12, dmgType: 'void' },
           { name: 'Zombie', level: 12, dmgType: 'acid' },
@@ -139,6 +167,7 @@ export const REGIONS = [
       },
       {
         id: 'heart-of-innocence', name: 'Heart of Innocence', coords: '34.0N, 39.0E (Approx.)', quest: 'Heart of Innocence Quest', walkSeconds: 40,
+        gather: { skill: 'fishing', material: 'moonstone' },
         monsters: [
           { name: 'Lost Soul', level: 13, dmgType: 'void' },
           { name: 'Wailing Banshee', level: 13, dmgType: 'cold' },
@@ -151,10 +180,11 @@ export const REGIONS = [
   {
     id: 'glenden-wood',
     name: 'Glenden Wood',
-    walkSeconds: 3600, // 1 hour at rank-0 Run; ~6 min once Run is maxed
+    walkSeconds: 1200, // 20 min at rank-0 Athletics; ~2 min once Athletics is maxed
     pois: [
       {
         id: 'banderling-plains', name: 'Banderling Plains', coords: '—', quest: 'None', walkSeconds: 20,
+        gather: { skill: 'woodcutting', material: 'pine' },
         monsters: [
           { name: 'Banderling', level: 18, dmgType: 'slash' },
           { name: 'Mosswart', level: 18, dmgType: 'acid' },
@@ -164,6 +194,7 @@ export const REGIONS = [
       },
       {
         id: 'mosswart-horde', name: 'Mosswart Horde', coords: '—', quest: 'None', walkSeconds: 30,
+        gather: { skill: 'fishing', material: 'aquamarine' },
         monsters: [
           { name: 'Mosswart Raider', level: 24, dmgType: 'acid' },
           { name: 'Reedshark', level: 25, dmgType: 'pierce' },
@@ -176,10 +207,11 @@ export const REGIONS = [
   {
     id: 'eastham',
     name: 'Eastham',
-    walkSeconds: 28800, // 8 hours at rank-0 Run; ~48 min once Run is maxed
+    walkSeconds: 7200, // 2 hours at rank-0 Athletics; ~12 min once Athletics is maxed
     pois: [
       {
         id: 'olthoi-nest', name: 'Olthoi Nest', coords: '—', quest: 'None', walkSeconds: 20,
+        gather: { skill: 'fishing', material: 'amber' },
         monsters: [
           { name: 'Olthoi Nymph', level: 32, dmgType: 'acid' },
           { name: 'Skeleton Lord', level: 33, dmgType: 'void' },
@@ -192,10 +224,11 @@ export const REGIONS = [
   {
     id: 'direlands',
     name: 'Direlands',
-    walkSeconds: 86400, // 24 hours at rank-0 Run; ~2.4 hours once Run is maxed
+    walkSeconds: 21600, // 6 hours at rank-0 Athletics; ~36 min once Athletics is maxed
     pois: [
       {
         id: 'golem-caverns', name: 'Golem Caverns', coords: '—', quest: 'None', walkSeconds: 20,
+        gather: { skill: 'mining', material: 'brass' },
         monsters: [
           { name: 'Sandstone Golem', level: 45, dmgType: 'bludgeon' },
           { name: 'Gromnie', level: 46, dmgType: 'bludgeon' },
@@ -205,6 +238,7 @@ export const REGIONS = [
       },
       {
         id: 'virindi-citadel', name: 'Virindi Citadel', coords: '—', quest: 'None', walkSeconds: 40,
+        gather: { skill: 'woodcutting', material: 'teak' },
         monsters: [
           { name: 'Virindi', level: 58, dmgType: 'lightning' },
           { name: 'Lugian Raider', level: 59, dmgType: 'bludgeon' },
@@ -226,6 +260,12 @@ export function getRegion(regionId) {
 
 export function getPoiById(poiId) {
   return POIS.find((p) => p.id === poiId) || null;
+}
+
+// A site is a POI you visit to do something other than fight — no monsters, no
+// waves, no loot. Combat skips them entirely (see game/combat.js).
+export function isSite(poi) {
+  return !!poi && (!!poi.site || !poi.monsters || poi.monsters.length === 0);
 }
 
 export function regionIndex(regionId) {

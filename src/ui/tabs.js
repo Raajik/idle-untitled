@@ -1,6 +1,6 @@
 // Tab views: each returns an HTML string. Events are delegated via data-action attributes.
 
-import { REGIONS, getRegion, getPoiById, DAMAGE_TYPES } from '../data/regions.js';
+import { REGIONS, getRegion, getPoiById, isSite, DAMAGE_TYPES } from '../data/regions.js';
 import { derivedStats, xpForLevel, totalXpForLevel, ATTRIBUTES } from '../game/hero.js';
 import {
   xpToNextRank,
@@ -15,21 +15,38 @@ import {
   GATHERING_SKILLS,
   MAX_SKILL_RANK,
 } from '../game/skills.js';
-import { computeDepth, activeAttackInterval } from '../game/combat.js';
+import { activeAttackInterval, activeAttackResource } from '../game/combat.js';
+import { WAVES_PER_POI, waveDifficulty, clearYield } from '../game/waves.js';
 import { MELEE_STANCES, ARCHERY_STANCES, MAGIC_SPELLS } from '../data/combatStances.js';
-import { canRecall } from '../game/lifestone.js';
+import {
+  canRecall,
+  canFeedLifestone,
+  offeringCost,
+  lifestoneGrowth,
+  isGrown,
+  LIFESTONE_GROWTH_REQUIRED,
+} from '../game/lifestone.js';
+import { canMeditate, isRested } from '../game/meditation.js';
 import { availableShortcutsFrom, canJump } from '../game/shortcuts.js';
-import { nodesForRegion } from '../data/gatherNodes.js';
 import { getMaterial, materialsForSlot } from '../data/materials.js';
 import { canTinker, TINKER_COST } from '../game/tinkering.js';
-import { SHOPS, getShop } from '../data/shops.js';
+import {
+  buildingsForRegion,
+  getBuilding,
+  unlockCost,
+  upgradeCost,
+  canAfford,
+  perkText,
+  MAX_BUILDING_LEVEL,
+} from '../data/buildings.js';
+import { rotationRemaining } from '../game/buildings.js';
 import { buyPrice, sellPrice, healCost } from '../game/shop.js';
 import { TRAINING_TRACKS, trainingCost } from '../game/training.js';
-import { soulsAvailable, canRebirth, REBIRTH_UPGRADES } from '../game/prestige.js';
+import { soulsAvailable, canEnlighten, ENLIGHTENMENT_UPGRADES } from '../game/enlightenment.js';
 import { itemScore } from '../game/loot.js';
 import { STARTING_SLOTS, AETHERIA_SLOTS, RARITIES } from '../data/items.js';
 import { UNLOCKS } from './unlocks.js';
-import { fmt, formatDuration } from '../engine/format.js';
+import { fmt, formatDuration, plural } from '../engine/format.js';
 
 function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -84,6 +101,14 @@ function onboardingHtml(state) {
   </div>`;
 }
 
+// The attack bar's text: how far into the current swing/cast you are, and how long
+// the whole thing takes, both spelled out in seconds rather than left implicit.
+// Exported because the renderer rewrites it every frame (see ui/render.js).
+export function attackBarLabel(state, elapsed, interval) {
+  const verb = state.hero.combat.mode === 'magic' ? 'Casting' : 'Winding up';
+  return `${verb} — ${Math.min(elapsed, interval).toFixed(1)}s / ${interval.toFixed(1)}s`;
+}
+
 // AC-style attack bar: a mode switcher (Melee/Archery/Magic — Archery needs a
 // bow/crossbow equipped) plus, per mode, a row of stance/spell picks and a
 // "reverse" bar that fills toward the chosen stance's interval or cast time.
@@ -94,6 +119,7 @@ function attackBarHtml(state, d) {
   const mode = h.combat.mode;
   const interval = activeAttackInterval(state, d);
   const pct = (h.attackTimer / interval) * 100;
+  const label = attackBarLabel(state, h.attackTimer, interval);
 
   const modeBtn = (id, label, disabled) => {
     const active = mode === id ? ' active' : '';
@@ -128,7 +154,7 @@ function attackBarHtml(state, d) {
         ${modeBtn('magic', 'Magic', false)}
       </div>
       <div class="stance-row">${stanceHtml}</div>
-      ${bar('attack', pct, mode === 'magic' ? 'Casting...' : 'Winding up...', 'atk-bar')}
+      ${bar(`attack res-${activeAttackResource(state)}`, pct, label, 'atk-bar')}
     </div>`;
 }
 
@@ -161,53 +187,165 @@ function combatDisplayHtml(state, headerHtml, extraHtml = '') {
     </div>`;
 }
 
-// --- Nearby shops (rendered inside the Battle tab's Nearby panel) ---
-function shopPanelHtml(state) {
-  const shopId = state.ui.activeShop;
-  if (!shopId) return '';
-  const shop = getShop(shopId);
-  if (!shop) return '';
+// --- Town buildings (rendered inside the Battle tab's Town panel) ---
 
-  if (shopId === 'physician') {
-    const cost = healCost(state);
-    return `<div class="shop-panel">
-      <div class="shop-panel-head"><b>${esc(shop.name)}</b><button class="btn" data-action="close-shop">Close</button></div>
-      <p class="muted">Heal to full for pyreals.</p>
-      <button class="btn primary" data-action="heal-service" ${cost > 0 && state.pyreals >= cost ? '' : 'disabled'}>Heal — ${fmt(cost)}p</button>
-    </div>`;
+// "1,200p · 8 Iron (have 3)" — the parenthetical only appears when you're short.
+function costHtml(state, cost) {
+  const parts = [`${fmt(cost.pyreals)}p`];
+  if (cost.materialId) {
+    const material = getMaterial(cost.materialId);
+    const have = state.materials[cost.materialId] || 0;
+    const short = have < cost.materials ? ` (have ${fmt(have)})` : '';
+    parts.push(`${cost.materials} ${esc(material ? material.name : cost.materialId)}${short}`);
   }
+  return parts.join(' · ');
+}
 
-  const stock = state.shops[shopId] || [];
-  const stockHtml = stock.length
-    ? stock
-        .map((item, i) => {
-          const price = buyPrice(item);
-          const spells = item.spells.map((s) => s.label).join(', ');
-          return `<div class="item">
-            <div class="name rarity-${item.rarity}">${esc(item.name)} <span class="muted">[${item.rarity} ${item.slot}]</span></div>
-            <div class="stats">${item.power} power${spells ? ' · ' + esc(spells) : ''}</div>
-            <div class="actions"><button class="btn" data-action="buy-item" data-arg="${shopId}:${i}" ${state.pyreals >= price ? '' : 'disabled'}>Buy — ${fmt(price)}p</button></div>
-          </div>`;
-        })
-        .join('')
-    : '<p class="muted">Sold out for now.</p>';
+function stockHtml(state, buildingId, entry) {
+  if (!entry.stock.length) return '<p class="muted">Sold out — wait for the next restock.</p>';
+  return entry.stock
+    .map((item, i) => {
+      const price = buyPrice(item);
+      const spells = item.spells.map((sp) => sp.label).join(', ');
+      return `<div class="item">
+        <div class="name rarity-${item.rarity}">${esc(item.name)} <span class="muted">[${item.rarity} ${item.slot}]</span></div>
+        <div class="stats">${item.power} power${spells ? ' · ' + esc(spells) : ''}</div>
+        <div class="actions"><button class="btn" data-action="buy-item" data-arg="${buildingId}:${i}" ${state.pyreals >= price ? '' : 'disabled'}>Buy — ${fmt(price)}p</button></div>
+      </div>`;
+    })
+    .join('');
+}
 
-  const sellHtml = state.inventory.length
-    ? state.inventory
-        .map(
-          (item) => `<div class="item">
+function sellHtml(state) {
+  if (!state.inventory.length) return '<p class="muted">Nothing in your inventory to sell.</p>';
+  return state.inventory
+    .map(
+      (item) => `<div class="item">
         <div class="name rarity-${item.rarity}">${esc(item.name)}</div>
         <div class="actions"><button class="btn" data-action="sell-item" data-arg="${item.id}">Sell — ${fmt(sellPrice(item))}p</button></div>
       </div>`
-        )
-        .join('')
-    : '<p class="muted">Nothing in your inventory to sell.</p>';
+    )
+    .join('');
+}
 
-  return `<div class="shop-panel">
-    <div class="shop-panel-head"><b>${esc(shop.name)}</b><button class="btn" data-action="close-shop">Close</button></div>
-    <div class="muted" style="margin:6px 0 4px">For sale</div>${stockHtml}
-    <div class="muted" style="margin:10px 0 4px">Sell your gear</div>${sellHtml}
+function buildingPanelHtml(state) {
+  const buildingId = state.ui.activeBuilding;
+  if (!buildingId) return '';
+  const building = getBuilding(buildingId);
+  const entry = building && state.buildings[buildingId];
+  if (!entry) return '';
+
+  const head = `<div class="shop-panel-head"><b>${esc(building.name)}</b><button class="btn" data-action="close-building">Close</button></div>
+    <p class="muted">${esc(building.blurb)}</p>`;
+
+  if (entry.level === 0) {
+    const cost = unlockCost(building);
+    const perk = perkText(building, 1);
+    const opening = building.stock ? 'Stocks gear that rotates every hour, faster as it grows.' : null;
+    return `<div class="shop-panel">${head}
+      <div class="muted" style="margin:8px 0 4px">Closed. ${esc([perk && `Opening it grants ${perk}.`, opening].filter(Boolean).join(' '))}</div>
+      <button class="btn primary" data-action="unlock-building" data-arg="${buildingId}" ${canAfford(state, cost) ? '' : 'disabled'}>Unlock — ${costHtml(state, cost)}</button>
+    </div>`;
+  }
+
+  const perk = perkText(building, entry.level);
+  const next = upgradeCost(building, entry.level);
+  const nextPerk = perkText(building, entry.level + 1);
+  const rotationLine = building.stock
+    ? `<div class="muted">Restocks in <span id="rotation-timer">${formatDuration(rotationRemaining(state, buildingId))}</span>.</div>`
+    : '';
+  const upgradeLine = next
+    ? `<div class="upgrade-row">
+        <div><b>Upgrade to level ${entry.level + 1}</b><div class="desc">${esc([nextPerk, building.stock ? 'faster restocks' : null].filter(Boolean).join(' · '))}</div></div>
+        <button class="btn" data-action="upgrade-building" data-arg="${buildingId}" ${canAfford(state, next) ? '' : 'disabled'}>${costHtml(state, next)}</button>
+      </div>`
+    : `<p class="muted">Fully upgraded.</p>`;
+
+  const service =
+    building.service === 'heal'
+      ? (() => {
+          const cost = healCost(state);
+          return `<div class="muted" style="margin:10px 0 4px">Services</div>
+            <button class="btn primary" data-action="heal-service" ${cost > 0 && state.pyreals >= cost ? '' : 'disabled'}>Heal to full — ${fmt(cost)}p</button>`;
+        })()
+      : '';
+
+  const shopSection = building.stock
+    ? `<div class="muted" style="margin:10px 0 4px">For sale</div>${stockHtml(state, buildingId, entry)}
+       <div class="muted" style="margin:10px 0 4px">Sell your gear</div>${sellHtml(state)}`
+    : '';
+
+  return `<div class="shop-panel">${head}
+    <div class="muted" style="margin:6px 0 2px">Level ${entry.level}/${MAX_BUILDING_LEVEL}${perk ? ` — ${esc(perk)}` : ''}</div>
+    ${rotationLine}
+    ${upgradeLine}
+    ${service}
+    ${shopSection}
   </div>`;
+}
+
+// --- Sites (POIs you visit for something other than a fight) ---
+
+// The vitals + Meditate control shown wherever resting matters. Meditation is the
+// only way to recover outside a fight, so it lives next to whatever spends vitals.
+function restHtml(state) {
+  const d = derivedStats(state);
+  const h = state.hero;
+  const label = state.meditating ? 'Stop meditating' : 'Meditate';
+  const disabled = state.meditating ? false : !canMeditate(state);
+  return `
+    <div class="vitals-row">
+      ${bar('hp', (h.hp / d.maxHp) * 100, `${Math.ceil(h.hp)} / ${d.maxHp} HP`, 'h-hp', 'hero')}
+      ${bar('stamina', (h.stamina / d.maxStamina) * 100, `${Math.ceil(h.stamina)} / ${d.maxStamina} Stamina`, 'h-sta')}
+      ${bar('mana', (h.mana / d.maxMana) * 100, `${Math.ceil(h.mana)} / ${d.maxMana} Mana`, 'h-mana')}
+    </div>
+    <div class="actions" style="margin-top:8px">
+      <button class="btn ${state.meditating ? '' : 'primary'}" data-action="toggle-meditate" ${disabled ? 'disabled' : ''}>${label}</button>
+      ${isRested(state) && !state.meditating ? '<span class="muted">Fully rested.</span>' : ''}
+    </div>`;
+}
+
+function lifestoneSiteHtml(state, poi) {
+  const growth = lifestoneGrowth(state, poi.id);
+  const grown = isGrown(state, poi.id);
+  const cost = offeringCost(state);
+
+  const story = grown
+    ? `<p>The stone stands full-grown, waist-high and steady, its light breathing slow and blue. It knows you now.</p>`
+    : `<p>A <span class="lifestone-glow">Lifestone</span> no bigger than a fist juts from the turf here, its light thin and guttering — a stone that never finished becoming one. It wants for something living. <em>Yours</em> would do.</p>
+       <p style="margin-top:8px">Press your hands to it and it will take <b>${fmt(cost.hp)} health</b> and <b>${fmt(cost.mana)} mana</b>, and grow a little for it. Sit and meditate to make that back, then give again.</p>`;
+
+  const action = grown
+    ? `<p class="muted" style="margin-top:8px">This is your Lifestone now — die anywhere and you'll wake at ${esc(getRegion(poi.regionId).name)}.</p>`
+    : `<div class="actions" style="margin-top:8px">
+        <button class="btn primary" data-action="feed-lifestone" data-arg="${poi.id}" ${canFeedLifestone(state, poi.id) ? '' : 'disabled'}>Give of yourself — ${fmt(cost.hp)} HP, ${fmt(cost.mana)} mana</button>
+      </div>`;
+
+  return `<div class="panel intro-panel">
+    <h2>${esc(poi.name)}</h2>
+    ${story}
+    ${bar('mana', (growth / LIFESTONE_GROWTH_REQUIRED) * 100, grown ? 'Fully grown' : `Grown ${growth}%`, 'lifestone-growth')}
+    ${action}
+    <h2 style="margin-top:14px">You — Level ${state.hero.level}</h2>
+    ${restHtml(state)}
+  </div>`;
+}
+
+function siteHtml(state, poi) {
+  if (poi.site === 'lifestone') return lifestoneSiteHtml(state, poi);
+  return `<div class="panel"><h2>${esc(poi.name)}</h2><p class="muted">There's nothing to do here yet.</p></div>`;
+}
+
+// The one-line status under a POI's name: which wave you're on, how much harder
+// it's making the monsters, and what a full clear will pay out. Exported because
+// the renderer patches it in place every frame — waves advance mid-fight, and the
+// header isn't rebuilt for that (see ui/render.js updateLive).
+export function waveLine(state, poi) {
+  const p = state.progress;
+  const material = poi.gather ? getMaterial(poi.gather.material) : null;
+  const parts = [`Wave ${p.wave}/${WAVES_PER_POI}`, `+${Math.round(waveDifficulty(p.wave) * 100)}% difficulty`];
+  if (material) parts.push(`clear for ${clearYield(state)} ${material.name}`);
+  return parts.join(' · ');
 }
 
 // --- Battle ---
@@ -240,8 +378,7 @@ export function battleTab(state) {
     .join('');
 
   let poiSection = '';
-  let nearbySection = '';
-  let gatherSection = '';
+  let townSection = '';
   if (state.location.regionId) {
     const region = getRegion(state.location.regionId);
     const jumpTargets = new Map();
@@ -261,7 +398,14 @@ export function battleTab(state) {
           : here
           ? '<span class="sub">here</span>'
           : `<span class="sub">Travel (${formatDuration(poi.walkSeconds)})</span>`;
-        const travelBtn = `<button class="${cls}" id="poi-tile-${poi.id}" title="Travel" data-action="travel-poi" data-arg="${poi.id}">${esc(poi.name)}${sub}</button>`;
+        const material = poi.gather ? getMaterial(poi.gather.material) : null;
+        const clears = p.poiClears[poi.id] || 0;
+        const yieldNote = material
+          ? `<span class="sub gather-note">${esc(material.name)}${clears ? ` · ${fmt(clears)} clears` : ''}</span>`
+          : isSite(poi)
+          ? `<span class="sub gather-note">${isGrown(state, poi.id) ? 'grown' : 'no fighting here'}</span>`
+          : '';
+        const travelBtn = `<button class="${cls}" id="poi-tile-${poi.id}" title="Travel" data-action="travel-poi" data-arg="${poi.id}">${esc(poi.name)}${sub}${yieldNote}</button>`;
         const shortcut = jumpTargets.get(poi.id);
         const jumpBtn = shortcut
           ? `<button class="tile poi-tile jump-tile" title="${esc(shortcut.name)}" data-action="jump-shortcut" data-arg="${shortcut.id}" ${canJump(state) ? '' : 'disabled'}>⚡ Jump${canJump(state) ? '' : ` (${formatDuration(state.progress.jumpCooldown)})`}</button>`
@@ -272,25 +416,18 @@ export function battleTab(state) {
     poiSection = `<div class="panel"><h2>Points of Interest — ${esc(region.name)}</h2><div class="tile-list">${poiTiles}</div></div>`;
 
     if (!state.location.poiId) {
-      const shopTiles = SHOPS.filter((s) => s.regionId === region.id)
-        .map((shop) => {
-          const cls = ['tile', 'shop-tile', state.ui.activeShop === shop.id ? 'current' : ''].join(' ');
-          return `<button class="${cls}" data-action="open-shop" data-arg="${shop.id}">${esc(shop.name)}</button>`;
+      const buildingTiles = buildingsForRegion(region.id)
+        .map((building) => {
+          const entry = state.buildings[building.id] || { level: 0 };
+          const locked = entry.level === 0;
+          const cls = ['tile', 'shop-tile', locked ? 'locked' : '', state.ui.activeBuilding === building.id ? 'current' : ''].join(' ');
+          const sub = locked
+            ? `<span class="sub">Locked — ${fmt(unlockCost(building).pyreals)}p</span>`
+            : `<span class="sub">Level ${entry.level}</span>`;
+          return `<button class="${cls}" data-action="open-building" data-arg="${building.id}">${esc(building.name)}${sub}</button>`;
         })
         .join('');
-      nearbySection = `<div class="panel"><h2>Nearby</h2><div class="tile-list">${shopTiles}</div>${shopPanelHtml(state)}</div>`;
-
-      const nodeTiles = nodesForRegion(region.id)
-        .map((node) => {
-          const gatheringHere = state.gathering && state.gathering.nodeId === node.id;
-          const label = GATHERING_SKILLS.find((g) => g.key === node.skill)?.label || node.skill;
-          const sub = gatheringHere
-            ? `<span class="travel-timer" id="gather-timer-${node.id}">${formatDuration(state.gathering.remaining)}</span>`
-            : `<span class="sub">${label} (${formatDuration(node.gatherSeconds)})</span>`;
-          return `<button class="tile" data-action="start-gather" data-arg="${node.id}" ${state.gathering || travel ? 'disabled' : ''}>${esc(node.name)}${sub}</button>`;
-        })
-        .join('');
-      gatherSection = `<div class="panel"><h2>Gathering</h2><div class="tile-list">${nodeTiles}</div></div>`;
+      townSection = `<div class="panel"><h2>Town — ${esc(region.name)}</h2><div class="tile-list">${buildingTiles}</div>${buildingPanelHtml(state)}</div>`;
     }
   }
 
@@ -303,17 +440,18 @@ export function battleTab(state) {
     combatPanel = `<div class="panel"><h2>Town</h2><p class="muted">Pick a point of interest to start hunting.</p></div>`;
   } else {
     const poi = getPoiById(state.location.poiId);
-    const depth = computeDepth(p);
-    const bossNote = depth >= 0.75 ? ` · boss may appear` : '';
-    const header = `<h2>${esc(poi.name)} <span class="muted" style="font-size:0.7em">+${Math.round(depth * 100)}% difficulty${bossNote}</span></h2>`;
-    combatPanel = combatDisplayHtml(state, header);
+    if (isSite(poi)) {
+      combatPanel = siteHtml(state, poi);
+    } else {
+      const header = `<h2>${esc(poi.name)} <span class="muted" id="poi-wave-line" style="font-size:0.7em">${esc(waveLine(state, poi))}</span></h2>`;
+      combatPanel = combatDisplayHtml(state, header);
+    }
   }
 
   return `
     <div class="panel"><h2>Regions</h2><div class="tile-list">${regionTiles}</div></div>
     ${poiSection}
-    ${nearbySection}
-    ${gatherSection}
+    ${townSection}
     ${combatPanel}
     <div class="panel"><h2>Combat Log</h2><div class="log" id="combat-log">${logHtml(state)}</div></div>`;
 }
@@ -574,33 +712,33 @@ export function trainingTab(state) {
   return `<div class="panel"><h2>Training — <span class="gold">${fmt(state.pyreals)} pyreals</span></h2>${rows}</div>`;
 }
 
-// --- Rebirth ---
-export function rebirthTab(state) {
+// --- Enlightenment ---
+export function enlightenmentTab(state) {
   const souls = soulsAvailable(state);
-  const can = canRebirth(state);
-  const upgrades = REBIRTH_UPGRADES.map((u) => {
-    const rank = state.rebirth.upgrades[u.id] || 0;
+  const can = canEnlighten(state);
+  const upgrades = ENLIGHTENMENT_UPGRADES.map((u) => {
+    const rank = state.enlightenment.upgrades[u.id] || 0;
     const maxed = rank >= u.maxRank;
     const cost = maxed ? null : u.cost(rank);
-    const afford = cost !== null && state.rebirth.souls >= cost;
+    const afford = cost !== null && state.enlightenment.souls >= cost;
     return `<div class="upgrade-row">
       <div><b>${u.name}</b> <span class="muted">${rank}/${u.maxRank}</span><div class="desc">${u.desc}</div></div>
-      ${maxed ? '<span class="muted">MAX</span>' : `<button class="btn" data-action="buy-upgrade" data-arg="${u.id}" ${afford ? '' : 'disabled'}>Buy — <span class="soul">${cost} souls</span></button>`}
+      ${maxed ? '<span class="muted">MAX</span>' : `<button class="btn" data-action="buy-upgrade" data-arg="${u.id}" ${afford ? '' : 'disabled'}>Buy — <span class="soul">${plural(cost, 'soul')}</span></button>`}
     </div>`;
   }).join('');
 
   return `
     <div class="panel">
-      <h2>Rebirth — <span class="soul">${state.rebirth.souls} Hero Souls</span> · ${state.rebirth.count} rebirths</h2>
-      <p class="muted" style="margin-bottom:10px">Reset your level, pyreals, gear, and region progress in exchange for Hero Souls — permanent power that carries across every run.</p>
-      <button class="btn primary" data-action="rebirth" ${can ? '' : 'disabled'}>
-        ${can ? `Rebirth now — gain ${souls} souls` : `Reach Glenden Wood to unlock rebirth`}
+      <h2>Enlightenment — <span class="soul">${plural(state.enlightenment.souls, 'Hero Soul')}</span> · enlightened ${plural(state.enlightenment.count, 'time')}</h2>
+      <p class="muted" style="margin-bottom:10px">Set down your level, pyreals, gear, skills, and region progress in exchange for Hero Souls — permanent power that carries into every run after.</p>
+      <button class="btn primary" data-action="enlightenment" ${can ? '' : 'disabled'}>
+        ${can ? `Become Enlightened — gain ${plural(souls, 'soul')}` : `Reach Glenden Wood to become Enlightened`}
       </button>
     </div>
     <div class="panel"><h2>Soul Upgrades</h2>${upgrades}</div>`;
 }
 
-// --- Overview (post-rebirth dashboard) ---
+// --- Overview (post-enlightenment dashboard) ---
 export function overviewTab(state) {
   const h = state.hero;
   const d = derivedStats(state);
@@ -610,7 +748,7 @@ export function overviewTab(state) {
   const tiles = [];
   const xpProgress = state.progress.totalXpEarned - totalXpForLevel(h.level);
   tiles.push(`<div class="panel"><h2>Hero</h2>
-    <span id="ov-hero-line">Level ${h.level} · <span class="gold">${fmt(state.pyreals)} pyreals</span> · <span class="soul">${state.rebirth.souls} souls</span></span><br/>
+    <span id="ov-hero-line">Level ${h.level} · <span class="gold">${fmt(state.pyreals)} pyreals</span> · <span class="soul">${state.enlightenment.souls} souls</span></span><br/>
     ${bar('hp', (h.hp / d.maxHp) * 100, `${Math.ceil(h.hp)} / ${d.maxHp} HP`, 'h-hp', 'hero')}
     ${bar('xp', (xpProgress / xpForLevel(h.level)) * 100, `XP ${fmt(xpProgress)} / ${fmt(xpForLevel(h.level))}`, 'h-xp')}
     <div class="muted">ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s</div></div>`);
@@ -619,7 +757,7 @@ export function overviewTab(state) {
   tiles.push(`<div class="panel"><h2>Battle — ${poi ? esc(poi.name) : 'Town'}</h2>
     <b id="m-name" class="${m && m.isBoss ? 'soul' : ''}">${m ? esc(m.name) + ` (Lv ${m.level})` + (m.isBoss ? ' ☠ BOSS' : '') : state.travel ? 'Travelling...' : 'Searching...'}</b>
     ${bar('hp', m ? (m.hp / m.maxHp) * 100 : 0, m ? `${Math.ceil(m.hp)} / ${m.maxHp}` : '...', 'm-hp', 'monster')}
-    <div id="ov-kills" class="muted">${poi ? `+${Math.round(computeDepth(p) * 100)}% difficulty` : ''}</div></div>`);
+    <div id="ov-kills" class="muted">${poi ? esc(waveLine(state, poi)) : ''}</div></div>`);
 
   const unlocked = UNLOCKS.filter((u) => u.when(state)).map((u) => u.id);
   if (unlocked.includes('training')) tiles.push(`<div class="panel"><h2>Training</h2>${trainingTab(state).replace(/<div class="panel">|<\/div>$/g, '')}</div>`);

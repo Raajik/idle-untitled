@@ -7,6 +7,7 @@ import { monsterStatsForLevel } from '../data/monsterScaling.js';
 import { rollSpell, spellLevelCeiling, rollSpellLevel } from '../data/spells.js';
 import { pick, pickWeighted, chance } from '../engine/rng.js';
 import { derivedStats } from './hero.js';
+import { waveDifficulty } from './waves.js';
 import { trainAttribute, SALVAGE_ATTR_XP } from './skills.js';
 
 let nextItemId = 1;
@@ -31,7 +32,7 @@ export function rollRarity(luckPct = 0) {
 export function generateItem(powerLevel, { luckPct = 0, rarityBoost = 0, forceSlot = null, forceBaseType = null, depth = 0, regionIdx = 0 } = {}) {
   let rarity = rollRarity(luckPct);
   if (rarityBoost > 0) {
-    // bosses: bump rarity up by rarityBoost tiers (capped at Legendary)
+    // deeper waves: bump rarity up by rarityBoost tiers (capped at Legendary)
     const idx = Math.min(RARITIES.indexOf(rarity) + rarityBoost, RARITIES.length - 1);
     rarity = RARITIES[idx];
   }
@@ -69,25 +70,24 @@ export function generateItem(powerLevel, { luckPct = 0, rarityBoost = 0, forceSl
   return item;
 }
 
-// Rarity tiers gained from depth alone, on top of any boss bonus.
+// Rarity tiers gained from how deep into a POI's waves the kill happened.
 function depthRarityBoost(depth) {
-  if (depth >= 2.5) return 2;
-  if (depth >= 1.5) return 1;
+  if (depth >= 0.9) return 2;
+  if (depth >= 0.5) return 1;
   return 0;
 }
 
-// Roll a drop for a kill; returns the item or null. Bosses always drop.
-export function rollDrop(state, isBoss) {
+// Roll a drop for a kill; returns the item or null. Later waves drop both more
+// powerful and rarer gear, so a full clear is worth more than farming wave 1.
+export function rollDrop(state) {
+  if (!chance(DROP_CHANCE)) return null;
   const luck = derivedStats(state).luckPct;
   const poi = getPoiById(state.location.poiId);
-  const depth = state.progress.poiDepth || 0;
+  const depth = waveDifficulty(state.progress.wave);
   const regionIdx = Math.max(0, regionIndex(state.location.regionId));
   const avgAtk = poi.monsters.reduce((s, m) => s + monsterStatsForLevel(m.level).atk, 0) / poi.monsters.length;
   const powerLevel = Math.round(poiItemPower(avgAtk) * (1 + depth));
-  const rarityBoost = depthRarityBoost(depth) + (isBoss ? 1 : 0);
-  if (isBoss) return generateItem(powerLevel, { luckPct: luck, rarityBoost, depth, regionIdx });
-  if (!chance(DROP_CHANCE)) return null;
-  return generateItem(powerLevel, { luckPct: luck, rarityBoost, depth, regionIdx });
+  return generateItem(powerLevel, { luckPct: luck, rarityBoost: depthRarityBoost(depth), depth, regionIdx });
 }
 
 // Rough item "score" for auto-equip and comparison.

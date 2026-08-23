@@ -7,10 +7,11 @@ import { DAMAGE_TYPES } from './regions.js';
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
 export const MAX_SPELL_LEVEL = 8;
 
-// How high a spell can roll here: driven by POI depth (0-3, see game/combat.js
-// computeDepth) and how far out the region is (regionIndex, see data/regions.js).
+// How high a spell can roll here: driven by how deep into a POI's waves the drop
+// happened (0 to ~1.1, see game/waves.js waveDifficulty) and how far out the
+// region is (regionIndex, see data/regions.js).
 export function spellLevelCeiling(depth, regionIndex) {
-  return Math.max(1, Math.min(MAX_SPELL_LEVEL, 1 + regionIndex * 2 + Math.floor(depth * 2)));
+  return Math.max(1, Math.min(MAX_SPELL_LEVEL, 1 + regionIndex * 2 + Math.floor(depth * 4)));
 }
 
 // Weighted toward the low end so even a high ceiling mostly rolls modest

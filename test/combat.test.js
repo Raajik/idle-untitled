@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { tickCombat, spawnMonster, computeDepth } from '../src/game/combat.js';
+import { tickCombat, spawnMonster } from '../src/game/combat.js';
+import { WAVES_PER_POI, waveDifficulty } from '../src/game/waves.js';
 import { createInitialState } from '../src/game/state.js';
 import { getPoiById } from '../src/data/regions.js';
 import { derivedStats } from '../src/game/hero.js';
@@ -12,26 +13,38 @@ function atPoi(poiId) {
   return s;
 }
 
-test('spawnMonster creates a normal monster with full hp', () => {
+test('spawnMonster creates a monster with full hp and opens a wave', () => {
   const s = atPoi('holtburg-meeting-hall');
   spawnMonster(s);
   assert.ok(s.monster);
   assert.equal(s.monster.hp, s.monster.maxHp);
-  assert.equal(s.monster.isBoss, false);
+  const poi = getPoiById('holtburg-meeting-hall');
+  assert.ok(poi.monsters.some((m) => m.name === s.monster.name));
+  assert.ok(s.progress.waveMonstersLeft >= 1 && s.progress.waveMonstersLeft <= 3);
 });
 
-test('boss can appear once depth passes the threshold', () => {
-  const s = atPoi('holtburg-meeting-hall');
-  s.progress.timeInPoi = 2000; // pushes depth to the 3.0 cap
-  s.progress.killsSinceBoss = 10;
-  let sawBoss = false;
-  for (let i = 0; i < 300 && !sawBoss; i++) {
-    spawnMonster(s);
-    if (s.monster.isBoss) sawBoss = true;
+test('monsters hit harder on later waves', () => {
+  const early = atPoi('holtburg-meeting-hall');
+  const late = atPoi('holtburg-meeting-hall');
+  late.progress.wave = WAVES_PER_POI;
+  // Same monster name on both sides so only the wave multiplier differs.
+  let matched = false;
+  for (let i = 0; i < 200 && !matched; i++) {
+    spawnMonster(early);
+    spawnMonster(late);
+    if (early.monster.name === late.monster.name) matched = true;
   }
-  assert.ok(sawBoss);
+  assert.ok(matched);
+  assert.ok(late.monster.maxHp > early.monster.maxHp);
+});
+
+test('no boss spawns inside a POI any more — bosses are becoming their own POIs', () => {
+  const s = atPoi('holtburg-meeting-hall');
   const poi = getPoiById('holtburg-meeting-hall');
-  if (sawBoss) assert.equal(s.monster.name, poi.boss.name);
+  for (let i = 0; i < 300; i++) {
+    spawnMonster(s);
+    assert.notEqual(s.monster.name, poi.boss.name);
+  }
 });
 
 test('combat ticks eventually kill the monster and grant rewards', () => {
@@ -46,13 +59,14 @@ test('combat ticks eventually kill the monster and grant rewards', () => {
   assert.ok(s.progress.totalXpEarned > 0 || s.hero.level > 1);
 });
 
-test('depth rises with time and kills spent at a POI', () => {
+test('waves advance as the hero clears them', () => {
   const s = atPoi('holtburg-meeting-hall');
   s.hero.str = 500;
   s.hero.end = 500;
-  const depthBefore = computeDepth(s.progress);
-  for (let i = 0; i < 40; i++) tickCombat(s, 0.25);
-  assert.ok(computeDepth(s.progress) > depthBefore);
+  assert.equal(s.progress.wave, 1);
+  for (let i = 0; i < 200; i++) tickCombat(s, 0.25);
+  assert.ok(s.progress.wave > 1 || s.progress.totalClears > 0);
+  assert.ok(waveDifficulty(s.progress.wave) >= 0);
 });
 
 test('no combat happens while travelling or in town', () => {
@@ -62,18 +76,19 @@ test('no combat happens while travelling or in town', () => {
   assert.equal(s.progress.totalKills, 0);
 });
 
-test('hero death triggers respawn cycle without progress loss', () => {
+test('hero death respawns them at their bound Lifestone', () => {
   const s = atPoi('virindi-citadel'); // Direlands, brutal
+  s.progress.boundLifestone = { regionId: 'holtburg', poiId: null };
   s.hero.end = 1; // very squishy
   let died = false;
-  let revived = false;
-  for (let i = 0; i < 400; i++) {
+  for (let i = 0; i < 400 && !(died && !s.hero.dead); i++) {
     tickCombat(s, 0.25);
     if (s.hero.dead) died = true;
-    if (died && !s.hero.dead && s.hero.hp > 0) revived = true; // came back at least once
   }
   assert.ok(died);
-  assert.ok(revived);
+  assert.equal(s.hero.dead, false);
+  assert.ok(s.hero.hp > 0);
+  assert.deepEqual(s.location, { regionId: 'holtburg', poiId: null });
 });
 
 test('the Devastating melee stance applies a stacking bleed that ticks damage over time', () => {

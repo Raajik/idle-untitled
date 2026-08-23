@@ -2,13 +2,15 @@
 
 import { createInitialState, SAVE_VERSION, addLog } from './game/state.js';
 import { derivedStats, heroDps, grantXp } from './game/hero.js';
-import { getPoiById } from './data/regions.js';
+import { getPoiById, isSite } from './data/regions.js';
 import { monsterStatsForLevel } from './data/monsterScaling.js';
 import { TUTORIAL_ROAD } from './data/tutorial.js';
 import { generateItem, maybeAutoEquip, DROP_CHANCE } from './game/loot.js';
 import { poiItemPower } from './data/items.js';
+import { freshBuildings } from './data/buildings.js';
 import { fmt } from './engine/format.js';
 import { skipTravel } from './game/travel.js';
+import { waveDifficulty, simulateWaveKills } from './game/waves.js';
 
 const SAVE_KEY = 'idle-untitled-save-v1';
 
@@ -47,7 +49,11 @@ function migrate(raw) {
   state.progress = { ...fresh.progress, ...(raw.progress || {}) };
   state.location = { ...fresh.location, ...(raw.location || {}) };
   state.travel = raw.travel !== undefined ? raw.travel : fresh.travel;
-  state.rebirth = { ...fresh.rebirth, ...(raw.rebirth || {}) };
+  // Rebirth was renamed to Enlightenment (the Asheron's Call term for the same
+  // idea) — carry an old save's souls, run count, and upgrades over intact.
+  state.enlightenment = { ...fresh.enlightenment, ...(raw.enlightenment || raw.rebirth || {}) };
+  delete state.rebirth;
+  state.buildings = { ...freshBuildings(), ...(raw.buildings || {}) };
   state.training = { ...fresh.training, ...(raw.training || {}) };
   state.settings = { ...fresh.settings, ...(raw.settings || {}) };
   state.ui = { ...fresh.ui, ...(raw.ui || {}) };
@@ -68,6 +74,29 @@ function migrate(raw) {
   if (state.progress.totalGoldEarned !== undefined) {
     state.progress.totalPyrealsEarned = state.progress.totalGoldEarned;
     delete state.progress.totalGoldEarned;
+  }
+
+  // Gathering nodes and per-slot town shops both folded into the POI/building rework:
+  // gathering is now a POI full-clear payout (see game/waves.js) and every shop is a
+  // town building with its own level and rotating stock (see data/buildings.js). Old
+  // saves lose their in-progress gather and their fixed shop stock — the town starts
+  // over with just the General Store — but keep every material they'd banked.
+  delete state.gathering;
+  delete state.shops;
+  delete state.progress.poiDepth;
+  delete state.progress.killsSinceBoss;
+  delete state.progress.bossesKilled;
+  if (state.ui.activeShop !== undefined) {
+    state.ui.activeBuilding = state.ui.activeShop;
+    delete state.ui.activeShop;
+  }
+
+  // Binding-on-death is new: a fresh character starts bound to the roadside stone and
+  // has to grow Holtburg's budding Lifestone to move it. Existing characters are long
+  // past that walk, so grandfather them onto the first region they'd already reached
+  // rather than yanking them back to the road the next time they die.
+  if (!(raw.progress && raw.progress.boundLifestone) && state.progress.unlockedRegions.length > 0) {
+    state.progress.boundLifestone = { regionId: state.progress.unlockedRegions[0], poiId: null };
   }
 
   // Pre-level-rework saves may have a stale in-progress monster instance missing the
@@ -114,6 +143,7 @@ function migrate(raw) {
   // Migrate the old single Hero/Equipment tabs into the Hero category's subsections.
   if (state.ui.activeTab === 'hero') state.ui.activeTab = 'attributes';
   if (state.ui.activeTab === 'equipment') state.ui.activeTab = 'inventory';
+  if (state.ui.activeTab === 'rebirth') state.ui.activeTab = 'enlightenment';
 
   state.version = SAVE_VERSION;
   return state;
@@ -172,7 +202,10 @@ export function applyOfflineProgress(state) {
   if (state.location.poiId === TUTORIAL_ROAD.id) return null; // mid-tutorial: nothing to simulate
 
   const poi = getPoiById(state.location.poiId);
-  const depth = state.progress.poiDepth || 0;
+  if (isSite(poi)) return null; // parked at a site: nothing to simulate
+  // Waves keep advancing while you're away, but the sim can't know which wave each
+  // kill landed on — it prices the whole stretch at the wave you left off on.
+  const depth = waveDifficulty(state.progress.wave);
   const monsterStats = poi.monsters.map((m) => monsterStatsForLevel(m.level));
   const avgOf = (key) => monsterStats.reduce((s, m) => s + m[key], 0) / monsterStats.length;
   const avgMonsterHp = avgOf('hp') * (1 + depth);
@@ -196,6 +229,7 @@ export function applyOfflineProgress(state) {
   state.progress.totalKills += kills;
   state.progress.killsInPoi += kills;
   state.progress.timeInPoi += remaining;
+  const clears = simulateWaveKills(state, poi, kills);
 
   // Sample expected drops, keep the best few
   const expectedDrops = Math.min(Math.round(kills * DROP_CHANCE), 200);
@@ -215,10 +249,11 @@ export function applyOfflineProgress(state) {
     pyrealsGain,
     levelsGained: state.hero.level - levelsBefore,
     equips: kept.length,
+    clears,
   };
   addLog(
     state,
-    `Welcome back! Away ${hours < 1 ? Math.round(elapsedSec / 60) + 'm' : hours.toFixed(1) + 'h'}: ${fmt(kills)} kills, +${fmt(pyrealsGain)} pyreals${summary.levelsGained ? `, +${summary.levelsGained} levels` : ''}.`,
+    `Welcome back! Away ${hours < 1 ? Math.round(elapsedSec / 60) + 'm' : hours.toFixed(1) + 'h'}: ${fmt(kills)} kills, +${fmt(pyrealsGain)} pyreals${summary.levelsGained ? `, +${summary.levelsGained} levels` : ''}${clears ? `, ${fmt(clears)} full clears` : ''}.`,
     'good'
   );
   return summary;

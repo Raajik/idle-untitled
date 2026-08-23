@@ -8,9 +8,9 @@ import { jumpCooldownSeconds, trainSkill, trainAttribute, JUMP_XP_ON_USE, JUMP_Q
 import { addLog } from './state.js';
 
 // Shortcuts usable right now: hero must be standing at one endpoint (not
-// travelling/gathering) and have reached the required Athletics rank.
+// travelling) and have reached the required Athletics rank.
 export function availableShortcutsFrom(state) {
-  if (state.travel || state.gathering || !state.location.poiId) return [];
+  if (state.travel || !state.location.poiId) return [];
   const rank = state.hero.skills.athletics.rank;
   return shortcutsFromLocation(state.location.poiId).filter((s) => rank >= s.athleticsRank);
 }
@@ -23,7 +23,7 @@ export function jumpTo(state, shortcutId) {
   const shortcut = SHORTCUTS.find((s) => s.id === shortcutId);
   if (!shortcut) return false;
   if (!canJump(state)) return false;
-  if (state.travel || state.gathering || !state.location.poiId) return false;
+  if (state.travel || !state.location.poiId) return false;
   const rank = state.hero.skills.athletics.rank;
   if (rank < shortcut.athleticsRank) return false;
 
@@ -34,10 +34,11 @@ export function jumpTo(state, shortcutId) {
 
   state.location = { regionId: destPoi.regionId, poiId: destPoiId };
   state.monster = null;
-  state.progress.poiDepth = 0;
+  state.meditating = false;
+  state.progress.wave = 1;
+  state.progress.waveMonstersLeft = 0;
   state.progress.timeInPoi = 0;
   state.progress.killsInPoi = 0;
-  state.progress.killsSinceBoss = 0;
   state.hero.attackTimer = 0;
   if (!state.progress.visitedPois.includes(destPoiId)) state.progress.visitedPois.push(destPoiId);
 

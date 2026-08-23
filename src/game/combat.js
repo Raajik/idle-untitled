@@ -1,11 +1,12 @@
 // Combat: pure tick-based battle resolution. Mutates state; no DOM access.
-// Combat only runs when the hero is standing at a POI (not travelling, not in town).
-// Difficulty within a POI ("depth") rises with time spent and kills, resets when
-// you travel away, and gates the boss in as a random encounter rather than a
-// one-time unlock.
+// Combat only runs when the hero is standing at a hunting POI — not travelling,
+// not meditating, not in town, and not at a site POI like a budding Lifestone.
+// Monsters arrive in waves (see game/waves.js) — difficulty rises with the wave
+// number, and clearing the last wave pays out the POI's gathering material and
+// starts the waves over.
 
-import { getPoiById, isMagicDamageType } from '../data/regions.js';
-import { monsterStatsForLevel, bossStatsForLevel } from '../data/monsterScaling.js';
+import { getPoiById, isMagicDamageType, isSite } from '../data/regions.js';
+import { monsterStatsForLevel } from '../data/monsterScaling.js';
 import { TUTORIAL_ROAD } from '../data/tutorial.js';
 import {
   MELEE_STANCES,
@@ -23,9 +24,11 @@ import { derivedStats, grantXp } from './hero.js';
 import { rollDrop, maybeAutoEquip } from './loot.js';
 import { addLog } from './state.js';
 import { tickTravel, arrive } from './travel.js';
-import { tickRecallCooldown } from './lifestone.js';
+import { tickRecallCooldown, respawnAtLifestone } from './lifestone.js';
+import { tickMeditation } from './meditation.js';
 import { tickJumpCooldown } from './shortcuts.js';
-import { tickGathering } from './gathering.js';
+import { beginWaveIfNeeded, recordWaveKill, waveDifficulty } from './waves.js';
+import { tickBuildings } from './buildings.js';
 import {
   trainSkill,
   trainAttribute,
@@ -49,40 +52,28 @@ import {
 const MONSTER_ATTACK_INTERVAL = 1.2; // seconds
 const RESPAWN_DELAY = 3.0;
 
-const DEPTH_CAP = 3.0;
-const BOSS_DEPTH_THRESHOLD = 0.75;
-const BOSS_CHANCE_AT_THRESHOLD = 0.075;
-const BOSS_CHANCE_CAP = 0.28;
-const MIN_TRASH_AFTER_BOSS = 3;
-
 const HERO_STAMINA_COST_PER_DEFEND = 4;
 const MONSTER_STAMINA_COST_PER_DODGE = 3;
-
-// Difficulty multiplier for the current POI: rises with time spent and kills,
-// capped so a POI can't scale forever.
-export function computeDepth(progress) {
-  return Math.min(DEPTH_CAP, progress.timeInPoi * 0.0025 + progress.killsInPoi * 0.01);
-}
-
-function bossChance(depth) {
-  if (depth < BOSS_DEPTH_THRESHOLD) return 0;
-  const t = (depth - BOSS_DEPTH_THRESHOLD) / (DEPTH_CAP - BOSS_DEPTH_THRESHOLD);
-  return BOSS_CHANCE_AT_THRESHOLD + t * (BOSS_CHANCE_CAP - BOSS_CHANCE_AT_THRESHOLD);
-}
 
 function resolvePoi(state) {
   return state.location.poiId === TUTORIAL_ROAD.id ? TUTORIAL_ROAD : getPoiById(state.location.poiId);
 }
 
+// The tutorial road reuses the combat tick but isn't a real POI — no waves, no
+// wave scaling, no clears (and no loot; see onMonsterDeath).
+function onTutorialRoad(state) {
+  return state.location.poiId === TUTORIAL_ROAD.id;
+}
+
 export function spawnMonster(state) {
   const poi = resolvePoi(state);
   const p = state.progress;
-  const depth = computeDepth(p);
-  p.poiDepth = depth;
+  const tutorial = onTutorialRoad(state);
+  if (!tutorial) beginWaveIfNeeded(state);
 
-  const canRollBoss = p.killsSinceBoss >= MIN_TRASH_AFTER_BOSS && Math.random() < bossChance(depth);
-  const def = canRollBoss ? poi.boss : pick(poi.monsters);
-  const base = canRollBoss ? bossStatsForLevel(def.level) : monsterStatsForLevel(def.level);
+  const depth = tutorial ? 0 : waveDifficulty(p.wave);
+  const def = pick(poi.monsters);
+  const base = monsterStatsForLevel(def.level);
   const r = 1 + depth;
   state.monster = {
     name: def.name,
@@ -94,12 +85,10 @@ export function spawnMonster(state) {
     def: Math.round(base.def * r),
     xp: base.xp,
     pyreals: base.pyreals,
-    isBoss: canRollBoss,
     dodge: base.dodge,
     maxStamina: Math.round(base.maxStamina * (1 + depth * 0.5)),
     stamina: Math.round(base.maxStamina * (1 + depth * 0.5)),
   };
-  if (canRollBoss) addLog(state, `☠ ${def.name} appears!`, 'boss');
 }
 
 function dealDamage(rawAtk, targetDef, critChance, critMult = 2) {
@@ -242,24 +231,17 @@ function onMonsterDeath(state) {
   const levels = grantXp(state, m.xp);
 
   p.totalKills += 1;
-  if (m.isBoss) {
-    p.bossesKilled += 1;
-    p.killsSinceBoss = 0;
-    addLog(state, `☠ ${m.name} defeated! +${fmt(m.xp)} XP, +${fmt(pyrealsGain)} pyreals`, 'boss');
-  } else {
-    p.killsInPoi += 1;
-    p.killsSinceBoss += 1;
-    addLog(state, `${m.name} slain. +${fmt(m.xp)} XP, +${fmt(pyrealsGain)} pyreals`, 'dim');
-  }
+  p.killsInPoi += 1;
+  addLog(state, `${m.name} slain. +${fmt(m.xp)} XP, +${fmt(pyrealsGain)} pyreals`, 'dim');
 
   if (levels > 0) {
     addLog(state, `Level up! Now level ${state.hero.level}.`, 'good');
     pushFx({ type: 'levelup' });
   }
 
-  if (state.location.poiId === TUTORIAL_ROAD.id) return; // roadside critters carry nothing to loot
+  if (onTutorialRoad(state)) return; // roadside critters carry nothing to loot, and aren't a wave
 
-  const drop = rollDrop(state, m.isBoss);
+  const drop = rollDrop(state);
   if (drop) {
     p.totalDrops += 1;
     if (maybeAutoEquip(state, drop)) {
@@ -269,6 +251,10 @@ function onMonsterDeath(state) {
       addLog(state, `⚔ Loot: ${drop.name} [${drop.rarity}]`, 'loot-line');
     }
   }
+
+  // Loot first, then the wave: the drop is rolled at the wave it was earned on,
+  // and the "cleared!" line lands last.
+  recordWaveKill(state, getPoiById(state.location.poiId));
 }
 
 // Fires once, the first time the hero ever dies: Alcott's second beat, which
@@ -316,10 +302,21 @@ export function activeAttackInterval(state, stats) {
   return stance.interval ?? 1 / stats.spd;
 }
 
+// Which vital the active attack draws on ('stamina' | 'mana' | 'life'). Used to
+// color the attack bar to match that vital's own bar.
+export function activeAttackResource(state) {
+  const h = state.hero;
+  const mode = h.combat.mode;
+  if (mode === 'archery') return ARCHERY_STANCES[h.combat.archeryStance].resource;
+  if (mode === 'magic') return MAGIC_SPELLS[h.combat.magicSpell].resource;
+  return MELEE_STANCES[h.combat.meleeStance].resource;
+}
+
 // One game tick. dt in seconds.
 export function tickCombat(state, dt) {
   tickRecallCooldown(state, dt);
   tickJumpCooldown(state, dt);
+  tickBuildings(state);
 
   if (state.travel && state.travel.tutorial) {
     tickTutorialJourney(state, dt);
@@ -327,10 +324,11 @@ export function tickCombat(state, dt) {
     return; // travelling: no combat, Athletics trains instead
   }
 
-  if (tickGathering(state, dt)) return; // gathering: no combat this tick
+  if (tickMeditation(state, dt)) return; // meditating: resting instead of fighting
 
   const h = state.hero;
   if (!state.location.poiId) return; // in town: nothing to fight
+  if (isSite(resolvePoi(state))) return; // a site (e.g. a budding Lifestone): nothing to fight either
 
   const stats = derivedStats(state);
 
@@ -343,7 +341,13 @@ export function tickCombat(state, dt) {
     if (h.respawnTimer <= 0) {
       h.dead = false;
       h.hp = stats.maxHp;
-      addLog(state, 'You awaken at your Lifestone, ready to fight again.', 'dim');
+      // The tutorial road is a scripted walk, not somewhere you can be pulled out
+      // of — everywhere else, death drops you back at your bound Lifestone.
+      if (onTutorialRoad(state)) {
+        addLog(state, 'You awaken at your Lifestone, ready to fight again.', 'dim');
+      } else {
+        respawnAtLifestone(state);
+      }
     }
     return;
   }
@@ -455,14 +459,7 @@ export function tickCombat(state, dt) {
       h.dead = true;
       h.respawnTimer = RESPAWN_DELAY;
       handleHeroDeath(state);
-      if (m.isBoss) {
-        // Losing to the boss makes it retreat — depth is kept, so you can challenge
-        // it again once you've clawed back the trash kills needed to re-roll it.
-        state.monster = null;
-        addLog(state, `The ${m.name} batters you down and retreats into the depths. Regain your strength and try again.`, 'boss');
-      } else {
-        addLog(state, `You fall to ${m.name}. Your Lifestone shimmers, calling you back...`, 'boss');
-      }
+      addLog(state, `You fall to ${m.name}. Your Lifestone shimmers, calling you back...`, 'boss');
       return;
     }
   }

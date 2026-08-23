@@ -4,7 +4,7 @@
 // `kind: 'category'` entries (Hero) are headers, not routable tabs — they render
 // nested tab buttons for every unlocked entry whose `parent` matches their id.
 
-import { canRebirth } from '../game/prestige.js';
+import { canEnlighten } from '../game/enlightenment.js';
 
 // Owning any gear at all — via a kill-drop, a shop purchase, or the tutorial's
 // auto-equips — not just having ever gotten a monster drop specifically.
@@ -29,7 +29,7 @@ export const UNLOCKS = [
     parent: 'hero',
     label: 'Tinkering',
     when: (s) => Object.values(s.materials).some((c) => c > 0),
-    toast: '🔧 Tinkering unlocked — use gathered/salvaged materials to improve your gear!',
+    toast: '🔧 Tinkering unlocked — use materials from clears and salvage to improve your gear!',
   },
   {
     id: 'lifestone',
@@ -40,8 +40,8 @@ export const UNLOCKS = [
   },
   { id: 'recall', kind: 'tab', parent: 'lifestone', label: 'Recall', when: (s) => s.progress.recallUnlocked },
   { id: 'training', kind: 'tab', label: '💰 Training', when: (s) => s.progress.totalPyrealsEarned >= 200, toast: '💰 Training unlocked — spend pyreals on permanent % upgrades!' },
-  { id: 'rebirth', kind: 'tab', label: '✦ Rebirth', when: (s) => s.progress.bossesKilled >= 1, toast: '✦ Rebirth unlocked — a greater power stirs...', teaser: (s) => !canRebirth(s) },
-  { id: 'overview', kind: 'tab', label: '📊 Overview', when: (s) => s.rebirth.count >= 1, toast: '📊 Overview unlocked — monitor everything at once!' },
+  { id: 'enlightenment', kind: 'tab', label: '✦ Enlightenment', when: (s) => s.progress.totalClears >= 1, toast: '✦ Enlightenment unlocked — a greater power stirs...', teaser: (s) => !canEnlighten(s) },
+  { id: 'overview', kind: 'tab', label: '📊 Overview', when: (s) => s.enlightenment.count >= 1, toast: '📊 Overview unlocked — monitor everything at once!' },
   { id: 'settings', kind: 'tab', label: '⚙ Settings', when: () => true },
 ];
 

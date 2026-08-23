@@ -47,10 +47,24 @@ test('maybeAutoEquip only equips strictly better items', () => {
   assert.equal(s.inventory.length, 0); // maybeAutoEquip itself never adds to inventory
 });
 
-test('bosses always drop', () => {
+test('later waves drop more powerful gear than wave 1', () => {
   const s = createInitialState();
   s.location = { regionId: 'holtburg', poiId: 'holtburg-meeting-hall' };
-  for (let i = 0; i < 10; i++) assert.ok(rollDrop(s, true));
+  const avgPowerAtWave = (wave) => {
+    s.progress.wave = wave;
+    let total = 0;
+    let drops = 0;
+    for (let i = 0; i < 400; i++) {
+      const item = rollDrop(s);
+      if (item) {
+        total += item.power;
+        drops += 1;
+      }
+    }
+    assert.ok(drops > 0);
+    return total / drops;
+  };
+  assert.ok(avgPowerAtWave(10) > avgPowerAtWave(1));
 });
 
 test('itemScore ranks power and spells', () => {

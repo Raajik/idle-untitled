@@ -46,11 +46,11 @@ test('progressive UI unlocks derive from game state', () => {
 
   s.inventory.push({ id: 1, slot: 'weapon', power: 5, spells: [], rarity: 'Common', name: 'Worn Sword' });
   s.progress.totalPyrealsEarned = 10000;
-  s.progress.bossesKilled = 1;
+  s.progress.totalClears = 1;
   s.progress.visitedPois = ['holtburg-meeting-hall'];
-  s.rebirth.count = 1;
+  s.enlightenment.count = 1;
   tabs = unlockedTabs(s).map((t) => t.id);
-  for (const id of ['attributes', 'skills', 'inventory', 'training', 'rebirth', 'overview']) {
+  for (const id of ['attributes', 'skills', 'inventory', 'training', 'enlightenment', 'overview']) {
     assert.ok(tabs.includes(id), `expected ${id} unlocked`);
   }
 });

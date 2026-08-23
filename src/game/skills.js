@@ -12,7 +12,11 @@ import { addLog } from './state.js';
 import { ATTRIBUTES } from './hero.js';
 
 export const MAX_SKILL_RANK = 100;
-export const ATHLETICS_XP_PER_SECOND = 4;
+// Walking is effortless and Athletics is the skill that shortens walking, so a
+// generous rate here compounds: it used to out-train every combat skill and let a
+// single long haul between regions jump Athletics ~10 ranks on its own. Kept just
+// under the rate a fight trains a weapon skill at.
+export const ATHLETICS_XP_PER_SECOND = 1.5;
 export const COMBAT_SKILL_XP = 1; // xp granted to a combat skill per attack faced/thrown
 
 // Attribute-xp grants: attributes level up from actions the same way skills do,
@@ -27,7 +31,7 @@ export const HIT_TAKEN_END_XP = 1; // END per landed hit
 export const DEATH_END_XP = 15; // additional END on death, on top of the hit's own grant
 export const SALVAGE_ATTR_XP = { str: 3, coord: 2, focus: 2 };
 export const TINKER_ATTR_XP = { coord: 2, focus: 2 };
-export const QUICK_XP_PER_ATHLETICS_SECOND = 1; // scaled down from ATHLETICS_XP_PER_SECOND
+export const QUICK_XP_PER_ATHLETICS_SECOND = 0.4; // same ~1/4 ratio to ATHLETICS_XP_PER_SECOND
 export const JUMP_QUICK_XP_ON_USE = 4; // scaled down from JUMP_XP_ON_USE, same ratio
 
 // Melee weapons (and bare fists) train their own skill; Bow/Crossbow are Ranged.

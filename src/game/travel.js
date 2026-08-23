@@ -1,6 +1,6 @@
 // Travel: walking to a region or a POI. Combat is suspended while `state.travel`
-// is set; arriving unlocks the region or moves the hero to the POI, resetting that
-// POI's difficulty depth. Every region and POI is visible and clickable from the
+// is set; arriving unlocks the region or moves the hero to the POI, restarting its
+// waves from wave 1. Every region and POI is visible and clickable from the
 // very start — distance is expressed purely through `walkSeconds`, not gating.
 // Clicking a new destination redirects travel immediately, even mid-walk.
 
@@ -10,10 +10,10 @@ import { modifiedWalkTime, grantAthleticsXp } from './skills.js';
 import { addLog } from './state.js';
 
 function resetPoiProgress(state) {
-  state.progress.poiDepth = 0;
+  state.progress.wave = 1;
+  state.progress.waveMonstersLeft = 0;
   state.progress.timeInPoi = 0;
   state.progress.killsInPoi = 0;
-  state.progress.killsSinceBoss = 0;
   state.monster = null;
   state.hero.attackTimer = 0;
 }
@@ -29,6 +29,7 @@ export function startTravelToRegion(state, regionId) {
     state.travel = { kind: 'region', id: regionId, remaining: TUTORIAL_JOURNEY_SECONDS, duration: TUTORIAL_JOURNEY_SECONDS, tutorial: true };
     state.location = { regionId: null, poiId: TUTORIAL_ROAD.id };
     state.monster = null;
+    state.meditating = false;
     addLog(state, `You set out for Holtburg, alone on the open road...`, 'dim');
     return true;
   }
@@ -37,6 +38,7 @@ export function startTravelToRegion(state, regionId) {
   state.travel = { kind: 'region', id: regionId, remaining: duration, duration };
   state.location = { regionId: null, poiId: null };
   state.monster = null;
+  state.meditating = false;
   addLog(state, `You set out for ${region.name}...`, 'dim');
   return true;
 }
@@ -50,6 +52,7 @@ export function startTravelToPoi(state, poiId) {
   state.travel = { kind: 'poi', id: poiId, remaining: duration, duration };
   state.location = { regionId: poi.regionId, poiId: null };
   state.monster = null;
+  state.meditating = false;
   addLog(state, `Walking to ${poi.name}...`, 'dim');
   return true;
 }

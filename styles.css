@@ -199,7 +199,17 @@ button.btn.active { border-color: var(--accent); color: var(--accent); backgroun
 }
 .stance-seg:hover { border-color: var(--accent); color: var(--accent); }
 .stance-seg.active { border-color: var(--accent); color: var(--accent); background: var(--bg-panel); }
-.bar.attack > .fill { background: var(--accent); }
+/* The attack bar takes the color of whatever vital the attack spends, so the fill
+   matches that vital's own bar (see data/combatStances.js `resource`). */
+.bar.attack > .fill {
+  background: var(--accent);
+  /* Driven per animation frame (see ui/render.js attackBarProgress) — a CSS
+     transition on top of that fights the interpolation and lags the reset. */
+  transition: none;
+}
+.bar.attack.res-stamina > .fill { background: var(--stamina); }
+.bar.attack.res-mana > .fill { background: var(--mana); }
+.bar.attack.res-life > .fill { background: var(--hp); }
 
 /* Combat log */
 .log {
@@ -249,6 +259,8 @@ button.btn.primary { border-color: var(--accent); color: var(--accent); }
 .tile.travelling { border-color: var(--xp); color: var(--xp); }
 .tile .sub, .tile .travel-timer { display: block; font-size: 10px; color: var(--text-dim); margin-top: 2px; }
 .tile.travelling .travel-timer { color: var(--xp); font-weight: bold; }
+.tile.locked { opacity: 0.55; border-style: dashed; }
+.tile .gather-note { color: var(--mana); opacity: 0.8; }
 .tile.fade-in { animation: tile-fade-in 0.6s ease-out; }
 @keyframes tile-fade-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 

@@ -4,6 +4,11 @@ export function fmt(n) {
   return Math.round(n).toLocaleString('en-US');
 }
 
+// "1 soul" / "2 souls". Pass `many` when the plural isn't just an added s.
+export function plural(n, one, many = `${one}s`) {
+  return `${fmt(n)} ${n === 1 ? one : many}`;
+}
+
 // Seconds -> short human string, e.g. 90 -> "1m 30s", 7530 -> "2h 5m".
 export function formatDuration(totalSeconds) {
   const s = Math.max(0, Math.ceil(totalSeconds));

@@ -29,7 +29,7 @@ const renderer = createRenderer(state, {
 
 const loop = createLoop({
   tick: (dt) => tickCombat(state, dt),
-  frame: () => renderer.frame(),
+  frame: (dt) => renderer.frame(dt), // dt in ms: the renderer interpolates the attack bar between ticks
   autosave: () => saveGame(state),
 });
 

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { trainingCost, buyTraining, TRAINING_TRACKS } from '../src/game/training.js';
-import { soulsForRun, performRebirth, buyUpgrade, canRebirth } from '../src/game/prestige.js';
+import { soulsForRun, performEnlightenment, buyUpgrade, canEnlighten } from '../src/game/enlightenment.js';
 import { createInitialState } from '../src/game/state.js';
 
 test('training cost grows exponentially', () => {
@@ -28,37 +28,37 @@ test('soulsForRun is zero before reaching Banderling Plains and grows after', ()
   assert.ok(s3 > s1);
 });
 
-test('rebirth resets the run but keeps souls and upgrades', () => {
+test('enlightenment resets the run but keeps souls and upgrades', () => {
   const s = createInitialState();
   s.progress.unlockedRegions = ['holtburg', 'glenden-wood'];
   s.hero.level = 25;
   s.pyreals = 5000;
   s.inventory.push({ id: 1, slot: 'weapon', power: 5, spells: [], rarity: 'Common', name: 'x' });
-  assert.ok(canRebirth(s));
+  assert.ok(canEnlighten(s));
 
-  const gained = performRebirth(s);
+  const gained = performEnlightenment(s);
   assert.ok(gained > 0);
-  assert.equal(s.rebirth.souls, gained);
-  assert.equal(s.rebirth.count, 1);
+  assert.equal(s.enlightenment.souls, gained);
+  assert.equal(s.enlightenment.count, 1);
   assert.equal(s.pyreals, 0);
   assert.equal(s.hero.level, 1);
   assert.equal(s.progress.unlockedRegions.length, 0);
   assert.equal(s.inventory.length, 0);
 });
 
-test('cannot rebirth before reaching Glenden Wood', () => {
+test('cannot enlightenment before reaching Glenden Wood', () => {
   const s = createInitialState();
-  assert.equal(canRebirth(s), false);
-  assert.equal(performRebirth(s), 0);
+  assert.equal(canEnlighten(s), false);
+  assert.equal(performEnlightenment(s), 0);
 });
 
 test('buyUpgrade spends souls and respects max rank', () => {
   const s = createInitialState();
-  s.rebirth.souls = 100;
+  s.enlightenment.souls = 100;
   assert.equal(buyUpgrade(s, 'xpBoost'), true);
-  assert.equal(s.rebirth.upgrades.xpBoost, 1);
+  assert.equal(s.enlightenment.upgrades.xpBoost, 1);
   // max it out
-  s.rebirth.souls = 1000;
+  s.enlightenment.souls = 1000;
   for (let i = 0; i < 10; i++) buyUpgrade(s, 'xpBoost');
-  assert.equal(s.rebirth.upgrades.xpBoost, 5); // maxRank
+  assert.equal(s.enlightenment.upgrades.xpBoost, 5); // maxRank
 });

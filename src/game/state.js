@@ -1,9 +1,9 @@
 // Central game state. One object, mutated by game logic, read by the UI.
 
 import { DAMAGE_TYPES } from '../data/regions.js';
-import { rollShopStock } from '../data/shops.js';
+import { freshBuildings } from '../data/buildings.js';
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 function freshSkill() {
   return { rank: 0, xp: 0 };
@@ -79,32 +79,38 @@ export function createInitialState() {
     },
     location: { regionId: null, poiId: null }, // null,null = still on the road to Holtburg
     travel: null, // { kind: 'region'|'poi', id, remaining, duration }
-    gathering: null, // { nodeId, remaining, duration } — suspends combat like travel does
+    meditating: false, // channelled rest; suspends combat like travel does (see game/meditation.js)
     progress: {
       unlockedRegions: [], // arrived at
       visitedPois: [],
-      poiDepth: 0, // current POI's difficulty multiplier (resets on travel away)
+      wave: 1, // current wave at this POI, 1..WAVES_PER_POI (resets on travel away)
+      waveMonstersLeft: 0, // monsters still standing in the current wave; 0 = roll a new wave
+      poiClears: {}, // poiId -> how many full clears (10 waves) you've done there
+      totalClears: 0,
       timeInPoi: 0,
       killsInPoi: 0,
-      killsSinceBoss: 0,
-      bossesKilled: 0,
       totalKills: 0,
       totalPyrealsEarned: 0,
       totalXpEarned: 0,
       totalDrops: 0,
       aetheriaSlots: 0,
       firstDeathHandled: false, // whether Alcott's "death teaches lessons" beat has fired
+      // Where you respawn. You start bound to the stone you woke beside on the road
+      // (regionId null = not in any region yet), a full 3-minute walk short of
+      // Holtburg — growing the budding Lifestone there moves this to Holtburg's hub.
+      boundLifestone: { regionId: null, poiId: null },
+      lifestoneGrowth: {}, // poiId -> 0..LIFESTONE_GROWTH_REQUIRED for each budding Lifestone
       recallUnlocked: false,
       recallCooldown: 0, // seconds remaining until Recall can be used again
       jumpCooldown: 0, // seconds remaining until a shortcut Jump can be used again
     },
-    monster: null, // current monster instance { name, hp, maxHp, atk, def, xp, pyreals, isBoss }
+    monster: null, // current monster instance { name, hp, maxHp, atk, def, xp, pyreals }
     equipment: { weapon: null, armor: null, shield: null, amulet: null, ring: null },
     inventory: [],
     materials: {}, // materialId -> count, no cap
-    shops: rollShopStock(), // shopId -> stock array, rolled once at creation
+    buildings: freshBuildings(), // buildingId -> { level, stock, rotatesAt }; only the General Store starts open
     training: { atk: 0, hp: 0, pyreals: 0 },
-    rebirth: {
+    enlightenment: {
       souls: 0,
       count: 0,
       upgrades: {}, // id -> rank
@@ -116,14 +122,14 @@ export function createInitialState() {
     ui: {
       seenUnlocks: [], // ids the player has been toasted about
       activeTab: 'battle',
-      activeShop: null, // which shop panel is expanded in the Battle tab's town view
+      activeBuilding: null, // which building panel is expanded in the Battle tab's town view
       inventoryFilter: { slot: 'all', rarity: 'all', spellId: 'all' },
     },
     lastSeen: Date.now(),
   };
 }
 
-// Reset everything a rebirth resets, keeping souls/upgrades/settings/unlock memory.
+// Reset everything an Enlightenment resets, keeping souls/upgrades/settings/unlock memory.
 export function resetRun(state) {
   const fresh = createInitialState();
   const name = state.hero.name;
@@ -136,7 +142,7 @@ export function resetRun(state) {
   state.hero.skills.lifestone = recallSkill;
   state.location = fresh.location;
   state.travel = fresh.travel;
-  state.gathering = fresh.gathering;
+  state.meditating = false;
   state.progress = fresh.progress;
   state.progress.recallUnlocked = recallUnlocked;
   state.progress.firstDeathHandled = firstDeathHandled;
@@ -144,10 +150,10 @@ export function resetRun(state) {
   state.equipment = fresh.equipment;
   state.inventory = fresh.inventory;
   state.materials = fresh.materials;
-  state.shops = rollShopStock();
+  state.buildings = freshBuildings(); // town is rebuilt from scratch: buildings cost run currency, like Training
   state.training = fresh.training;
   state.log = fresh.log;
-  // keep: rebirth, settings, ui.seenUnlocks, lastSeen, onboarding, hero.name, Recall skill/unlock
+  // keep: enlightenment, settings, ui.seenUnlocks, lastSeen, onboarding, hero.name, Recall skill/unlock
 }
 
 const MAX_LOG = 60;

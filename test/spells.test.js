@@ -2,10 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spellLevelCeiling, rollSpellLevel, rollSpell, spellBonusKey, MAX_SPELL_LEVEL } from '../src/data/spells.js';
 
-test('spellLevelCeiling rises with POI depth and region tier, capped at MAX_SPELL_LEVEL', () => {
-  assert.equal(spellLevelCeiling(0, 0), 1); // fresh Holtburg: level 1 only
-  assert.ok(spellLevelCeiling(3, 0) < MAX_SPELL_LEVEL); // deep in a starting region, still capped below max
-  assert.equal(spellLevelCeiling(3, 5), MAX_SPELL_LEVEL); // deep in a late-game region hits the cap
+test('spellLevelCeiling rises with wave depth and region tier, capped at MAX_SPELL_LEVEL', () => {
+  assert.equal(spellLevelCeiling(0, 0), 1); // Holtburg, wave 1: level 1 only
+  assert.ok(spellLevelCeiling(1.08, 0) > spellLevelCeiling(0, 0)); // last wave of the same POI rolls higher
+  assert.ok(spellLevelCeiling(1.08, 0) < MAX_SPELL_LEVEL); // ...but a starting region still can't reach the cap
+  assert.equal(spellLevelCeiling(1.08, 5), MAX_SPELL_LEVEL); // late region, late wave hits the cap
 });
 
 test('rollSpellLevel stays within 1..ceiling and skews toward the low end', () => {

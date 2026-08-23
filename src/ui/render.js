@@ -4,21 +4,24 @@
 //   - frame():  per-animation-frame in-place updates for live combat + fx
 
 import { topLevelEntries, childTabs, drainNewUnlocks, UNLOCKS } from './unlocks.js';
-import { battleTab, attributesTab, skillsTab, inventoryTab, trainingTab, rebirthTab, recallTab, tinkeringTab, overviewTab, settingsTab, battleDockHtml } from './tabs.js';
+import { battleTab, attributesTab, skillsTab, inventoryTab, trainingTab, enlightenmentTab, recallTab, tinkeringTab, overviewTab, settingsTab, battleDockHtml, waveLine, attackBarLabel } from './tabs.js';
 import { startTravelToRegion, startTravelToPoi } from '../game/travel.js';
 import { derivedStats, xpForLevel, totalXpForLevel } from '../game/hero.js';
 import { equipItem, salvageItem } from '../game/loot.js';
 import { buyTraining } from '../game/training.js';
-import { performRebirth, buyUpgrade } from '../game/prestige.js';
+import { performEnlightenment, buyUpgrade } from '../game/enlightenment.js';
 import { exportSave, importSave, hardReset, saveGame, suppressSave } from '../save.js';
 import { drainFx } from '../engine/fx.js';
+import { TICK_MS } from '../engine/loop.js';
 import { fmt, formatDuration } from '../engine/format.js';
-import { computeDepth, fleeTutorialEncounter, activeAttackInterval } from '../game/combat.js';
+import { fleeTutorialEncounter, activeAttackInterval, activeAttackResource } from '../game/combat.js';
+import { isSite, getPoiById } from '../data/regions.js';
+import { unlockBuilding, upgradeBuilding, rotationRemaining } from '../game/buildings.js';
 import { activeWeaponSkill } from '../game/skills.js';
 import { setHeroName, answerSeenLifestone, acknowledgeAlcottIntro } from '../game/onboarding.js';
-import { recallTo } from '../game/lifestone.js';
+import { recallTo, feedLifestone } from '../game/lifestone.js';
+import { startMeditating, stopMeditating } from '../game/meditation.js';
 import { jumpTo } from '../game/shortcuts.js';
-import { startGathering } from '../game/gathering.js';
 import { applyTinkering } from '../game/tinkering.js';
 import { buyItem, sellItem, healService } from '../game/shop.js';
 import { getMaterial } from '../data/materials.js';
@@ -30,7 +33,7 @@ const TAB_RENDERERS = {
   skills: skillsTab,
   inventory: inventoryTab,
   training: trainingTab,
-  rebirth: rebirthTab,
+  enlightenment: enlightenmentTab,
   recall: recallTab,
   tinkering: tinkeringTab,
   overview: overviewTab,
@@ -45,8 +48,11 @@ const TAB_RENDERERS = {
 function battleStructureKey(state) {
   const t = state.travel;
   const tutorialMonster = t && t.tutorial ? (state.monster ? 'm' : 'nm') : '';
-  const gatherKey = state.gathering ? state.gathering.nodeId : '';
-  return `${state.onboarding.step}|${t ? t.kind + ':' + t.id : ''}|${state.location.regionId}|${state.location.poiId}|${tutorialMonster}|${gatherKey}|${state.ui.activeShop || ''}`;
+  // The open building's restock timestamp is part of the shape: when its stock
+  // rotates out from under an open panel, the panel has to be rebuilt.
+  const open = state.ui.activeBuilding;
+  const buildingKey = open ? `${open}:${state.buildings[open] ? state.buildings[open].rotatesAt : ''}` : '';
+  return `${state.onboarding.step}|${t ? t.kind + ':' + t.id : ''}|${state.location.regionId}|${state.location.poiId}|${tutorialMonster}|${buildingKey}|${state.meditating ? 'med' : ''}`;
 }
 
 function toast(text) {
@@ -67,11 +73,15 @@ export function createRenderer(state, { onImport }) {
   let lastLogLen = 0;
   let menuRenderFrames = 0;
   let lastBattleKey = null;
+  // Wall-clock copy of hero.attackTimer, plus the last raw value we saw — a drop
+  // between the two is how a landed swing is detected. See attackBarProgress.
+  let smoothAttackTimer = 0;
+  let lastAttackTimer = 0;
 
   function updateSummary() {
     const d = derivedStats(state);
     summary.innerHTML = `<b>Lv ${state.hero.level}</b> · <span class="gold">${fmt(state.pyreals)}p</span>` +
-      (state.rebirth.count > 0 ? `\n<span class="soul">${state.rebirth.souls} souls</span> · run ${state.rebirth.count + 1}` : '') +
+      (state.enlightenment.count > 0 ? `\n<span class="soul">${state.enlightenment.souls} souls</span> · run ${state.enlightenment.count + 1}` : '') +
       `\nATK ${d.atk} · HP ${Math.ceil(state.hero.hp)}/${d.maxHp}`;
   }
 
@@ -176,6 +186,40 @@ export function createRenderer(state, { onImport }) {
     }
   }
 
+  // Game logic ticks at TICK_HZ (4/s), so hero.attackTimer advances in 0.25s
+  // jumps — reading it straight makes the attack bar stair-step. This runs a
+  // wall-clock copy forward every animation frame instead.
+  //
+  // Two bounds keep the smoothed value honest: it never falls behind the real
+  // timer, and it never runs more than one tick ahead of it, so a stalled attack
+  // (a spell waiting on mana regen, say) parks the bar instead of filling it. A
+  // *drop* in the real timer is what marks a landed swing — testing "smooth is
+  // ahead of real" instead would fire between every pair of ticks and jitter the
+  // bar back and forth by one frame's worth of fill.
+  function attackBarProgress(dtMs, interval) {
+    const real = state.hero.attackTimer;
+    const swung = real < lastAttackTimer;
+    lastAttackTimer = real;
+    if (state.hero.dead || swung) {
+      smoothAttackTimer = real;
+    } else {
+      const oneTickAhead = real + TICK_MS / 1000;
+      smoothAttackTimer = Math.min(interval, oneTickAhead, Math.max(real, smoothAttackTimer + dtMs / 1000));
+    }
+    return smoothAttackTimer;
+  }
+
+  // Swaps the attack bar to the color of whatever vital the current attack spends.
+  // Patched rather than rebuilt so switching stance mid-swing recolors instantly.
+  function setAttackBarResource(resource) {
+    const el = document.getElementById('atk-bar');
+    if (!el) return;
+    const wanted = `res-${resource}`;
+    if (el.classList.contains(wanted)) return;
+    el.classList.remove('res-stamina', 'res-mana', 'res-life');
+    el.classList.add(wanted);
+  }
+
   // --- in-place live updates for battle/overview tabs ---
   function setBar(id, pct, label) {
     const fill = document.getElementById(id + '-fill');
@@ -209,7 +253,7 @@ export function createRenderer(state, { onImport }) {
     }
   }
 
-  function updateLive() {
+  function updateLive(dtMs = 16) {
     const d = derivedStats(state);
     const h = state.hero;
     const m = state.monster;
@@ -236,13 +280,19 @@ export function createRenderer(state, { onImport }) {
     setText('h-attack-line', `${aw.weaponName ? `Attacking with ${aw.weaponName}` : 'Fighting unarmed'}, ${aw.label} (Rank ${aw.skill.rank}).`);
 
     const atkInterval = activeAttackInterval(state, d);
-    const atkLabel = h.combat.mode === 'magic' ? 'Casting...' : 'Winding up...';
-    setBar('atk-bar', (h.attackTimer / atkInterval) * 100, atkLabel);
+    const elapsed = attackBarProgress(dtMs, atkInterval);
+    setBar('atk-bar', (elapsed / atkInterval) * 100, attackBarLabel(state, elapsed, atkInterval));
+    setAttackBarResource(activeAttackResource(state));
 
     const ovLine = document.getElementById('ov-hero-line');
-    if (ovLine) ovLine.innerHTML = `Level ${h.level} · <span class="gold">${fmt(state.pyreals)} pyreals</span> · <span class="soul">${state.rebirth.souls} souls</span>`;
+    if (ovLine) ovLine.innerHTML = `Level ${h.level} · <span class="gold">${fmt(state.pyreals)} pyreals</span> · <span class="soul">${state.enlightenment.souls} souls</span>`;
     if (state.location.poiId) {
-      setText('ov-kills', `+${Math.round(computeDepth(state.progress) * 100)}% difficulty`);
+      const poi = getPoiById(state.location.poiId);
+      if (poi) {
+        const line = waveLine(state, poi);
+        setText('poi-wave-line', line); // Battle tab header
+        setText('ov-kills', line); // Overview tile
+      }
     }
 
     appendLog();
@@ -256,13 +306,24 @@ export function createRenderer(state, { onImport }) {
     setText(t.kind === 'region' ? `region-timer-${t.id}` : `poi-timer-${t.id}`, text);
   }
 
-  function updateGatherCountdown() {
-    const g = state.gathering;
-    if (!g) return;
-    setText(`gather-timer-${g.nodeId}`, formatDuration(g.remaining));
+  // The hero's three vitals bars, without any of the monster/attack-bar patching
+  // updateLive() does — used wherever there's no fight on (sites, meditating).
+  function updateVitals() {
+    const d = derivedStats(state);
+    const h = state.hero;
+    updateSummary();
+    setBar('h-hp', (h.hp / d.maxHp) * 100, `${Math.ceil(h.hp)} / ${d.maxHp} HP`);
+    setBar('h-sta', (h.stamina / d.maxStamina) * 100, `${Math.ceil(h.stamina)} / ${d.maxStamina} Stamina`);
+    setBar('h-mana', (h.mana / d.maxMana) * 100, `${Math.ceil(h.mana)} / ${d.maxMana} Mana`);
+    appendLog();
   }
 
-  function frame() {
+  function updateRotationCountdown() {
+    if (!state.ui.activeBuilding) return;
+    setText('rotation-timer', formatDuration(rotationRemaining(state, state.ui.activeBuilding)));
+  }
+
+  function frame(dtMs = 16) {
     applyFx();
     const fresh = drainNewUnlocks(state);
     if (fresh.length) {
@@ -281,15 +342,16 @@ export function createRenderer(state, { onImport }) {
         render();
       } else if (state.travel) {
         updateTravelCountdown();
-        if (state.travel.tutorial) updateLive();
+        if (state.travel.tutorial) updateLive(dtMs);
       } else if (state.location.poiId) {
-        updateLive();
-      } else if (state.gathering) {
-        updateGatherCountdown();
+        // Sites have no monster, but their vitals bars still move while meditating.
+        if (isSite(getPoiById(state.location.poiId))) updateVitals();
+        else updateLive(dtMs);
+      } else {
+        updateRotationCountdown(); // standing in town: only the open shop's restock clock moves
       }
-      // else: standing in town with nothing travelling/gathering — nothing to patch this frame.
     } else if (state.ui.activeTab === 'overview') {
-      updateLive();
+      updateLive(dtMs);
     } else {
       // menu tabs: refresh periodically so gold/level stay current
       menuRenderFrames += 1;
@@ -322,7 +384,7 @@ export function createRenderer(state, { onImport }) {
       case 'equip': equipItem(state, Number(arg)); break;
       case 'toggle-autoequip': state.settings.autoEquip = !state.settings.autoEquip; break;
       case 'train': buyTraining(state, arg); break;
-      case 'rebirth': performRebirth(state); break;
+      case 'enlightenment': performEnlightenment(state); break;
       case 'buy-upgrade': buyUpgrade(state, arg); break;
       case 'submit-name': {
         const input = document.getElementById('name-input');
@@ -333,13 +395,19 @@ export function createRenderer(state, { onImport }) {
       case 'ack-intro': acknowledgeAlcottIntro(state); break;
       case 'flee-tutorial': fleeTutorialEncounter(state); break;
       case 'recall': recallTo(state, arg); break;
+      case 'toggle-meditate':
+        if (state.meditating) stopMeditating(state, 'You rise, and the quiet lets go of you.');
+        else startMeditating(state);
+        break;
+      case 'feed-lifestone': feedLifestone(state, arg); break;
       case 'jump-shortcut': jumpTo(state, arg); break;
-      case 'start-gather': startGathering(state, arg); break;
-      case 'open-shop': state.ui.activeShop = arg; break;
-      case 'close-shop': state.ui.activeShop = null; break;
+      case 'open-building': state.ui.activeBuilding = arg; break;
+      case 'close-building': state.ui.activeBuilding = null; break;
+      case 'unlock-building': unlockBuilding(state, arg); break;
+      case 'upgrade-building': upgradeBuilding(state, arg); break;
       case 'buy-item': {
-        const [shopId, idx] = arg.split(':');
-        buyItem(state, shopId, Number(idx));
+        const [buildingId, idx] = arg.split(':');
+        buyItem(state, buildingId, Number(idx));
         break;
       }
       case 'sell-item': sellItem(state, Number(arg)); break;

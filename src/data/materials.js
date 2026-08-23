@@ -7,8 +7,9 @@
 // with this game's currency.
 //
 // `category` determines which equipment slot a material can be applied to in
-// Tinkering (see game/tinkering.js), and which gathering-skill pool it's
-// mined/chopped/foraged/fished/skinned from (see data/gatherNodes.js).
+// Tinkering (see game/tinkering.js). GATHER_MATERIAL_POOLS at the bottom groups
+// the same materials by gathering skill — each POI's `gather` entry in
+// data/regions.js names one member of one pool as its full-clear payout.
 
 function mat(id, name, category) {
   return { id, name, category };
@@ -93,8 +94,10 @@ export function slotsForMaterialCategory(category) {
 // quantity of the item's material.
 export const SALVAGE_YIELD = { Common: 1, Uncommon: 2, Rare: 3, Epic: 5, Legendary: 8 };
 
-// Thematic pools gathering nodes draw from — subsets of the lists above so
-// gathering and salvage feed the same shared material pool.
+// What each gathering skill can yield — subsets of the lists above, so gathering
+// and salvage feed the same shared material pool. A POI's full-clear material
+// must be a member of the pool for the skill that clear trains
+// (test/waves.test.js enforces this).
 export const GATHER_MATERIAL_POOLS = {
   mining: ['iron', 'brass', 'granite', 'jet', 'copper', 'silver', 'gold'],
   woodcutting: ['oak', 'mahogany', 'pine', 'teak', 'ebony'],

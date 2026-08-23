@@ -6,7 +6,8 @@
 // tinkering.js for the call sites), the same way skills already do.
 // Character level is derived from total XP earned this run, using AC's cubic curve.
 
-import { REBIRTH_UPGRADES } from '../data/rebirth.js';
+import { ENLIGHTENMENT_UPGRADES } from '../data/enlightenment.js';
+import { heroBuildingBonuses } from '../data/buildings.js';
 import { spellBonusKey } from '../data/spells.js';
 
 export const ATTRIBUTES = [
@@ -39,7 +40,8 @@ export function levelFromTotalXp(xp) {
   return level;
 }
 
-// Aggregate all percentage/flat bonuses from item spells, training, and rebirth upgrades.
+// Aggregate all percentage/flat bonuses from item spells, training, unlocked town
+// buildings, and enlightenment upgrades.
 export function getBonuses(state) {
   const b = {
     atkPct: 0, atkFlat: 0, hpFlat: 0, hpPct: 0, pyrealsPct: 0, xpPct: 0, critPct: 0, luckPct: 0,
@@ -71,8 +73,12 @@ export function getBonuses(state) {
   b.hpPct += state.training.hp * 8;
   b.pyrealsPct += state.training.pyreals * 5;
 
-  for (const up of REBIRTH_UPGRADES) {
-    const rank = state.rebirth.upgrades[up.id] || 0;
+  for (const [key, val] of Object.entries(heroBuildingBonuses(state))) {
+    b[key] = (b[key] || 0) + val;
+  }
+
+  for (const up of ENLIGHTENMENT_UPGRADES) {
+    const rank = state.enlightenment.upgrades[up.id] || 0;
     if (rank === 0) continue;
     for (const [key, val] of Object.entries(up.effectPerRank)) {
       b[key] = (b[key] || 0) + val * rank;
