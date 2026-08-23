@@ -12,8 +12,11 @@ export const ACHIEVEMENTS = [
     id: 'vitae-hardened',
     name: 'Hardened by Vitae',
     desc: 'Carry the full 40% — whether you spent it at a Lifestone or earned it the hard way.',
-    reward: '+5 HP, Stamina and Mana regeneration per second',
-    effect: { hpRegenFlat: 5, staminaRegenFlat: 5, manaRegenFlat: 5 },
+    reward: '+1 HP, Stamina and Mana regeneration per second',
+    // Deliberately modest: at +5 this roughly quintupled stamina regen and wiped
+    // out the "fighting runs you down" pressure entirely (measured: 75% stalled
+    // down to 0%). +1 is a real, permanent easing without erasing the mechanic.
+    effect: { hpRegenFlat: 1, staminaRegenFlat: 1, manaRegenFlat: 1 },
   },
 ];
 

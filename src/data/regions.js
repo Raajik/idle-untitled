@@ -66,6 +66,26 @@ export const REGIONS = [
         boss: { name: 'Banderling Warlord', level: 7, dmgType: 'slash' },
       },
       {
+        id: 'colier-mine', name: 'Colier Mine', coords: '39.9N, 33.8E', quest: 'None', walkSeconds: 15,
+        gather: { skill: 'mining', material: 'opal' },
+        monsters: [
+          { name: 'Mine Drudge', level: 3, dmgType: 'bludgeon' },
+          { name: 'Cave Lurker', level: 3, dmgType: 'pierce' },
+          { name: 'Rockslide Golem', level: 4, dmgType: 'bludgeon' },
+        ],
+        boss: { name: 'The Deep Foreman', level: 8, dmgType: 'bludgeon' },
+      },
+      {
+        id: 'green-mire-grave', name: 'Green Mire Grave', coords: '38.4N, 35.1E', quest: 'None', walkSeconds: 17,
+        gather: { skill: 'foraging', material: 'velvet' },
+        monsters: [
+          { name: 'Grave Mite', level: 3, dmgType: 'acid' },
+          { name: 'Shallow Wisp', level: 4, dmgType: 'void' },
+          { name: 'Mire Zombie', level: 4, dmgType: 'acid' },
+        ],
+        boss: { name: 'The Mire Warden', level: 9, dmgType: 'void' },
+      },
+      {
         id: 'rat-nest', name: 'A Rat Nest', coords: '40.2N, 32.5E', quest: 'Rat Tails', walkSeconds: 16,
         gather: { skill: 'mining', material: 'copper' },
         monsters: [

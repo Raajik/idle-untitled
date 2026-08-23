@@ -8,8 +8,9 @@
 
 import { ENLIGHTENMENT_UPGRADES } from '../data/enlightenment.js';
 import { heroBuildingBonuses } from '../data/buildings.js';
+import { weaponClass } from '../data/items.js';
 import { achievementBonuses } from '../data/achievements.js';
-import { spellBonusKey } from '../data/spells.js';
+import { spellBonusKeys } from '../data/spells.js';
 import { vitaeMultiplier, workOffVitae } from './vitae.js';
 
 export const ATTRIBUTES = [
@@ -49,25 +50,33 @@ export function getBonuses(state) {
     atkPct: 0, atkFlat: 0, hpFlat: 0, hpPct: 0, pyrealsPct: 0, xpPct: 0, critPct: 0, luckPct: 0,
     weaponAtk: 0, armorDef: 0, armorFlat: 0, maxManaFlat: 0, startStats: 0,
     hpRegenFlat: 0, staminaRegenFlat: 0, manaRegenFlat: 0,
+    magicAtkFlat: 0, hitChancePct: 0, attackSpeedPct: 0, manaCostPct: 0, minDamagePct: 0,
     dodgeBonus: 0, blockBonus: 0, parryBonus: 0, magicResistanceBonus: 0, resistanceBonus: {},
   };
 
   for (const slot of Object.keys(state.equipment)) {
     const item = state.equipment[slot];
     if (!item) continue;
-    if (slot === 'weapon') b.weaponAtk += item.power;
+    // A weapon's power feeds whatever it's actually for: a blade or a bow sharpens
+    // your ATK, a wand or an orb sharpens what you channel through it. Holding a
+    // casting device in melee stance is therefore holding nothing much at all.
+    if (slot === 'weapon') {
+      if (weaponClass(item.baseType) === 'magic') b.magicAtkFlat += item.power;
+      else b.weaponAtk += item.power;
+    }
     if (slot === 'armor') {
       b.armorDef += Math.floor(item.power * 0.6);
       b.hpFlat += item.power * 2;
     }
     if (slot === 'shield') b.armorDef += Math.floor(item.power * 0.5);
     for (const spell of item.spells) {
-      const key = spellBonusKey(spell);
-      if (key.includes('.')) {
-        const [outer, inner] = key.split('.');
-        b[outer][inner] = (b[outer][inner] || 0) + spell.value;
-      } else {
-        b[key] = (b[key] || 0) + spell.value;
+      for (const key of spellBonusKeys(spell)) {
+        if (key.includes('.')) {
+          const [outer, inner] = key.split('.');
+          b[outer][inner] = (b[outer][inner] || 0) + spell.value;
+        } else {
+          b[key] = (b[key] || 0) + spell.value;
+        }
       }
     }
   }
@@ -105,7 +114,7 @@ export function derivedStats(state) {
   const vitae = vitaeMultiplier(state);
   const maxHp = Math.floor((20 + h.end * 5 + b.hpFlat) * (1 + b.hpPct / 100) * vitae);
   const atk = Math.floor((3 + h.str * 1.5 + b.weaponAtk + b.atkFlat) * (1 + b.atkPct / 100) * vitae);
-  const magicAtk = Math.floor((3 + h.focus * 1.5) * vitae); // Magic's own damage baseline, off Focus not Strength
+  const magicAtk = Math.floor((3 + h.focus * 1.5 + b.magicAtkFlat) * vitae); // Magic's own damage baseline, off Focus not Strength
   const def = Math.floor((h.end * 0.5 + b.armorDef + b.armorFlat) * vitae);
   const spd = 1 + h.quick * 0.04; // attacks per second
   const critChance = 5 + h.coord * 0.2 + b.critPct; // percent
@@ -123,6 +132,10 @@ export function derivedStats(state) {
     hpRegenFlat: b.hpRegenFlat,
     staminaRegenFlat: b.staminaRegenFlat,
     manaRegenFlat: b.manaRegenFlat,
+    hitChancePct: b.hitChancePct,
+    attackSpeedPct: b.attackSpeedPct,
+    manaCostPct: b.manaCostPct,
+    minDamagePct: b.minDamagePct,
     xpPct: b.xpPct,
     pyrealsPct: b.pyrealsPct,
     luckPct: b.luckPct,

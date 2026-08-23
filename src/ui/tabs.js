@@ -30,8 +30,9 @@ import { canMeditate, isRested } from '../game/meditation.js';
 import { vitaePct, atMaxVitae, xpToClearStack, VITAE_PER_STACK, MAX_VITAE_PCT } from '../game/vitae.js';
 import { ACHIEVEMENTS } from '../data/achievements.js';
 import { availableShortcutsFrom, canJump } from '../game/shortcuts.js';
-import { getMaterial, materialsForSlot } from '../data/materials.js';
-import { canTinker, TINKER_COST } from '../game/tinkering.js';
+import { getMaterial, materialsForSlot, MATERIALS } from '../data/materials.js';
+import { canTinker, tinkerEffectFor, TINKER_COST } from '../game/tinkering.js';
+import { TINKER_RECIPES } from '../data/tinkering.js';
 import {
   buildingsForRegion,
   getBuilding,
@@ -46,9 +47,13 @@ import { buyPrice, sellPrice, healCost } from '../game/shop.js';
 import { TRAINING_TRACKS, trainingCost } from '../game/training.js';
 import { soulsAvailable, canEnlighten, ENLIGHTENMENT_UPGRADES } from '../game/enlightenment.js';
 import { itemScore, salvageYield } from '../game/loot.js';
-import { STARTING_SLOTS, AETHERIA_SLOTS, RARITIES, itemIcon, slotIcon } from '../data/items.js';
+import { STARTING_SLOTS, AETHERIA_SLOTS, RARITIES, itemIcon, slotIcon, weaponClass } from '../data/items.js';
 import { UNLOCKS } from './unlocks.js';
 import { fmt, formatDuration, plural } from '../engine/format.js';
+
+function cap(s) {
+  return s[0].toUpperCase() + s.slice(1);
+}
 
 function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -636,24 +641,48 @@ export function tinkeringTab(state) {
     .map((slot) => {
       const item = state.equipment[slot];
       if (!item) return '';
-      const compatible = materialsForSlot(slot).filter((m) => (state.materials[m.id] || 0) >= TINKER_COST);
-      const body = compatible.length
-        ? `<select class="text-input" id="tinker-material-${slot}">${compatible.map((m) => `<option value="${m.id}">${esc(m.name)} (${state.materials[m.id]})</option>`).join('')}</select>
+      // A weapon only takes what its class has a use for; everything else takes
+      // anything of a matching category (see game/tinkering.js tinkerEffectFor).
+      const usable = materialsForSlot(slot)
+        .concat(slot === 'weapon' ? MATERIALS.filter((m) => !materialsForSlot(slot).includes(m)) : [])
+        .filter((m) => tinkerEffectFor(state, slot, m.id));
+      const affordable = usable.filter((m) => (state.materials[m.id] || 0) >= TINKER_COST);
+      const cls = slot === 'weapon' ? weaponClass(item.baseType) : null;
+      const teaches = (m) => {
+        const effect = tinkerEffectFor(state, slot, m.id);
+        return effect && effect !== 'any' ? ` — ${SPELL_ID_LABELS[effect] || effect}` : '';
+      };
+      const body = affordable.length
+        ? `<select class="text-input" id="tinker-material-${slot}">${affordable
+            .map((m) => `<option value="${m.id}">${esc(m.name)} (${state.materials[m.id]})${esc(teaches(m))}</option>`)
+            .join('')}</select>
            <button class="btn" data-action="apply-tinker" data-arg="${slot}">Apply (${TINKER_COST})</button>`
-        : `<span class="muted">No compatible materials (needs ${TINKER_COST}+ of a matching type)</span>`;
+        : `<span class="muted">Nothing to work in yet — needs ${TINKER_COST}+ of ${usable.length ? usable.map((m) => esc(m.name)).join(', ') : 'a matching material'}</span>`;
       return `<div class="upgrade-row">
-        <div><b>${esc(item.name)}</b> <span class="muted">[${slot}]</span></div>
+        <div><b>${esc(item.name)}</b> <span class="muted">[${cls ? `${cls} weapon` : slot}]</span></div>
         <div class="actions">${body}</div>
       </div>`;
     })
     .join('');
 
+  // The recipe table, so you know which dungeon to go farm before you go.
+  const recipeRows = Object.entries(TINKER_RECIPES)
+    .map(
+      ([cls, recipes]) => `<div class="upgrade-row">
+        <div><b>${cap(cls)} weapons</b><div class="desc">${Object.entries(recipes)
+          .map(([id, effect]) => `${esc(getMaterial(id) ? getMaterial(id).name : id)} → ${esc(SPELL_ID_LABELS[effect] || effect)}`)
+          .join(' · ')}</div></div>
+      </div>`
+    )
+    .join('');
+
   return `
     <div class="panel">
       <h2>Tinkering</h2>
-      <p class="muted">Consumes materials to add or boost an affix on an equipped item. A material only fits the slot it matches — no risk, no workmanship, just raw materials.</p>
+      <p class="muted">Works a material into an equipped item. No risk and no workmanship roll — but a weapon only takes what its kind has a use for, and each material always teaches the same thing.</p>
     </div>
     <div class="panel"><h2>Equipped Gear</h2>${slotRows || '<p class="muted">Nothing equipped yet.</p>'}</div>
+    <div class="panel"><h2>Weapon Recipes</h2>${recipeRows}</div>
     <div class="panel"><h2>Materials</h2>${heldMaterials || '<p class="muted">None gathered or salvaged yet.</p>'}</div>`;
 }
 
@@ -667,6 +696,13 @@ const SPELL_ID_LABELS = {
   xpPct: 'Wisdom (+% XP)',
   critPct: 'Precision (+% Crit)',
   maxManaFlat: 'Clarity (+Max Mana)',
+  magicDamage: 'Channeling (+Magic ATK)',
+  hitChance: 'Accuracy (+% to hit)',
+  attackSpeed: 'Alacrity (faster attacks)',
+  spellEfficiency: 'Frugality (cheaper casts)',
+  minDamage: 'Tempering (higher minimum hit)',
+  evasion: 'Evasion (+% Dodge)',
+  guard: 'Guard (+% Dodge/Block/Parry)',
 };
 
 function filterBtn(key, value, label, current) {

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spellLevelCeiling, rollSpellLevel, rollSpell, spellBonusKey, MAX_SPELL_LEVEL } from '../src/data/spells.js';
+import { spellLevelCeiling, rollSpellLevel, rollSpell, spellBonusKeys, MAX_SPELL_LEVEL } from '../src/data/spells.js';
 
 test('spellLevelCeiling rises with wave depth and region tier, capped at MAX_SPELL_LEVEL', () => {
   assert.equal(spellLevelCeiling(0, 0), 1); // Holtburg, wave 1: level 1 only
@@ -26,5 +26,5 @@ test('rollSpell produces a leveled, labeled spell with a valid bonus key', () =>
   assert.ok(s);
   assert.equal(s.level, 3);
   assert.ok(s.label.length > 0);
-  assert.ok(spellBonusKey(s));
+  assert.ok(spellBonusKeys(s).length > 0);
 });

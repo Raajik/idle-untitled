@@ -110,8 +110,16 @@ export function spawnMonster(state) {
   };
 }
 
-function dealDamage(rawAtk, targetDef, critChance, critMult = 2) {
-  const variance = 0.9 + Math.random() * 0.2;
+// `minDamagePct` (Tempering) lifts the bottom of the damage band toward the top,
+// so a tempered weapon rolls closer to its best hit every time; at 100 it always
+// does. It narrows the spread rather than raising the ceiling.
+const DAMAGE_VARIANCE_LOW = 0.9;
+const DAMAGE_VARIANCE_HIGH = 1.1;
+
+function dealDamage(rawAtk, targetDef, critChance, critMult = 2, minDamagePct = 0) {
+  const lift = Math.max(0, Math.min(100, minDamagePct)) / 100;
+  const low = DAMAGE_VARIANCE_LOW + (DAMAGE_VARIANCE_HIGH - DAMAGE_VARIANCE_LOW) * lift;
+  const variance = low + Math.random() * (DAMAGE_VARIANCE_HIGH - low);
   let dmg = Math.max(1, Math.round((rawAtk - targetDef) * variance));
   const crit = Math.random() * 100 < critChance;
   if (crit) dmg *= critMult;
@@ -308,18 +316,33 @@ function tickTutorialJourney(state, dt) {
 
 // The current attack bar's target interval (or cast time) for whichever
 // combat mode is active — shared by the UI (fill %) and tickCombat itself.
+// Oak worked into a weapon speeds every windup it has, cast times included —
+// hence one property rather than a separate "casting speed".
+const MAX_ATTACK_SPEED_PCT = 60; // a floor on the windup, so nothing goes instant
+
+function hastened(seconds, stats) {
+  const pct = Math.min(MAX_ATTACK_SPEED_PCT, stats.attackSpeedPct || 0);
+  return seconds * (1 - pct / 100);
+}
+
 export function activeAttackInterval(state, stats) {
   const h = state.hero;
   const mode = h.combat.mode;
   if (mode === 'archery') {
     const stance = ARCHERY_STANCES[h.combat.archeryStance];
-    return stance.interval ?? 1 / stats.spd;
+    return hastened(stance.interval ?? 1 / stats.spd, stats);
   }
   if (mode === 'magic') {
-    return MAGIC_SPELLS[h.combat.magicSpell].castTime;
+    return hastened(MAGIC_SPELLS[h.combat.magicSpell].castTime, stats);
   }
   const stance = MELEE_STANCES[h.combat.meleeStance];
-  return stance.interval ?? 1 / stats.spd;
+  return hastened(stance.interval ?? 1 / stats.spd, stats);
+}
+
+// What a cast costs after Frugality (opal). Never free.
+export function spellManaCost(spell, stats) {
+  const pct = Math.min(90, stats.manaCostPct || 0);
+  return Math.max(1, Math.round(spell.manaCost * (1 - pct / 100)));
 }
 
 // What the active attack costs: which vital it draws on and how much one attack
@@ -330,7 +353,7 @@ export function activeAttackCost(state, stats = derivedStats(state)) {
   const mode = h.combat.mode;
   if (mode === 'magic') {
     const spell = MAGIC_SPELLS[h.combat.magicSpell];
-    return { resource: spell.resource, amount: spell.manaCost };
+    return { resource: spell.resource, amount: spellManaCost(spell, stats) };
   }
   const stance = mode === 'archery' ? ARCHERY_STANCES[h.combat.archeryStance] : MELEE_STANCES[h.combat.meleeStance];
   return { resource: stance.resource, amount: staminaCostForWindup(activeAttackInterval(state, stats)) };
@@ -405,7 +428,7 @@ export function tickCombat(state, dt) {
 
   if (mode === 'archery') {
     const stance = ARCHERY_STANCES[h.combat.archeryStance];
-    const attackInterval = stance.interval ?? 1 / stats.spd;
+    const attackInterval = activeAttackInterval(state, stats);
     const staminaCost = staminaCostForWindup(attackInterval);
     h.attackTimer += dt;
     while (h.attackTimer >= attackInterval) {
@@ -420,42 +443,44 @@ export function tickCombat(state, dt) {
       const weaponSkill = activeWeaponSkill(state);
       trainSkill(state, weaponSkill.skill, weaponSkill.label, COMBAT_SKILL_XP);
       trainAttribute(state, 'coord', ARCHERY_COORD_XP);
-      const chance = Math.min(95, Math.max(0, hitChance(weaponSkill.skill.rank) + stance.accuracyMod));
+      const chance = Math.min(95, Math.max(0, hitChance(weaponSkill.skill.rank) + stance.accuracyMod + stats.hitChancePct));
       if (Math.random() * 100 >= chance) {
         addLog(state, `Your shot goes wide of ${m.name}.`, 'dim');
         continue;
       }
 
-      const { dmg, crit } = dealDamage(stats.atk, m.def, stats.critChance);
+      const { dmg, crit } = dealDamage(stats.atk, m.def, stats.critChance, 2, stats.minDamagePct);
       if (applyDamageToMonster(state, dmg, crit)) return;
     }
   } else if (mode === 'magic') {
     const spell = MAGIC_SPELLS[h.combat.magicSpell];
+    const castTime = activeAttackInterval(state, stats);
+    const manaCost = spellManaCost(spell, stats);
     h.attackTimer += dt;
-    while (h.attackTimer >= spell.castTime) {
-      if (h.mana < spell.manaCost) {
-        h.attackTimer = spell.castTime; // spell held on the tongue until the mana is there
+    while (h.attackTimer >= castTime) {
+      if (h.mana < manaCost) {
+        h.attackTimer = castTime; // spell held on the tongue until the mana is there
         break;
       }
-      h.attackTimer -= spell.castTime;
-      h.mana -= spell.manaCost;
+      h.attackTimer -= castTime;
+      h.mana -= manaCost;
       if (rollMonsterDodge(state)) continue;
 
       const warSkill = h.skills.offense.war;
       trainSkill(state, warSkill, 'War Magic', COMBAT_SKILL_XP);
       trainAttribute(state, 'focus', MAGIC_ATTR_XP);
       trainAttribute(state, 'self', MAGIC_ATTR_XP);
-      if (Math.random() * 100 >= hitChance(warSkill.rank)) {
+      if (Math.random() * 100 >= Math.min(95, hitChance(warSkill.rank) + stats.hitChancePct)) {
         addLog(state, `Your ${spell.label} fizzles past ${m.name}.`, 'dim');
         continue;
       }
 
-      const { dmg, crit } = dealDamage(stats.magicAtk * spell.dmgMult, m.def, stats.critChance, spell.critMult);
+      const { dmg, crit } = dealDamage(stats.magicAtk * spell.dmgMult, m.def, stats.critChance, spell.critMult, stats.minDamagePct);
       if (applyDamageToMonster(state, dmg, crit)) return;
     }
   } else {
     const stance = MELEE_STANCES[h.combat.meleeStance];
-    const attackInterval = stance.interval ?? 1 / stats.spd;
+    const attackInterval = activeAttackInterval(state, stats);
     const staminaCost = staminaCostForWindup(attackInterval);
     h.attackTimer += dt;
     while (h.attackTimer >= attackInterval) {
@@ -472,12 +497,12 @@ export function tickCombat(state, dt) {
       trainAttribute(state, 'str', MELEE_ATTR_XP);
       trainAttribute(state, 'coord', MELEE_ATTR_XP);
       trainAttribute(state, 'quick', MELEE_ATTR_XP);
-      if (Math.random() * 100 >= hitChance(weaponSkill.skill.rank)) {
+      if (Math.random() * 100 >= Math.min(95, hitChance(weaponSkill.skill.rank) + stats.hitChancePct)) {
         addLog(state, `You swing and miss ${m.name}.`, 'dim');
         continue;
       }
 
-      const { dmg, crit } = dealDamage(stats.atk * stance.dmgMult, m.def, stats.critChance);
+      const { dmg, crit } = dealDamage(stats.atk * stance.dmgMult, m.def, stats.critChance, 2, stats.minDamagePct);
       if (stance.bleed) applyBleed(state, stats.atk);
       // No heal on kill — the Lifestone (respawn) is how you recover. Skills (Healing,
       // Cooking, Life Magic) will add in-fight recovery later.

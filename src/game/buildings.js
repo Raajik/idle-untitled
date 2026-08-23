@@ -18,11 +18,11 @@ import {
   MAX_BUILDING_LEVEL,
 } from '../data/buildings.js';
 import { generateItem } from './loot.js';
+import { WEAPON_CLASSES } from '../data/items.js';
 import { pick, randInt } from '../engine/rng.js';
 import { addLog } from './state.js';
 
-const MELEE_BASE_TYPES = ['sword', 'axe', 'mace', 'spear'];
-const RANGED_BASE_TYPES = ['bow', 'crossbow'];
+
 
 // Shop gear tracks the hero's level so a town stays worth visiting, with a small
 // extra bump per building level.
@@ -33,7 +33,7 @@ function stockPower(state, level) {
 function rollForSlot(state, level, slot, weaponFilter) {
   const power = stockPower(state, level);
   if (slot === 'weapon' && weaponFilter) {
-    const wanted = weaponFilter === 'ranged' ? RANGED_BASE_TYPES : MELEE_BASE_TYPES;
+    const wanted = WEAPON_CLASSES[weaponFilter] || WEAPON_CLASSES.melee;
     return generateItem(power, { forceSlot: 'weapon', forceBaseType: pick(wanted) });
   }
   return generateItem(power, { forceSlot: slot });

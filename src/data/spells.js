@@ -89,6 +89,56 @@ const DEFS = {
     effectLabel: (v) => `+${v} Max Mana`,
     bonusKey: () => 'maxManaFlat',
   },
+
+  // --- Properties Tinkering works into a weapon (see data/tinkering.js). These
+  // are deterministic: a given material always teaches the same property, so
+  // Tinkering is a choice rather than a slot-machine pull. ---
+
+  magicDamage: {
+    name: 'Channeling',
+    roll: (level) => ({ value: magnitude(level, 2) }),
+    effectLabel: (v) => `+${v} Magic ATK`,
+    bonusKey: () => 'magicAtkFlat',
+  },
+  hitChance: {
+    name: 'Accuracy',
+    roll: (level) => ({ value: magnitude(level, 1.2) }),
+    effectLabel: (v) => `+${v}% to hit`,
+    bonusKey: () => 'hitChancePct',
+  },
+  attackSpeed: {
+    name: 'Alacrity',
+    roll: (level) => ({ value: magnitude(level, 1.2) }),
+    effectLabel: (v) => `${v}% faster attacks`,
+    bonusKey: () => 'attackSpeedPct',
+  },
+  spellEfficiency: {
+    name: 'Frugality',
+    roll: (level) => ({ value: magnitude(level, 2) }),
+    effectLabel: (v) => `-${v}% mana per cast`,
+    bonusKey: () => 'manaCostPct',
+  },
+  minDamage: {
+    name: 'Tempering',
+    roll: (level) => ({ value: magnitude(level, 4) }),
+    effectLabel: (v) => `+${v}% toward your best hit`,
+    bonusKey: () => 'minDamagePct',
+  },
+  evasion: {
+    name: 'Evasion',
+    roll: (level) => ({ value: magnitude(level, 2) }),
+    effectLabel: (v) => `+${v}% Dodge`,
+    bonusKey: () => 'dodgeBonus',
+  },
+  guard: {
+    // A melee fighter is the only one who can actually use all three defensive
+    // layers — Block wants a shield and Parry wants a melee weapon — so brass
+    // worked into a melee weapon feeds every one of them.
+    name: 'Guard',
+    roll: (level) => ({ value: magnitude(level, 1.5) }),
+    effectLabel: (v) => `+${v}% Dodge, Block and Parry`,
+    bonusKey: () => ['dodgeBonus', 'blockBonus', 'parryBonus'],
+  },
 };
 
 function cap(s) {
@@ -104,8 +154,26 @@ export const SPELL_IDS_FOR_SLOT = {
   ring: ['pyrealsPct', 'xpPct', 'critPct', 'maxManaFlat'],
 };
 
-// Rolls one full spell instance for the given slot: { id, name, level, value,
-// meta, label }. Picks a random applicable spell id for that slot.
+// Rolls one full spell instance of a named id: { id, name, level, value, meta,
+// label }. Used where the caller already knows what it wants — Tinkering's
+// recipes name a specific property rather than rolling for one.
+export function rollSpellById(id, level) {
+  const def = DEFS[id];
+  if (!def) return null;
+  const { value, meta = {} } = def.roll(level);
+  const name = def.name || (def.displayName ? def.displayName(meta) : id);
+  return {
+    id,
+    name,
+    level,
+    value,
+    meta,
+    label: `${name} ${ROMAN[level]} (${def.effectLabel(value, meta)})`,
+  };
+}
+
+// Rolls one full spell instance for the given slot, picking a random applicable
+// spell id for that slot.
 export function rollSpell(slot, level) {
   const ids = SPELL_IDS_FOR_SLOT[slot] || [];
   if (ids.length === 0) return null;
@@ -123,8 +191,10 @@ export function rollSpell(slot, level) {
   };
 }
 
-// Which key in hero.js's bonus accumulator a spell instance feeds. Supports
+// Which keys in hero.js's bonus accumulator a spell instance feeds. Always an
+// array — most spells feed exactly one, but a few (Guard) feed several. Supports
 // dotted paths for nested bonuses (e.g. "resistanceBonus.fire").
-export function spellBonusKey(spell) {
-  return DEFS[spell.id].bonusKey(spell.meta || {});
+export function spellBonusKeys(spell) {
+  const keys = DEFS[spell.id].bonusKey(spell.meta || {});
+  return Array.isArray(keys) ? keys : [keys];
 }

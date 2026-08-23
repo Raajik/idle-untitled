@@ -30,6 +30,7 @@ export const ITEM_TINKERING_MATERIALS = [
   mat('satin', 'Satin', 'item'),
   mat('silver', 'Silver', 'item'),
   mat('teak', 'Teak', 'item'),
+  mat('velvet', 'Velvet', 'item'),
 ];
 
 export const WEAPON_TINKERING_MATERIALS = [
@@ -106,9 +107,9 @@ export const SALVAGE_GROWTH_PER_RANK = 1.03; // ~19x by rank 100
 // must be a member of the pool for the skill that clear trains
 // (test/waves.test.js enforces this).
 export const GATHER_MATERIAL_POOLS = {
-  mining: ['iron', 'brass', 'granite', 'jet', 'copper', 'silver', 'gold', 'green-garnet'],
+  mining: ['iron', 'brass', 'granite', 'jet', 'copper', 'silver', 'gold', 'green-garnet', 'opal'],
   woodcutting: ['oak', 'mahogany', 'pine', 'teak', 'ebony'],
   skinning: ['gromnie-hide'],
-  foraging: ['linen', 'satin', 'porcelain'],
+  foraging: ['linen', 'satin', 'porcelain', 'velvet'],
   fishing: ['aquamarine', 'moonstone', 'amber'],
 };

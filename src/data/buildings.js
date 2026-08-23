@@ -96,10 +96,10 @@ export const BUILDINGS = [
     id: 'archmage',
     regionId: 'holtburg',
     name: 'Archmage',
-    blurb: 'Amulets, and a great deal of unsolicited advice about mana.',
+    blurb: 'Wands, orbs, staves, amulets, and unsolicited advice about mana.',
     unlock: { pyreals: 4500, materialId: 'moonstone', materials: 6 },
     upgrade: { pyreals: 2800, growth: 1.7, materialId: 'moonstone', materials: 3 },
-    stock: { slots: ['amulet'], min: 2, max: 4 },
+    stock: { slots: ['weapon', 'amulet'], weaponFilter: 'magic', min: 3, max: 5 },
     perk: { key: 'maxManaFlat', perLevel: 6, text: (v) => `+${v} Max Mana` },
   },
   {

@@ -20,8 +20,26 @@ export const RARITIES = [
 ];
 
 // Weapon base names double as their offensive skill key (lowercased) — see skills.js.
+// Weapons come in three classes. Which one you're holding decides what your
+// attacks cost and scale off (see game/combat.js), and which materials Tinkering
+// will take for it (see data/tinkering.js).
+export const WEAPON_CLASSES = {
+  melee: ['sword', 'axe', 'mace', 'spear'],
+  ranged: ['bow', 'crossbow'],
+  magic: ['wand', 'orb', 'staff'],
+};
+
+// The class of a weapon base type, or null for anything that isn't a weapon.
+export function weaponClass(baseType) {
+  if (!baseType) return null;
+  for (const [cls, types] of Object.entries(WEAPON_CLASSES)) {
+    if (types.includes(baseType)) return cls;
+  }
+  return null;
+}
+
 export const BASE_NAMES = {
-  weapon: ['Sword', 'Axe', 'Mace', 'Spear', 'Bow', 'Crossbow'],
+  weapon: ['Sword', 'Axe', 'Mace', 'Spear', 'Bow', 'Crossbow', 'Wand', 'Orb', 'Staff'],
   armor: ['Leather Armor', 'Studded Leather', 'Chainmail', 'Plate Armor', 'Covenant Armor'],
   shield: ['Buckler', 'Round Shield', 'Kite Shield', 'Tower Shield'],
   amulet: ['Amulet', 'Necklace', 'Pendant', 'Talisman'],
@@ -39,6 +57,9 @@ export const ITEM_ICONS = {
   spear: '🔱',
   bow: '🏹',
   crossbow: '🎯',
+  wand: '🪄',
+  orb: '🔮',
+  staff: '🦯',
   armor: '🧥',
   shield: '🛡',
   amulet: '📿',

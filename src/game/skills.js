@@ -53,7 +53,13 @@ export const OFFENSE_SKILLS = [
 ];
 
 export const MELEE_WEAPON_BASE_TYPES = ['sword', 'spear', 'axe', 'mace'];
-const WEAPON_BASE_TO_SKILL = { sword: 'sword', spear: 'spear', axe: 'axe', mace: 'mace', bow: 'bow', crossbow: 'crossbow' };
+// Casting devices all channel War Magic — the device shapes how well, not which
+// skill (see data/items.js WEAPON_CLASSES).
+const WEAPON_BASE_TO_SKILL = {
+  sword: 'sword', spear: 'spear', axe: 'axe', mace: 'mace',
+  bow: 'bow', crossbow: 'crossbow',
+  wand: 'war', orb: 'war', staff: 'war',
+};
 
 // Gathering skills, in the order they're listed in the Skills tab.
 export const GATHERING_SKILLS = [
