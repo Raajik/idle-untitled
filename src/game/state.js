@@ -62,9 +62,8 @@ export function createInitialState() {
       // hero's body, worked back off by earning `xpRemaining` experience.
       vitae: { stacks: 0, xpRemaining: 0 },
       knownSpells: [], // self-buff spell ids (see data/buffSpells.js); Alcott teaches the first three
-      // combat timers
+      // combat timers (each monster carries its own; see game/combat.js)
       attackTimer: 0,
-      monsterTimer: 0,
       respawnTimer: 0,
       dead: false,
       combat: {
@@ -116,7 +115,9 @@ export function createInitialState() {
       recallCooldown: 0, // seconds remaining until Recall can be used again
       jumpCooldown: 0, // seconds remaining until a shortcut Jump can be used again
     },
-    monster: null, // current monster instance { name, hp, maxHp, atk, def, xp, pyreals }
+    // Everything currently engaged, front of the list first — the hero swings at
+    // that one while all of them swing back. Up to MAX_SWARM (see game/waves.js).
+    monsters: [],
     equipment: { weapon: null, armor: null, shield: null, amulet: null, ring: null },
     inventory: [],
     achievements: [], // earned achievement ids (see data/achievements.js); permanent, survives Enlightenment
@@ -165,7 +166,7 @@ export function resetRun(state) {
   state.progress = fresh.progress;
   state.progress.recallUnlocked = recallUnlocked;
   state.progress.firstDeathHandled = firstDeathHandled;
-  state.monster = null;
+  state.monsters = [];
   state.equipment = fresh.equipment;
   state.inventory = fresh.inventory;
   state.materials = fresh.materials;

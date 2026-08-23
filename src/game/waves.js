@@ -14,16 +14,37 @@
 
 import { getMaterial } from '../data/materials.js';
 import { buildingBonus } from '../data/buildings.js';
-import { randInt } from '../engine/rng.js';
 import { trainSkill, GATHERING_SKILLS } from './skills.js';
 import { addLog } from './state.js';
 
 export const WAVES_PER_POI = 10;
-export const MIN_MONSTERS_PER_WAVE = 1;
-export const MAX_MONSTERS_PER_WAVE = 3;
+
+// How many things can be on you at once. One is the norm and stays the norm
+// almost everywhere; eight is what the Direlands does to people. A wave's whole
+// group engages together, so this is the swarm size, not a queue length.
+export const MAX_SWARM = 8;
+const SWARM_SKEW = 2.5; // >1 bends the roll hard toward small groups
+
+// The largest group this region will throw at a given wave. Wave 1 is always a
+// single monster wherever you are; the region's own ceiling is only reached on
+// the last wave, so a place gets more dangerous the deeper into it you get.
+export function swarmCap(regionSwarmMax, wave) {
+  const cap = Math.max(1, Math.min(MAX_SWARM, regionSwarmMax || 1));
+  const through = (Math.max(1, Math.min(WAVES_PER_POI, wave)) - 1) / (WAVES_PER_POI - 1);
+  return Math.max(1, Math.round(1 + through * (cap - 1)));
+}
+
+// Rolls an actual group size within that ceiling, skewed so that even where a
+// pack of eight is possible, most waves are still one or two.
+export function rollSwarmSize(regionSwarmMax, wave) {
+  const cap = swarmCap(regionSwarmMax, wave);
+  const roll = Math.pow(Math.random(), SWARM_SKEW);
+  return Math.max(1, Math.min(cap, 1 + Math.floor(roll * cap)));
+}
 
 // Used by the offline simulation, which has a kill count but no per-wave rolls.
-export const AVG_MONSTERS_PER_WAVE = Math.round((MIN_MONSTERS_PER_WAVE + MAX_MONSTERS_PER_WAVE) / 2);
+// The skew keeps real groups small, so two is a fair stand-in across a session.
+export const AVG_MONSTERS_PER_WAVE = 2;
 
 const WAVE_DIFFICULTY_PER_WAVE = 0.12;
 const BASE_CLEAR_YIELD = 1; // one material per full clear before multipliers
@@ -42,15 +63,21 @@ export function clearYield(state) {
   return Math.max(1, Math.floor(BASE_CLEAR_YIELD * mult));
 }
 
-// Rolls the next wave's size if the current one is spent. Called by spawnMonster
-// before every spawn, so `waveMonstersLeft` is always the number of monsters
-// still standing in the current wave (including the one about to appear).
-export function beginWaveIfNeeded(state) {
+// Rolls the next wave's group if the current one is spent. `waveMonstersLeft` is
+// the number still standing in this wave, which — since they all engage at once
+// — is also how many are currently on you.
+export function beginWaveIfNeeded(state, regionSwarmMax) {
   const p = state.progress;
   if (p.waveMonstersLeft > 0) return;
-  p.waveMonstersLeft = randInt(MIN_MONSTERS_PER_WAVE, MAX_MONSTERS_PER_WAVE);
+  p.waveMonstersLeft = rollSwarmSize(regionSwarmMax, p.wave);
   const count = p.waveMonstersLeft;
-  addLog(state, `Wave ${p.wave}/${WAVES_PER_POI} — ${count} ${count === 1 ? 'foe closes' : 'foes close'} in.`, 'dim');
+  addLog(
+    state,
+    count === 1
+      ? `Wave ${p.wave}/${WAVES_PER_POI} — a foe closes in.`
+      : `Wave ${p.wave}/${WAVES_PER_POI} — ${count} of them close in at once.`,
+    count > 2 ? 'boss' : 'dim'
+  );
 }
 
 // One kill's worth of wave progress. Advances the wave when its last monster

@@ -33,7 +33,7 @@ export function jumpTo(state, shortcutId) {
   if (!destPoi) return false;
 
   state.location = { regionId: destPoi.regionId, poiId: destPoiId };
-  state.monster = null;
+  state.monsters = [];
   state.meditating = false;
   state.progress.wave = 1;
   state.progress.waveMonstersLeft = 0;

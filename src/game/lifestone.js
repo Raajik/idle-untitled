@@ -47,7 +47,7 @@ export function recallTo(state, regionId) {
   if (!region) return false;
 
   state.travel = null;
-  state.monster = null;
+  state.monsters = [];
   state.meditating = false;
   state.location = { regionId, poiId: null };
   state.progress.recallCooldown = recallCooldownSeconds(state.hero.skills.lifestone.recall.rank);
@@ -72,7 +72,7 @@ export function respawnAtLifestone(state) {
   if (already) return false;
 
   state.location = { regionId: bind.regionId, poiId: bind.poiId };
-  state.monster = null;
+  state.monsters = [];
   state.progress.wave = 1;
   state.progress.waveMonstersLeft = 0;
   state.progress.timeInPoi = 0;

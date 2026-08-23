@@ -208,6 +208,12 @@ body {
   );
 }
 
+/* The rest of a pack: named small, under the one you're actually swinging at. */
+.also-engaged { display: flex; align-items: center; gap: 8px; margin: 2px 0; font-size: 12px; }
+.also-engaged > span { flex: 0 0 40%; }
+.also-engaged .bar { flex: 1; }
+.swarm-warning { color: var(--hp); font-size: 12px; margin-bottom: 4px; }
+
 .bar.mini { height: 10px; margin: 2px 0; }
 .bar.mini > .vitae-overlay { background-size: 6px 6px; }
 .bar.mini > .label { font-size: 8px; }
@@ -409,6 +415,8 @@ button.btn.primary { border-color: var(--accent); color: var(--accent); }
   border-bottom: 1px dotted var(--border);
 }
 .upgrade-row .desc { font-size: 12px; color: var(--text-dim); }
+/* A row whose resource has run out: still listed, visibly not usable. */
+.upgrade-row.spent { opacity: 0.5; }
 
 /* Jump / shortcut tiles */
 .jump-tile { border-color: var(--soul); color: var(--soul); }

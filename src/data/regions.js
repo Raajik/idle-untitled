@@ -17,6 +17,10 @@
 // only for now: bosses no longer spawn inside a POI's waves and will become their
 // own dedicated boss POIs.
 //
+// `swarmMax` is how many monsters a region will throw at you simultaneously on a
+// POI's last wave (see game/waves.js rollSwarmSize). One is the norm everywhere;
+// the Direlands is where being surrounded becomes the actual threat.
+//
 // walkSeconds is the BASE travel time (before the Run skill's speed bonus) it
 // takes to reach a region from town, or a POI from its region's hub.
 
@@ -33,6 +37,7 @@ export function isMagicDamageType(dmgType) {
 export const REGIONS = [
   {
     id: 'holtburg',
+    swarmMax: 2, // most this region will put on you at once, on its deepest wave
     name: 'Holtburg',
     walkSeconds: 180, // 3 minutes — matches TUTORIAL_JOURNEY_SECONDS for the "seen a Lifestone" path that skips the scripted journey
     pois: [
@@ -189,6 +194,7 @@ export const REGIONS = [
   },
   {
     id: 'glenden-wood',
+    swarmMax: 3, // most this region will put on you at once, on its deepest wave
     name: 'Glenden Wood',
     walkSeconds: 1200, // 20 min at rank-0 Athletics; ~2 min once Athletics is maxed
     pois: [
@@ -216,6 +222,7 @@ export const REGIONS = [
   },
   {
     id: 'eastham',
+    swarmMax: 5, // most this region will put on you at once, on its deepest wave
     name: 'Eastham',
     walkSeconds: 7200, // 2 hours at rank-0 Athletics; ~12 min once Athletics is maxed
     pois: [
@@ -233,6 +240,7 @@ export const REGIONS = [
   },
   {
     id: 'direlands',
+    swarmMax: 8, // most this region will put on you at once, on its deepest wave
     name: 'Direlands',
     walkSeconds: 21600, // 6 hours at rank-0 Athletics; ~36 min once Athletics is maxed
     pois: [

@@ -127,7 +127,11 @@ function migrate(raw) {
 
   // Pre-level-rework saves may have a stale in-progress monster instance missing the
   // newer fields (level, dmgType, stamina) — drop it so a fresh one spawns next tick.
-  if (state.monster && state.monster.level === undefined) state.monster = null;
+  // Combat went from one monster at a time to a whole engaged group, so any
+  // in-progress fight in an old save is dropped and re-engaged on the next tick.
+  delete state.monster;
+  delete state.hero.monsterTimer;
+  state.monsters = Array.isArray(raw.monsters) ? raw.monsters : [];
 
   // Migrate pre-region saves (flat zone/poi index) into the Holtburg region + POI system.
   // These saves predate depth-based difficulty, so we drop them into Holtburg's town hub.

@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { tickCombat, spawnMonster } from '../src/game/combat.js';
+import { tickCombat, engageWave } from '../src/game/combat.js';
 import { WAVES_PER_POI, waveDifficulty } from '../src/game/waves.js';
 import { createInitialState } from '../src/game/state.js';
+import { ATTRIBUTE_BASE } from '../src/game/skills.js';
 import { getPoiById } from '../src/data/regions.js';
 import { derivedStats } from '../src/game/hero.js';
 
@@ -13,13 +14,13 @@ function atPoi(poiId) {
   return s;
 }
 
-test('spawnMonster creates a monster with full hp and opens a wave', () => {
+test('engageWave creates a monster with full hp and opens a wave', () => {
   const s = atPoi('drudge-hideout');
-  spawnMonster(s);
-  assert.ok(s.monster);
-  assert.equal(s.monster.hp, s.monster.maxHp);
+  engageWave(s);
+  assert.ok(s.monsters.length);
+  assert.equal(s.monsters[0].hp, s.monsters[0].maxHp);
   const poi = getPoiById('drudge-hideout');
-  assert.ok(poi.monsters.some((m) => m.name === s.monster.name));
+  assert.ok(poi.monsters.some((m) => m.name === s.monsters[0].name));
   assert.ok(s.progress.waveMonstersLeft >= 1 && s.progress.waveMonstersLeft <= 3);
 });
 
@@ -30,20 +31,20 @@ test('monsters hit harder on later waves', () => {
   // Same monster name on both sides so only the wave multiplier differs.
   let matched = false;
   for (let i = 0; i < 200 && !matched; i++) {
-    spawnMonster(early);
-    spawnMonster(late);
-    if (early.monster.name === late.monster.name) matched = true;
+    engageWave(early);
+    engageWave(late);
+    if (early.monsters[0].name === late.monsters[0].name) matched = true;
   }
   assert.ok(matched);
-  assert.ok(late.monster.maxHp > early.monster.maxHp);
+  assert.ok(late.monsters[0].maxHp > early.monsters[0].maxHp);
 });
 
 test('no boss spawns inside a POI any more — bosses are becoming their own POIs', () => {
   const s = atPoi('drudge-hideout');
   const poi = getPoiById('drudge-hideout');
   for (let i = 0; i < 300; i++) {
-    spawnMonster(s);
-    assert.notEqual(s.monster.name, poi.boss.name);
+    engageWave(s);
+    assert.notEqual(s.monsters[0].name, poi.boss.name);
   }
 });
 
@@ -72,7 +73,7 @@ test('waves advance as the hero clears them', () => {
 test('no combat happens while travelling or in town', () => {
   const s = createInitialState(); // fresh game: no location, no travel
   for (let i = 0; i < 20; i++) tickCombat(s, 0.25);
-  assert.equal(s.monster, null);
+  assert.equal(s.monsters.length, 0);
   assert.equal(s.progress.totalKills, 0);
 });
 
@@ -96,19 +97,19 @@ test('the Devastating melee stance applies a stacking bleed that ticks damage ov
   s.hero.combat.meleeStance = 4; // Devastating: 4s swing, applies Bleed
   s.hero.str = 30;
   s.hero.end = 30;
-  spawnMonster(s);
-  s.monster.hp = 100000;
-  s.monster.maxHp = 100000;
-  s.monster.def = 0;
-  s.monster.dodge = 0;
+  engageWave(s);
+  s.monsters[0].hp = 100000;
+  s.monsters[0].maxHp = 100000;
+  s.monsters[0].def = 0;
+  s.monsters[0].dodge = 0;
 
-  for (let i = 0; i < 30 && !s.monster.bleed; i++) tickCombat(s, 4.1);
-  assert.ok(s.monster.bleed);
-  assert.ok(s.monster.bleed.stacks >= 1);
+  for (let i = 0; i < 30 && !s.monsters[0].bleed; i++) tickCombat(s, 4.1);
+  assert.ok(s.monsters[0].bleed);
+  assert.ok(s.monsters[0].bleed.stacks >= 1);
 
-  const hpBefore = s.monster.hp;
+  const hpBefore = s.monsters[0].hp;
   for (let i = 0; i < 6; i++) tickCombat(s, 1.1);
-  assert.ok(s.monster.hp < hpBefore);
+  assert.ok(s.monsters[0].hp < hpBefore);
 });
 
 test('melee swings grow STR, COORD, and QUICK', () => {
@@ -146,15 +147,32 @@ test('hero death grants a bigger END bump than a single non-lethal hit', () => {
 });
 
 test('Magic Resistance only trains against magic-based attacks', () => {
-  const magic = atPoi('daiklos'); // all-void/acid monster pool
-  magic.hero.skills.magicResistance.rank = 100; // guarantee procs so focus/self grow
-  magic.hero.end = 1;
+  // Enough Endurance to still be standing — and to still have the stamina a
+  // defensive roll costs — after several swings. A 1-Endurance hero runs dry and
+  // dies inside the window, and a skipped defensive layer never procs, which has
+  // nothing to do with what this is checking.
+  const durable = (poiId) => {
+    const s = atPoi(poiId);
+    s.hero.end = 60;
+    s.hero.skills.magicResistance.rank = 100; // guarantee procs so focus/self grow
+    return s;
+  };
+
+  // Raw attrXp is not a progress meter: gaining a point subtracts the cost from
+  // it, so enough procs can land it back on zero. Count points and leftover xp
+  // together instead.
+  const attrProgress = (s, attr) => (s.hero[attr] - ATTRIBUTE_BASE) * 100000 + s.hero.attrXp[attr];
+
+  const magic = durable('daiklos'); // all-void/acid monster pool
+  const focusBefore = attrProgress(magic, 'focus');
+  const selfBefore = attrProgress(magic, 'self');
   for (let i = 0; i < 40; i++) tickCombat(magic, 0.25);
   assert.ok(magic.hero.skills.magicResistance.xp > 0 || magic.hero.skills.magicResistance.rank > 0);
-  assert.ok(magic.hero.attrXp.focus > 0 || magic.hero.focus > 5);
-  assert.ok(magic.hero.attrXp.self > 0 || magic.hero.self > 5);
+  assert.ok(attrProgress(magic, 'focus') > focusBefore, 'a Magic Resistance proc should grow Focus');
+  assert.ok(attrProgress(magic, 'self') > selfBefore, 'a Magic Resistance proc should grow Self');
 
-  const physical = atPoi('drudge-hideout'); // all-bludgeon monster pool
+  const physical = durable('drudge-hideout'); // no magic in this monster pool
+  physical.hero.skills.magicResistance.rank = 0;
   for (let i = 0; i < 40; i++) tickCombat(physical, 0.25);
   assert.equal(physical.hero.skills.magicResistance.rank, 0);
   assert.equal(physical.hero.skills.magicResistance.xp, 0);
@@ -172,17 +190,17 @@ test('magic casting drains mana, trains War Magic, and deals damage', () => {
   // staying under the rank cap so the skill can still gain xp.
   s.hero.self = 20;
   s.hero.skills.offense.war.rank = 80;
-  spawnMonster(s);
-  s.monster.hp = 100000;
-  s.monster.maxHp = 100000;
-  s.monster.def = 0;
-  s.monster.dodge = 0;
+  engageWave(s);
+  s.monsters[0].hp = 100000;
+  s.monsters[0].maxHp = 100000;
+  s.monsters[0].def = 0;
+  s.monsters[0].dodge = 0;
 
   const rankBefore = s.hero.skills.offense.war.rank;
   const xpBefore = s.hero.skills.offense.war.xp;
   for (let i = 0; i < 20; i++) tickCombat(s, 0.6);
 
   assert.ok(s.hero.skills.offense.war.xp > xpBefore || s.hero.skills.offense.war.rank > rankBefore);
-  assert.ok(s.monster.hp < 100000);
+  assert.ok(s.monsters[0].hp < 100000);
   assert.ok(s.hero.mana < derivedStats(s).maxMana);
 });

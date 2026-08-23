@@ -230,9 +230,17 @@ function upkeepHtml(state) {
     )
     .join('');
 
+  // Auto-heal stays listed once you've owned a kit — it's worth knowing the
+  // feature exists — but it greys out with nothing to spend, and says so. The
+  // one case it stays clickable without a kit is when it's already ON, so
+  // running dry can't strand the setting in a state you can't switch off.
+  const kitCharges = charges(state, 'healing-kit');
+  const autoHealNote = kitCharges
+    ? `Below half health, spends ${STAMINA_PER_HP} stamina and a kit charge per point of health.`
+    : 'Needs a Healing Kit — nothing left to spend.';
   const autoHealRow = state.progress.autoHealUnlocked
-    ? `<div class="upgrade-row">
-        <div><b>Auto-heal</b><div class="desc">Below half health, spends ${STAMINA_PER_HP} stamina and a kit charge per point of health.</div></div>
+    ? `<div class="upgrade-row${kitCharges ? '' : ' spent'}">
+        <div><b>Auto-heal</b><div class="desc">${esc(autoHealNote)}</div></div>
         <button class="btn small${state.settings.autoHeal ? ' active' : ''}" data-action="toggle-autoheal" ${canAutoHeal(state) || state.settings.autoHeal ? '' : 'disabled'}>${state.settings.autoHeal ? 'ON' : 'OFF'}</button>
       </div>`
     : '';
@@ -267,19 +275,43 @@ function meditateButtonHtml(state) {
 
 // Shared monster/hero combat display used by both real POI fights and the tutorial
 // road — `extraHtml` slots in anything extra (e.g. a Flee button during the tutorial).
+// One row per engaged monster. The first is the one you're swinging at and gets
+// the full-size bar and the fx target; the rest are shown small, because knowing
+// how many are on you and roughly how hurt they are is the point.
+function engagedMonstersHtml(state) {
+  if (state.meditating) return `<div><b id="m-name">Resting — the fight can wait.</b></div>`;
+  const monsters = state.monsters;
+  if (!monsters.length) return `<div><b id="m-name">Searching...</b></div>`;
+
+  return monsters
+    .map((m, i) => {
+      const pct = (m.hp / m.maxHp) * 100;
+      const hp = `${Math.max(0, Math.ceil(m.hp))} / ${m.maxHp}`;
+      if (i === 0) {
+        return `<div><b id="m-name">${esc(monsterLabel(m))}</b></div>
+          ${bar('hp', pct, hp, 'm-hp', 'monster')}
+          <div id="m-meta" class="muted">ATK ${m.atk} · DEF ${m.def} · ${esc(m.dmgType)}</div>`;
+      }
+      return `<div class="also-engaged">
+        <span class="muted">${esc(monsterLabel(m))}</span>
+        ${bar('hp mini', pct, hp, `m-hp-${i}`)}
+      </div>`;
+    })
+    .join('');
+}
+
 function combatDisplayHtml(state, headerHtml, extraHtml = '') {
   const h = state.hero;
   const d = derivedStats(state);
-  const m = state.monster;
   const xpProgress = state.progress.totalXpEarned - totalXpForLevel(h.level);
   const aw = activeWeaponSkill(state);
   const attackLine = aw.weaponName ? `Attacking with ${esc(aw.weaponName)}` : 'Fighting unarmed';
+  const swarm = state.monsters.length > 1 ? `<div class="swarm-warning">Surrounded — ${state.monsters.length} on you.</div>` : '';
   return `
     <div class="panel">
       ${headerHtml}
-      <div><b id="m-name">${state.meditating ? 'Resting — the fight can wait.' : m ? esc(monsterLabel(m)) : 'Searching...'}</b></div>
-      ${bar('hp', m ? (m.hp / m.maxHp) * 100 : 0, m ? `${Math.max(0, Math.ceil(m.hp))} / ${m.maxHp}` : '...', 'm-hp', 'monster')}
-      <div id="m-meta" class="muted">${m ? `ATK ${m.atk} · DEF ${m.def} · ${esc(m.dmgType)}` : ''}</div>
+      ${swarm}
+      ${engagedMonstersHtml(state)}
       ${extraHtml}
       <h2 style="margin-top:14px">You — Level ${h.level}</h2>
       <div class="vitals-row">
@@ -465,7 +497,7 @@ export function battleTab(state) {
   if (travel && travel.tutorial) {
     const header = `<h2>The Road to Holtburg <span class="muted" style="font-size:0.7em">${formatDuration(travel.remaining)} remaining</span></h2>
       <p class="muted" style="margin-bottom:8px">You're unarmed and alone out here. Fight if you must, or try to slip past.</p>`;
-    const fleeBtn = state.monster ? `<div class="actions" style="margin:8px 0"><button class="btn" data-action="flee-tutorial">Try to run away</button></div>` : '';
+    const fleeBtn = state.monsters.length ? `<div class="actions" style="margin:8px 0"><button class="btn" data-action="flee-tutorial">Try to run away</button></div>` : '';
     return `
       ${combatDisplayHtml(state, header, fleeBtn)}
       ${upkeepHtml(state)}
@@ -972,7 +1004,7 @@ export function enlightenmentTab(state) {
 export function overviewTab(state) {
   const h = state.hero;
   const d = derivedStats(state);
-  const m = state.monster;
+  const m = state.monsters[0] || null;
   const p = state.progress;
 
   const tiles = [];
@@ -1027,7 +1059,7 @@ export function recallTab(state) {
 export function battleDockHtml(state) {
   const h = state.hero;
   const d = derivedStats(state);
-  const m = state.monster;
+  const m = state.monsters[0] || null;
   const travel = state.travel;
 
   let where;

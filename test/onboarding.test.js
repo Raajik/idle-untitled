@@ -48,7 +48,7 @@ test('the tutorial journey runs combat in parallel with the countdown and can be
   for (let i = 0; i < 20; i++) tickCombat(s, 0.25);
   assert.ok(s.travel); // still walking
   assert.ok(s.travel.remaining < 180); // countdown is moving
-  if (s.monster) assert.equal(fleeTutorialEncounter(s), true);
+  if (s.monsters.length) assert.equal(fleeTutorialEncounter(s), true);
 
   let ticks = 0;
   while (s.travel && ticks < 5000) {

@@ -111,13 +111,13 @@ test('a spawned monster carries its level through to its label', () => {
   s.onboarding.tutorialPending = true;
   startTravelToRegion(s, 'holtburg');
   let elapsed = 0;
-  while (!s.monster && elapsed < 200) {
+  while (!s.monsters.length && elapsed < 200) {
     tickCombat(s, 0.25);
     elapsed += 0.25;
   }
-  assert.ok(s.monster, 'something should have turned up on the road');
-  assert.equal(typeof s.monster.level, 'number');
-  const label = monsterLabel(s.monster);
+  assert.ok(s.monsters.length, 'something should have turned up on the road');
+  assert.equal(typeof s.monsters[0].level, 'number');
+  const label = monsterLabel(s.monsters[0]);
   assert.ok(!label.includes('undefined'), `rendered "${label}"`);
   assert.match(label, /\(Lv \d+\)$/);
 });

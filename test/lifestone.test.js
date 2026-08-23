@@ -34,7 +34,7 @@ test('the budding Lifestone is a site: no monsters, no combat', () => {
   assert.ok(isSite(poi));
   const s = atSite();
   for (let i = 0; i < 40; i++) tickCombat(s, 0.25);
-  assert.equal(s.monster, null);
+  assert.equal(s.monsters.length, 0);
   assert.equal(s.progress.totalKills, 0);
 });
 
@@ -76,7 +76,7 @@ test('meditating suspends combat rather than running alongside it', () => {
   s.hero.hp = 1;
   startMeditating(s);
   for (let i = 0; i < 10; i++) tickCombat(s, 0.25);
-  assert.equal(s.monster, null);
+  assert.equal(s.monsters.length, 0);
   assert.equal(s.progress.totalKills, 0);
   assert.ok(s.hero.hp > 1);
 });

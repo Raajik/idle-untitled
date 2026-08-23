@@ -35,7 +35,7 @@ export function canMeditate(state) {
 export function startMeditating(state) {
   if (!canMeditate(state)) return false;
   state.meditating = true;
-  state.monster = null; // break off whatever you were fighting
+  state.monsters = []; // break off whatever you were fighting
   addLog(state, 'You sit, steady your breathing, and let the world go quiet.', 'dim');
   return true;
 }

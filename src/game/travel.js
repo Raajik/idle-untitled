@@ -14,7 +14,7 @@ function resetPoiProgress(state) {
   state.progress.waveMonstersLeft = 0;
   state.progress.timeInPoi = 0;
   state.progress.killsInPoi = 0;
-  state.monster = null;
+  state.monsters = [];
   state.hero.attackTimer = 0;
 }
 
@@ -28,7 +28,7 @@ export function startTravelToRegion(state, regionId) {
   if (regionId === 'holtburg' && state.onboarding.tutorialPending) {
     state.travel = { kind: 'region', id: regionId, remaining: TUTORIAL_JOURNEY_SECONDS, duration: TUTORIAL_JOURNEY_SECONDS, tutorial: true };
     state.location = { regionId: null, poiId: TUTORIAL_ROAD.id };
-    state.monster = null;
+    state.monsters = [];
     state.meditating = false;
     addLog(state, `You set out for Holtburg, alone on the open road...`, 'dim');
     return true;
@@ -37,7 +37,7 @@ export function startTravelToRegion(state, regionId) {
   const duration = modifiedWalkTime(region.walkSeconds, state.hero.skills.athletics.rank);
   state.travel = { kind: 'region', id: regionId, remaining: duration, duration };
   state.location = { regionId: null, poiId: null };
-  state.monster = null;
+  state.monsters = [];
   state.meditating = false;
   addLog(state, `You set out for ${region.name}...`, 'dim');
   return true;
@@ -51,7 +51,7 @@ export function startTravelToPoi(state, poiId) {
   const duration = modifiedWalkTime(poi.walkSeconds, state.hero.skills.athletics.rank);
   state.travel = { kind: 'poi', id: poiId, remaining: duration, duration };
   state.location = { regionId: poi.regionId, poiId: null };
-  state.monster = null;
+  state.monsters = [];
   state.meditating = false;
   addLog(state, `Walking to ${poi.name}...`, 'dim');
   return true;

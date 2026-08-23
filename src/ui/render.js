@@ -50,7 +50,7 @@ const TAB_RENDERERS = {
 // place so buttons never get torn out from under a click.
 function battleStructureKey(state) {
   const t = state.travel;
-  const tutorialMonster = t && t.tutorial ? (state.monster ? 'm' : 'nm') : '';
+  const tutorialMonster = t && t.tutorial ? (state.monsters.length ? 'm' : 'nm') : '';
   // The open building's restock timestamp is part of the shape: when its stock
   // rotates out from under an open panel, the panel has to be rebuilt.
   const open = state.ui.activeBuilding;
@@ -58,7 +58,8 @@ function battleStructureKey(state) {
   // Which buffs are up (not how long they have left) is part of the shape: the
   // Upkeep rows change between "Cast" and a countdown as they come and go.
   const buffKey = state.buffs.map((b) => b.id).join(',');
-  return `${state.onboarding.step}|${t ? t.kind + ':' + t.id : ''}|${state.location.regionId}|${state.location.poiId}|${tutorialMonster}|${buildingKey}|${state.meditating ? 'med' : ''}|${buffKey}`;
+  const engaged = state.monsters.length;
+  return `${state.onboarding.step}|${t ? t.kind + ':' + t.id : ''}|${state.location.regionId}|${state.location.poiId}|${tutorialMonster}|${buildingKey}|${state.meditating ? 'med' : ''}|${buffKey}|${engaged}`;
 }
 
 function toast(text) {
@@ -290,7 +291,7 @@ export function createRenderer(state, { onImport }) {
   function updateLive(dtMs = 16) {
     const d = derivedStats(state);
     const h = state.hero;
-    const m = state.monster;
+    const m = state.monsters[0] || null;
 
     updateSummary();
     updateVitaeOverlay();
@@ -300,6 +301,10 @@ export function createRenderer(state, { onImport }) {
       if (nameEl) nameEl.textContent = state.meditating ? 'Resting — the fight can wait.' : monsterLabel(m);
       setBar('m-hp', (m.hp / m.maxHp) * 100, `${Math.max(0, Math.ceil(m.hp))} / ${m.maxHp}`);
       setText('m-meta', `ATK ${m.atk} · DEF ${m.def} · ${m.dmgType}`);
+      for (let i = 1; i < state.monsters.length; i++) {
+        const other = state.monsters[i];
+        setBar(`m-hp-${i}`, (other.hp / other.maxHp) * 100, `${Math.max(0, Math.ceil(other.hp))} / ${other.maxHp}`);
+      }
     }
 
     setBar('h-hp', (h.hp / d.maxHp) * 100, h.dead ? 'Dead... reviving' : `${Math.ceil(h.hp)} / ${d.maxHp} HP`);
