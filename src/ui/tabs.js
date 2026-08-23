@@ -459,6 +459,49 @@ function walkTimeHtml(state, baseSeconds) {
   return `<span class="sub walk-time${tone}" title="${esc(title)}">Travel: ${formatClock(actual)}</span>`;
 }
 
+// The town, drawn as one more card at the head of every band.
+//
+// Going home used to be a sidebar button that read "-> Holtburg" while you were
+// standing in Holtburg, and which — because of the guard in game/travel.js —
+// did nothing at all when clicked from a POI. Making the town a card means
+// leaving is the same gesture as arriving: same shape, same travel time in the
+// same colour, same quest marker when the Town Hall wants something. It's
+// pinned in every band so it's never more than a glance away, whichever
+// hunting ground you happened to be looking at.
+function townTileHtml(state, region, travel) {
+  const here = !state.location.poiId && state.location.regionId === region.id && !travel;
+  const travelling = travel && travel.kind === 'region' && travel.id === region.id;
+  const cls = ['tile', 'poi-tile', 'town-card', here ? 'current' : '', travelling ? 'travelling' : ''].join(' ');
+
+  // The walk home is the walk out: you're as far from the hub as the place you
+  // went to is from it.
+  const currentPoi = state.location.poiId ? getPoiById(state.location.poiId) : null;
+  const backSeconds = currentPoi ? currentPoi.walkSeconds : 0;
+
+  const when = travelling
+    // Its own id: the Regions section draws a region-timer-<id> for the same
+    // walk, and two elements sharing an id leaves one of them frozen.
+    ? `<span class="travel-timer" id="town-timer-${region.id}">${formatDuration(travel.remaining)}</span>`
+    : here
+    ? '<span class="sub">here</span>'
+    : walkTimeHtml(state, backSeconds);
+
+  const shops = buildingsForRegion(region.id);
+  const open = shops.filter((b) => (state.buildings[b.id] || {}).level > 0).length;
+  const quest = shops.find((b) => buildingHasQuest(state, b.id));
+  const marker = quest
+    ? `<span class="quest-mark" title="${esc(`${quest.name}: ${buildingQuestText(state, quest.id)}`)}">!</span>`
+    : '';
+
+  return `<button class="${cls}" id="town-tile-${region.id}" title="Return to town" data-action="travel-region" data-arg="${region.id}">
+    <span class="poi-name">&#127968; ${esc(region.name)} Town</span>
+    <span class="poi-level">Hub</span>
+    ${when}
+    <span class="sub gather-note">${open} of ${shops.length} open</span>
+    ${marker}
+  </button>`;
+}
+
 // One hunting ground. Fixed-height so a band reads as a grid of equals rather
 // than a ragged list — every tile carries the same four lines whether or not it
 // has anything to say on them.
@@ -535,6 +578,7 @@ function poiTiersHtml(state, region, travel, jumpTargets) {
       : `<div class="muted" style="margin-bottom:6px">${tiers[0].label}</div>`;
 
   const activeTone = (tiers.find((t) => t.id === active) || tiers[0]).tone;
+  const townTile = townTileHtml(state, region, travel);
   const tiles = poisInTier(region, active)
     .map((poi) => {
       const tile = poiTileHtml(state, poi, travel, activeTone);
@@ -551,7 +595,7 @@ function poiTiersHtml(state, region, travel, jumpTargets) {
     })
     .join('');
 
-  return `${strip}<div class="tile-list poi-grid">${tiles || '<p class="muted">Nothing here yet.</p>'}</div>`;
+  return `${strip}<div class="tile-list poi-grid">${townTile}${tiles}</div>`;
 }
 
 // --- Town buildings (rendered inside the Battle tab's Town panel) ---

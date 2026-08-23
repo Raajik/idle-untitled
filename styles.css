@@ -457,6 +457,11 @@ button.btn.primary { border-color: var(--accent); color: var(--accent); }
    the bottom keeps the walk time on the same row across every tile in a band. */
 .poi-grid .gather-note { margin-top: auto; }
 
+/* The town card. Wears the accent rather than a band colour, because it isn't a
+   band — it's the one card in every band that isn't somewhere to fight. */
+.poi-grid .tile.town-card { --tier-edge: var(--accent); --tier-tint: rgba(232, 184, 75, 0.08); }
+.poi-grid .tile.town-card .poi-name { color: var(--accent); }
+
 /* Band accents, cool (early) to hot (late). --tier-edge is the border and the
    level text; --tier-tint is the wash behind the tile. */
 .tier-site { --tier-edge: #6ab0a4; --tier-tint: rgba(106, 176, 164, 0.10); }

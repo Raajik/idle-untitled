@@ -147,7 +147,17 @@ export function createRenderer(state, { onImport }) {
     const rows = REGIONS.filter((r) => state.progress.unlockedRegions.includes(r.id)).map((r) => {
       const here = state.location.regionId === r.id && !state.location.poiId && !state.travel;
       const heading = state.travel && state.travel.kind === 'region' && state.travel.id === r.id;
-      const label = here ? `${r.name} — here` : heading ? `${r.name} — on the way` : `→ ${r.name}`;
+      // "-> Holtburg" while standing in Holtburg was the confusing part. Say what
+      // the click actually does from where you are: walk back to the hub, or
+      // set out for somewhere else entirely.
+      const inRegion = state.location.regionId === r.id;
+      const label = here
+        ? `${r.name} — here`
+        : heading
+        ? `${r.name} — on the way`
+        : inRegion
+        ? `↩ ${r.name} town`
+        : `→ ${r.name}`;
       return `<button class="nav-shortcut" data-action="travel-region" data-arg="${r.id}" ${here || heading ? 'disabled' : ''}>${label}</button>`;
     });
     shortcuts.innerHTML = rows.join('');
@@ -365,6 +375,7 @@ export function createRenderer(state, { onImport }) {
     const text = formatDuration(t.remaining);
     setText('travel-remaining', text);
     setText(t.kind === 'region' ? `region-timer-${t.id}` : `poi-timer-${t.id}`, text);
+    if (t.kind === 'region') setText(`town-timer-${t.id}`, text); // the town card's own copy
   }
 
   // Buff countdowns are the one bit of Upkeep that moves every second. The panel

@@ -23,7 +23,12 @@ function resetPoiProgress(state) {
 export function startTravelToRegion(state, regionId) {
   const region = getRegion(regionId);
   if (!region) return false;
-  if (!state.travel && state.progress.unlockedRegions.includes(regionId)) return false; // already there, not redirecting
+  // Refuse only when you are actually standing in the hub. This used to refuse
+  // whenever the region was unlocked at all, which meant that from any POI
+  // inside it the "go to Holtburg" button silently did nothing — there was no
+  // way back to town short of dying.
+  const atHub = state.location.regionId === regionId && !state.location.poiId;
+  if (!state.travel && atHub) return false;
 
   // Alcott pointed this newbie at Holtburg specifically — the first walk there is
   // the scripted tutorial journey (weak roadside monsters, fixed 3-minute length).
@@ -35,11 +40,19 @@ export function startTravelToRegion(state, regionId) {
     return true;
   }
 
-  const duration = modifiedWalkTime(region.walkSeconds, state.hero.skills.athletics.rank);
+  // Walking home inside a region you're already in is a shorter trip than
+  // crossing to a new one: it's however far the POI you're leaving was.
+  const goingHome = state.location.regionId === regionId;
+  const currentPoi = state.location.poiId ? getPoiById(state.location.poiId) : null;
+  const baseSeconds = goingHome && currentPoi ? currentPoi.walkSeconds : region.walkSeconds;
+  const duration = modifiedWalkTime(baseSeconds, state.hero.skills.athletics.rank);
   state.travel = { kind: 'region', id: regionId, remaining: duration, duration };
-  state.location = { regionId: null, poiId: null };
+  // Keep the region when you never left it. Blanking it made the whole POI grid
+  // disappear the moment you set off for town, so there was nothing on screen to
+  // change your mind with halfway there.
+  state.location = { regionId: goingHome ? regionId : null, poiId: null };
   state.monsters = [];
-  addLog(state, `You set out for ${region.name}...`, 'dim');
+  addLog(state, goingHome ? `You head back to ${region.name}...` : `You set out for ${region.name}...`, 'dim');
   return true;
 }
 
