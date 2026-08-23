@@ -163,6 +163,7 @@ export function createInitialState() {
       activeShopTab: 'weapons', // which shelf of an open shop you're looking at
       activeSkillTab: 'offense', // which group of skills the Skills tab is showing
       activePoiTier: null, // which level band of POIs is showing; null = wherever you are
+      expandedBands: {}, // '<regionId>:<tierId>' -> true/false in the sidebar map; absent = wherever you are
       collapsed: {}, // sectionId -> true when folded away (see `section` in ui/tabs.js)
       inventoryFilter: { slot: 'all', rarity: 'all', spellId: 'all' },
       selectedItemId: null, // which slot in the Inventory grid is open in the detail panel

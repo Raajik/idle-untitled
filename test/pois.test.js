@@ -25,6 +25,9 @@ function inTown(poiId = null) {
   s.hero.name = 'Probe';
   s.progress.unlockedRegions = ['holtburg'];
   s.location = { regionId: 'holtburg', poiId };
+  // The grid folds by default now that the sidebar map exists (see
+  // ui/sidebarMap.js); these tests are about what it draws when opened.
+  s.ui.collapsed = { pois: false };
   takeTour(s, 'holtburg:town-hall');
   tickBuildings(s);
   return s;

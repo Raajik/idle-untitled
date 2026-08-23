@@ -21,8 +21,10 @@ const headings = (html) =>
 test('the Battle tab folds down to the fight and the log', () => {
   const s = inTown('drudge-hideout');
   const html = battleTab(s);
-  // Travel and housekeeping are all present, but as headers you can fold.
-  assert.ok(headings(html).some((h) => h.startsWith('Regions')));
+  // Regions are gone from here entirely — the sidebar map lists every one of
+  // them permanently, with travel times, which is strictly more than the
+  // section ever showed.
+  assert.ok(!headings(html).some((h) => h.startsWith('Regions')), 'Regions belongs to the sidebar now');
   assert.ok(headings(html).some((h) => h.includes('Points of Interest')));
   assert.ok(html.includes('toggle-section'));
 });
@@ -36,8 +38,9 @@ test('standing in town does not print the word Town twice', () => {
 
 test('a folded section keeps its summary and drops its body', () => {
   const s = inTown(null);
+  s.ui.collapsed.pois = false;
   const open = battleTab(s);
-  assert.ok(open.includes('Pick a point of interest'), 'the POI list starts open');
+  assert.ok(open.includes('Pick a point of interest'), 'the POI list opens on request');
 
   s.ui.collapsed.pois = true;
   const folded = battleTab(s);
@@ -66,14 +69,12 @@ test('the fight itself is never foldable', () => {
   assert.ok(html.includes('id="m-name"'), 'and should always be on screen');
 });
 
-test('Regions starts open only while you have nowhere to be', () => {
-  const adrift = createInitialState();
-  adrift.onboarding.step = 'done';
-  adrift.hero.name = 'Probe';
-  assert.ok(battleTab(adrift).includes('travel-region'), 'a new hero needs the region list');
-
-  const settled = inTown(null);
-  const html = battleTab(settled);
-  const regionsFolded = /Regions<\/h2>[\s\S]{0,120}?<\/button>\s*<\/div>/.test(html);
-  assert.ok(regionsFolded, 'once you have arrived somewhere it folds itself away');
+test('the Points of Interest grid folds itself away by default', () => {
+  // Travelling is faster from the sidebar map; this grid is for comparing places
+  // side by side rather than picking one, so it starts out of the way.
+  const s = inTown('drudge-hideout');
+  const html = battleTab(s);
+  assert.ok(!html.includes('poi-grid'), 'the grid should start folded');
+  assert.ok(headings(html).some((h) => h.includes('Points of Interest')), 'but its header stays');
+  assert.ok(html.includes('at Drudge Hideout'), 'carrying where you are');
 });

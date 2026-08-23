@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createInitialState } from '../src/game/state.js';
 import { battleTab } from '../src/ui/tabs.js';
+import { sidebarMapHtml } from '../src/ui/sidebarMap.js';
 import { startTravelToRegion, startTravelToPoi, arrive } from '../src/game/travel.js';
 import { takeTour, tickBuildings } from '../src/game/buildings.js';
 import { getRegion, tiersForRegion } from '../src/data/regions.js';
@@ -14,6 +15,7 @@ function inHoltburg(poiId = null) {
   s.onboarding.step = 'done';
   s.progress.unlockedRegions = ['holtburg'];
   s.location = { regionId: 'holtburg', poiId };
+  s.ui.collapsed = { pois: false }; // the grid folds by default; open it to test it
   return s;
 }
 
@@ -119,13 +121,20 @@ test('the map stays on screen while you walk home', () => {
   // grid off screen — so there was nothing to change your mind with halfway
   // there, and no countdown on the card you had just pressed.
   const s = withTown('drudge-hideout');
-  s.ui.collapsed = { regions: false };
   startTravelToRegion(s, 'holtburg');
-  const html = battleTab(s);
-  assert.ok(html.includes('Points of Interest'), 'the grid should survive the walk');
-  assert.ok(html.includes('town-tile-holtburg'), 'including the card you pressed');
-  assert.equal((html.match(/id="town-timer-holtburg"/g) || []).length, 1, 'which now counts down');
-  assert.ok((html.match(/id="region-timer-holtburg"/g) || []).length <= 1, 'and never shares an id');
+  const grid = battleTab(s);
+  const map = sidebarMapHtml(s);
+  assert.ok(grid.includes('Points of Interest'), 'the grid should survive the walk');
+  assert.ok(grid.includes('town-tile-holtburg'), 'including the card you pressed');
+  assert.ok(map.includes('map-town-holtburg'), 'and the sidebar row you might have pressed instead');
+  // Both draw a countdown for the same walk. They must never share an id, or
+  // getElementById patches one and leaves the other frozen.
+  const both = grid + map;
+  assert.equal((both.match(/id="town-timer-holtburg"/g) || []).length, 1);
+  assert.equal((both.match(/id="map-town-timer-holtburg"/g) || []).length, 1);
+  for (const id of ['town-tile-holtburg', 'map-town-holtburg', 'poi-tile-drudge-hideout', 'map-poi-drudge-hideout']) {
+    assert.ok((both.match(new RegExp(`id="${id}"`, 'g')) || []).length <= 1, `${id} appears twice`);
+  }
 });
 
 test('walking home is as far as the place you walked out to', () => {

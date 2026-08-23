@@ -551,6 +551,21 @@ function poiTileHtml(state, poi, travel, tone, regionId) {
   </button>`;
 }
 
+// What the folded Points of Interest header says. Where you are, plus anything
+// nearby that wants doing — the two reasons you'd unfold it.
+function poiSectionSummary(state, region, here) {
+  const bounties = new Set();
+  for (const poi of region.pois) {
+    for (const b of bountiesAt(state, poi, region.id)) bounties.add(b.id);
+  }
+  return [
+    here ? `at ${here.name}` : 'in town',
+    bounties.size ? `${bounties.size} ${bounties.size === 1 ? 'bounty' : 'bounties'} nearby` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
 // The bands themselves. A region with one band shows its name rather than a row
 // of one button, the same way a specialist shop skips its tab strip.
 function poiTiersHtml(state, region, travel, jumpTargets) {
@@ -951,7 +966,10 @@ export function battleTab(state) {
       'pois',
       `${esc(region.name)} &gt; Points of Interest`,
       `${here ? '' : '<p class="muted" style="margin-bottom:6px">Pick a point of interest to start hunting.</p>'}${poiTiersHtml(state, region, travel, jumpTargets)}`,
-      { summary: here ? `at ${here.name}` : 'in town' }
+      // Folded by default now that the sidebar map exists: travelling is faster
+      // from there, and this grid is for when you want to compare places side by
+      // side rather than pick one.
+      { summary: poiSectionSummary(state, region, here), defaultOpen: false }
     );
 
     if (!state.location.poiId) {
@@ -1015,11 +1033,10 @@ export function battleTab(state) {
     ? 'on the road'
     : 'nowhere yet';
 
+  // Regions are gone from here entirely — the sidebar map (see ui/sidebarMap.js)
+  // lists every one of them permanently, with its travel time, which is strictly
+  // more than this section ever showed.
   return `
-    ${section(state, 'regions', 'Regions', `<div class="tile-list">${regionTiles}</div>`, {
-      summary: regionSummary,
-      defaultOpen: !state.location.regionId,
-    })}
     ${poiSection}
     ${townSection}
     ${combatPanel}

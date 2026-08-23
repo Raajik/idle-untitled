@@ -4,6 +4,7 @@
 //   - frame():  per-animation-frame in-place updates for live combat + fx
 
 import { topLevelEntries, childTabs, drainNewUnlocks, UNLOCKS } from './unlocks.js';
+import { sidebarMapHtml } from './sidebarMap.js';
 import { battleTab, attributesTab, skillsTab, inventoryTab, trainingTab, enlightenmentTab, recallTab, tinkeringTab, overviewTab, settingsTab, battleDockHtml, sidebarUpkeepHtml, waveLine, attackBarLabel, monsterLabel } from './tabs.js';
 import { startTravelToRegion, startTravelToPoi } from '../game/travel.js';
 import { derivedStats, xpForLevel, totalXpForLevel } from '../game/hero.js';
@@ -15,7 +16,7 @@ import { drainFx } from '../engine/fx.js';
 import { TICK_MS } from '../engine/loop.js';
 import { fmt, formatDuration } from '../engine/format.js';
 import { fleeTutorialEncounter, activeAttackInterval, activeAttackResource } from '../game/combat.js';
-import { isSite, getPoiById, REGIONS } from '../data/regions.js';
+import { isSite, getPoiById, REGIONS, poisInTier } from '../data/regions.js';
 import { investToOpen, investInBuilding, takeTour, rotationRemaining } from '../game/buildings.js';
 import { activeWeaponSkill } from '../game/skills.js';
 import { vitaePct } from '../game/vitae.js';
@@ -145,24 +146,11 @@ export function createRenderer(state, { onImport }) {
 
   // Quick travel back to a region hub you've already reached, so "go to town" is
   // one click from any tab instead of a scroll through the region list.
+  // The sidebar map: everywhere you can go, with its travel time, always on
+  // screen. Replaced the old list of region shortcuts, which could only ever
+  // name four places and said "-> Holtburg" while you were standing in it.
   function renderShortcuts() {
-    const rows = REGIONS.filter((r) => state.progress.unlockedRegions.includes(r.id)).map((r) => {
-      const here = state.location.regionId === r.id && !state.location.poiId && !state.travel;
-      const heading = state.travel && state.travel.kind === 'region' && state.travel.id === r.id;
-      // "-> Holtburg" while standing in Holtburg was the confusing part. Say what
-      // the click actually does from where you are: walk back to the hub, or
-      // set out for somewhere else entirely.
-      const inRegion = state.location.regionId === r.id;
-      const label = here
-        ? `${r.name} — here`
-        : heading
-        ? `${r.name} — on the way`
-        : inRegion
-        ? `↩ ${r.name} town`
-        : `→ ${r.name}`;
-      return `<button class="nav-shortcut" data-action="travel-region" data-arg="${r.id}" ${here || heading ? 'disabled' : ''}>${label}</button>`;
-    });
-    shortcuts.innerHTML = rows.join('');
+    shortcuts.innerHTML = sidebarMapHtml(state);
     upkeepPanel.innerHTML = sidebarUpkeepHtml(state);
     settingsBtn.classList.toggle('active', state.ui.activeTab === 'settings');
   }
@@ -378,6 +366,9 @@ export function createRenderer(state, { onImport }) {
     setText('travel-remaining', text);
     setText(t.kind === 'region' ? `region-timer-${t.id}` : `poi-timer-${t.id}`, text);
     if (t.kind === 'region') setText(`town-timer-${t.id}`, text); // the town card's own copy
+    // The sidebar map draws the same countdown under its own map- prefixed ids.
+    setText(t.kind === 'region' ? `map-region-timer-${t.id}` : `map-poi-timer-${t.id}`, text);
+    if (t.kind === 'region') setText(`map-town-timer-${t.id}`, text);
   }
 
   // Buff countdowns are the one bit of Upkeep that moves every second. The panel
@@ -459,6 +450,15 @@ export function createRenderer(state, { onImport }) {
       if (setHeroName(state, e.target.value)) render();
     }
   });
+
+  // Whether the hero is standing in this band right now — the default open state
+  // for a band nobody has clicked.
+  function bandHoldsHero(st, key) {
+    const [regionId, tierId] = key.split(':');
+    const region = REGIONS.find((r) => r.id === regionId);
+    if (!region || !st.location.poiId) return false;
+    return poisInTier(region, tierId).some((p) => p.id === st.location.poiId);
+  }
 
   function isTyping() {
     const el = document.activeElement;
@@ -603,6 +603,15 @@ export function createRenderer(state, { onImport }) {
       }
       case 'set-poi-tier': state.ui.activePoiTier = arg; break;
       case 'set-skill-tab': state.ui.activeSkillTab = arg; break;
+      case 'expand-band': state.ui.expandedBands[arg] = 'all'; break;
+      case 'toggle-band': {
+        const open = state.ui.expandedBands[arg];
+        // Absent means "open if you're standing in it", so the first click has
+        // to resolve that before flipping it.
+        const showing = open === undefined ? bandHoldsHero(state, arg) : open;
+        state.ui.expandedBands[arg] = !showing;
+        break;
+      }
       case 'set-void-spell': state.hero.combat.voidSpell = arg; state.hero.attackTimer = 0; break;
       case 'set-war-element': state.hero.combat.warElement = arg; break;
       case 'set-shop-tab': state.ui.activeShopTab = arg; break;
