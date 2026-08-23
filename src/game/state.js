@@ -2,8 +2,15 @@
 
 import { DAMAGE_TYPES } from '../data/regions.js';
 import { freshBuildings } from '../data/buildings.js';
+import { EQUIP_SLOTS } from '../data/items.js';
 
 export const SAVE_VERSION = 5;
+
+function freshEquipment() {
+  const e = {};
+  for (const slot of EQUIP_SLOTS) e[slot] = null;
+  return e;
+}
 
 function freshSkill() {
   return { rank: 0, xp: 0 };
@@ -118,7 +125,7 @@ export function createInitialState() {
     // Everything currently engaged, front of the list first — the hero swings at
     // that one while all of them swing back. Up to MAX_SWARM (see game/waves.js).
     monsters: [],
-    equipment: { weapon: null, armor: null, shield: null, amulet: null, ring: null },
+    equipment: freshEquipment(), // one entry per instance in data/items.js EQUIP_SLOTS
     inventory: [],
     achievements: [], // earned achievement ids (see data/achievements.js); permanent, survives Enlightenment
     materials: {}, // materialId -> count, no cap

@@ -40,6 +40,7 @@ import {
   defensiveChance,
   resistanceMitigationPct,
   hitChance,
+  effectiveRank,
   activeWeaponSkill,
   grantAthleticsXp,
   MELEE_WEAPON_BASE_TYPES,
@@ -279,7 +280,8 @@ function tryDefend(state, stats, m) {
     const skill = h.skills[key];
     trainSkill(state, skill, name, COMBAT_SKILL_XP);
     if (h.stamina < HERO_STAMINA_COST_PER_DEFEND) continue;
-    const chance = Math.min(95, defensiveChance(skill.rank) + bonus);
+    const rank = effectiveRank(skill.rank, stats.skillRankBonus[key]);
+    const chance = Math.min(95, defensiveChance(rank) + bonus);
     if (Math.random() * 100 < chance) {
       h.stamina -= HERO_STAMINA_COST_PER_DEFEND;
       for (const [attr, xp] of ATTR_ON_DEFEND_SUCCESS[key]) trainAttribute(state, attr, xp);
@@ -504,7 +506,8 @@ export function tickCombat(state, dt) {
       const weaponSkill = activeWeaponSkill(state);
       trainSkill(state, weaponSkill.skill, weaponSkill.label, COMBAT_SKILL_XP);
       trainAttribute(state, 'coord', ARCHERY_COORD_XP);
-      const chance = Math.min(95, Math.max(0, hitChance(weaponSkill.skill.rank) + stance.accuracyMod + stats.hitChancePct));
+      const rank = effectiveRank(weaponSkill.skill.rank, stats.skillRankBonus[weaponSkill.key]);
+      const chance = Math.min(95, Math.max(0, hitChance(rank) + stance.accuracyMod + stats.hitChancePct));
       if (Math.random() * 100 >= chance) {
         addLog(state, `Your shot goes wide of ${m.name}.`, 'dim');
         continue;
@@ -531,7 +534,8 @@ export function tickCombat(state, dt) {
       trainSkill(state, warSkill, 'War Magic', COMBAT_SKILL_XP);
       trainAttribute(state, 'focus', MAGIC_ATTR_XP);
       trainAttribute(state, 'self', MAGIC_ATTR_XP);
-      if (Math.random() * 100 >= Math.min(95, hitChance(warSkill.rank) + stats.hitChancePct)) {
+      const warRank = effectiveRank(warSkill.rank, stats.skillRankBonus.war);
+      if (Math.random() * 100 >= Math.min(95, hitChance(warRank) + stats.hitChancePct)) {
         addLog(state, `Your ${spell.label} fizzles past ${m.name}.`, 'dim');
         continue;
       }
@@ -558,7 +562,8 @@ export function tickCombat(state, dt) {
       trainAttribute(state, 'str', MELEE_ATTR_XP);
       trainAttribute(state, 'coord', MELEE_ATTR_XP);
       trainAttribute(state, 'quick', MELEE_ATTR_XP);
-      if (Math.random() * 100 >= Math.min(95, hitChance(weaponSkill.skill.rank) + stats.hitChancePct)) {
+      const rank = effectiveRank(weaponSkill.skill.rank, stats.skillRankBonus[weaponSkill.key]);
+      if (Math.random() * 100 >= Math.min(95, hitChance(rank) + stats.hitChancePct)) {
         addLog(state, `You swing and miss ${m.name}.`, 'dim');
         continue;
       }
@@ -594,7 +599,11 @@ export function tickCombat(state, dt) {
       const resistSkill = h.skills.resistance[attacker.dmgType];
       const resistName = `${attacker.dmgType[0].toUpperCase()}${attacker.dmgType.slice(1)} Resistance`;
       trainSkill(state, resistSkill, resistName, COMBAT_SKILL_XP);
-      const mitigation = Math.min(95, resistanceMitigationPct(resistSkill.rank) + (stats.resistanceBonus[attacker.dmgType] || 0));
+      const mitigation = Math.min(
+        95,
+        resistanceMitigationPct(effectiveRank(resistSkill.rank, stats.skillRankBonus[attacker.dmgType])) +
+          (stats.resistanceBonus[attacker.dmgType] || 0)
+      );
 
       const { dmg: rawDmg } = dealDamage(attacker.atk, stats.def, 0);
       const dmg = Math.max(1, Math.round(rawDmg * (1 - mitigation / 100)));

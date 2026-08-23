@@ -1,7 +1,8 @@
 // Loot: drop rolls, item generation, rarity rolls, inventory/equip helpers.
 
-import { SLOTS, RARITIES, BASE_NAMES, PREFIXES, poiItemPower } from '../data/items.js';
+import { SLOTS, RARITIES, BASE_NAMES, poiItemPower, equipSlotsForKind } from '../data/items.js';
 import {
+  getMaterial,
   materialsForSlot,
   SALVAGE_BASE_MIN,
   SALVAGE_BASE_MAX,
@@ -20,10 +21,6 @@ let nextItemId = 1;
 
 // Gear is semi-rare: most kills come up empty.
 export const DROP_CHANCE = 0.05;
-
-// Chance EACH available spell slot on an item actually holds a spell — this is
-// what makes "having any spell at all" uncommon on early Common drops.
-const SPELL_PRESENCE_CHANCE = { Common: 0.25, Uncommon: 0.45, Rare: 0.65, Epic: 0.85, Legendary: 1.0 };
 
 export function rollRarity(luckPct = 0) {
   // luck shifts weight from Common toward higher tiers
@@ -47,21 +44,26 @@ export function generateItem(powerLevel, { luckPct = 0, rarityBoost = 0, forceSl
   const jitter = 0.9 + Math.random() * 0.2;
   const power = Math.max(1, Math.round(powerLevel * rarity.powerMult * jitter));
 
-  const maxSpellSlots = rarity.affixes; // reuse the rarity table's existing slot-count numbers
-  const presenceChance = SPELL_PRESENCE_CHANCE[rarity.name] ?? 0.5;
+  // Rarity decides the count outright — no per-slot presence roll on top, so an
+  // Uncommon always has at least one spell and a Legendary always has at least
+  // four. How GOOD they are is the level, which depth and region still gate.
+  const [minSpells, maxSpells] = rarity.spells;
+  const wanted = randInt(minSpells, maxSpells);
   const ceiling = spellLevelCeiling(depth, regionIdx);
   const spells = [];
-  for (let i = 0; i < maxSpellSlots; i++) {
-    if (Math.random() >= presenceChance) continue;
-    const level = rollSpellLevel(ceiling);
-    const spell = rollSpell(slot, level);
-    if (spell) spells.push(spell);
+  const taken = new Set();
+  for (let i = 0; i < wanted * 4 && spells.length < wanted; i++) {
+    const spell = rollSpell(slot, rollSpellLevel(ceiling));
+    // One of each kind per item: two Strength spells on one ring reads as a bug
+    // even when it isn't, and stacking the same affix is what Tinkering is for.
+    if (!spell || taken.has(spell.id + JSON.stringify(spell.meta || {}))) continue;
+    taken.add(spell.id + JSON.stringify(spell.meta || {}));
+    spells.push(spell);
   }
 
   const base = forceSlot === 'weapon' && forceBaseType
     ? BASE_NAMES.weapon.find((b) => b.toLowerCase() === forceBaseType) || pick(BASE_NAMES.weapon)
     : pick(BASE_NAMES[slot]);
-  const prefix = pick(PREFIXES[rarity.name]);
   // Gear found in a dungeon is made of whatever that dungeon yields, so salvaging
   // it feeds the same pile the clear does — but only when the material can
   // actually belong to this slot, or Tinkering's category rules break (see
@@ -72,13 +74,17 @@ export function generateItem(powerLevel, { luckPct = 0, rarityBoost = 0, forceSl
     : materialPool.length
     ? pick(materialPool).id
     : undefined;
+  // Named for what it's made of — "Opal Amulet", "Iron Sword". Rarity is already
+  // carried by the item's color and its [Rare amulet] tag, so a second adjective
+  // in the name only buried the thing that tells you what it salvages into.
+  const materialName = material ? (getMaterial(material) || {}).name : null;
   const item = {
     id: nextItemId++,
     slot,
     rarity: rarity.name,
     power,
     spells,
-    name: `${prefix} ${base}`,
+    name: materialName ? `${materialName} ${base}` : base,
     baseType: slot === 'weapon' ? base.toLowerCase() : undefined,
     material,
   };
@@ -133,22 +139,39 @@ export function itemScore(item) {
   return score;
 }
 
+// Where an item of this kind should go: an empty instance if there is one,
+// otherwise whichever is currently holding the worst thing — so a second ring
+// fills your other hand instead of replacing the first.
+export function bestSlotFor(state, kind) {
+  const slots = equipSlotsForKind(kind).filter((slot) => slot in state.equipment);
+  if (!slots.length) return null;
+  const empty = slots.find((slot) => !state.equipment[slot]);
+  if (empty) return empty;
+  return slots.reduce((worst, slot) =>
+    itemScore(state.equipment[slot]) < itemScore(state.equipment[worst]) ? slot : worst
+  );
+}
+
 export function equipItem(state, itemId) {
   const idx = state.inventory.findIndex((it) => it.id === itemId);
   if (idx === -1) return false;
   const item = state.inventory[idx];
-  const current = state.equipment[item.slot];
+  const slot = bestSlotFor(state, item.slot);
+  if (!slot) return false;
+  const current = state.equipment[slot];
   state.inventory.splice(idx, 1);
-  state.equipment[item.slot] = item;
+  state.equipment[slot] = item;
   if (current) state.inventory.push(current);
   return true;
 }
 
 export function maybeAutoEquip(state, item) {
   if (!state.settings.autoEquip) return false;
-  const current = state.equipment[item.slot];
+  const slot = bestSlotFor(state, item.slot);
+  if (!slot) return false;
+  const current = state.equipment[slot];
   if (itemScore(item) > itemScore(current)) {
-    state.equipment[item.slot] = item;
+    state.equipment[slot] = item;
     if (current) state.inventory.push(current);
     return true;
   }

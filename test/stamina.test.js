@@ -125,7 +125,7 @@ test('a fresh hero is genuinely limited by stamina, but still kills', () => {
   // Padded with armor rather than Endurance: dying would skip ticks and hand out
   // vitae, both of which move the number this test is trying to measure, and
   // raising END would shrink the very stamina pressure under test.
-  s.equipment.armor = { id: 1, slot: 'armor', power: 200, spells: [], rarity: 'Common', name: 'Test Plate' };
+  s.equipment.chest = { id: 1, slot: 'chest', power: 200, spells: [], rarity: 'Common', name: 'Test Plate' };
   let stalledTicks = 0;
   let liveTicks = 0;
   for (let i = 0; i < 2400; i++) {

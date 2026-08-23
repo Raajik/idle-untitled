@@ -115,6 +115,13 @@ export function resistanceMitigationPct(rank) {
   return defensiveChance(rank);
 }
 
+// A skill's rank as it counts in combat: what you've trained plus whatever your
+// gear adds (see the `skillRank` spell family in data/spells.js). Still capped at
+// MAX_SKILL_RANK, so gear can carry you to the ceiling but never past it.
+export function effectiveRank(baseRank, bonus = 0) {
+  return Math.max(0, Math.min(MAX_SKILL_RANK, baseRank + bonus));
+}
+
 // Chance (%) an attack connects at all, given the wielder's relevant offense skill.
 // Starts at even odds (lots of misses on an untrained skill) and climbs to 95%.
 export function hitChance(rank) {

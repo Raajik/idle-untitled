@@ -3,6 +3,7 @@
 // what makes high-level ones rare/late-game (see `spellLevelCeiling`).
 
 import { DAMAGE_TYPES } from './regions.js';
+import { ARMOR_SLOTS, UNDERCLOTHING_SLOTS } from './items.js';
 
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 export const MAX_SPELL_LEVEL = 10;
@@ -19,6 +20,41 @@ export function spellLevelCeiling(depth, regionIndex) {
 export function rollSpellLevel(ceiling) {
   const t = Math.pow(Math.random(), 2);
   return Math.max(1, Math.min(ceiling, 1 + Math.floor(t * ceiling)));
+}
+
+// Every attribute, skill and mitigation spell is worth this much per level.
+export const PER_LEVEL = 5;
+
+// The attributes an item can raise, and what to call the spell that does it.
+export const ATTRIBUTE_NAMES = {
+  str: 'Strength',
+  end: 'Endurance',
+  coord: 'Coordination',
+  quick: 'Quickness',
+  focus: 'Focus',
+  self: 'Self',
+};
+
+// The skills an item can raise ranks in. Deliberately the combat ones only —
+// a ring that makes you better at Fishing is a different kind of item.
+export const BUFFABLE_SKILL_NAMES = {
+  unarmed: 'Unarmed',
+  sword: 'Sword',
+  axe: 'Axe',
+  mace: 'Mace',
+  spear: 'Spear',
+  bow: 'Bow',
+  crossbow: 'Crossbow',
+  war: 'War Magic',
+  dodge: 'Dodge',
+  block: 'Block',
+  parry: 'Parry',
+  magicResistance: 'Magic Resistance',
+};
+
+function pickKey(table) {
+  const keys = Object.keys(table);
+  return keys[Math.floor(Math.random() * keys.length)];
 }
 
 function magnitude(level, perLevel, base = 0) {
@@ -47,23 +83,30 @@ const DEFS = {
     effectLabel: (v) => `+${v}% ATK`,
     bonusKey: () => 'atkPct',
   },
-  defensiveBoost: {
-    name: null, // named per-roll below, since it depends on which skill it picked
-    roll: (level) => {
-      const options = ['dodge', 'block', 'parry', 'magicResistance', 'resistance'];
-      const skill = options[Math.floor(Math.random() * options.length)];
-      const meta = skill === 'resistance' ? { skill, dmgType: DAMAGE_TYPES[Math.floor(Math.random() * DAMAGE_TYPES.length)] } : { skill };
-      return { value: magnitude(level, 2), meta };
-    },
-    effectLabel: (v, meta) =>
-      meta.skill === 'resistance'
-        ? `+${v}% ${cap(meta.dmgType)} Resistance`
-        : `+${v}% ${meta.skill === 'magicResistance' ? 'Magic Resistance' : cap(meta.skill)}`,
-    bonusKey: (meta) => (meta.skill === 'resistance' ? `resistanceBonus.${meta.dmgType}` : `${meta.skill}Bonus`),
-    displayName: (meta) =>
-      meta.skill === 'resistance'
-        ? { dodge: 'Swiftness', block: 'Bulwark', parry: 'Riposte', magicResistance: 'Runeward' }[meta.skill] || `${cap(meta.dmgType)} Ward`
-        : { dodge: 'Swiftness', block: 'Bulwark', parry: 'Riposte', magicResistance: 'Runeward' }[meta.skill],
+  // --- The three families an item's own spells come from. Every one of them is
+  // an exact multiple of five per level — no jitter — so a "Strength V" is worth
+  // the same +25 wherever it turns up, and a level 1 is a real, readable +5. ---
+
+  attribute: {
+    name: null, // named for whichever attribute it rolled
+    roll: (level) => ({ value: level * PER_LEVEL, meta: { attr: pickKey(ATTRIBUTE_NAMES) } }),
+    effectLabel: (v, meta) => `+${v} ${ATTRIBUTE_NAMES[meta.attr]}`,
+    bonusKey: (meta) => `attrBonus.${meta.attr}`,
+    displayName: (meta) => ATTRIBUTE_NAMES[meta.attr],
+  },
+  skillRank: {
+    name: null, // named for whichever skill it rolled
+    roll: (level) => ({ value: level * PER_LEVEL, meta: { skill: pickKey(BUFFABLE_SKILL_NAMES) } }),
+    effectLabel: (v, meta) => `+${v} ${BUFFABLE_SKILL_NAMES[meta.skill]}`,
+    bonusKey: (meta) => `skillRankBonus.${meta.skill}`,
+    displayName: (meta) => BUFFABLE_SKILL_NAMES[meta.skill],
+  },
+  mitigation: {
+    name: null, // named for whichever damage type it rolled
+    roll: (level) => ({ value: level * PER_LEVEL, meta: { dmgType: DAMAGE_TYPES[Math.floor(Math.random() * DAMAGE_TYPES.length)] } }),
+    effectLabel: (v, meta) => `+${v}% ${cap(meta.dmgType)} Resistance`,
+    bonusKey: (meta) => `resistanceBonus.${meta.dmgType}`,
+    displayName: (meta) => `${cap(meta.dmgType)} Ward`,
   },
   pyrealsPct: {
     name: 'Fortune',
@@ -160,13 +203,23 @@ function cap(s) {
 }
 
 // Which spell ids a given equipment slot can roll.
+// Which spell ids a given equipment slot can roll. Every slot reaches the
+// attribute family, so there's always enough variety to fill an orange's five
+// slots with five different things. The scaling damage affixes stay on weapons
+// on purpose: they multiply the flat ATK that Tinkering adds, which is what
+// makes a spell-rich weapon the one worth working on.
 export const SPELL_IDS_FOR_SLOT = {
-  weapon: ['flatDamage', 'atkPct', 'defensiveBoost'],
-  armor: ['armor'],
-  shield: ['armor'],
-  amulet: ['pyrealsPct', 'xpPct', 'critPct', 'maxManaFlat'],
-  ring: ['pyrealsPct', 'xpPct', 'critPct', 'maxManaFlat'],
+  weapon: ['attribute', 'skillRank', 'flatDamage', 'atkPct'],
+  shield: ['attribute', 'mitigation', 'armor'],
+  amulet: ['attribute', 'skillRank', 'mitigation', 'pyrealsPct', 'xpPct', 'critPct', 'maxManaFlat'],
+  bracelet: ['attribute', 'skillRank', 'mitigation', 'pyrealsPct', 'xpPct', 'critPct', 'maxManaFlat'],
+  ring: ['attribute', 'skillRank', 'mitigation', 'pyrealsPct', 'xpPct', 'critPct', 'maxManaFlat'],
 };
+// Every piece of armor rolls from the same pool.
+for (const slot of ARMOR_SLOTS) SPELL_IDS_FOR_SLOT[slot] = ['attribute', 'mitigation', 'armor'];
+// Underclothing turns nothing, so it never rolls Aegis — enchantment is the
+// whole reason to wear a particular shirt.
+for (const slot of UNDERCLOTHING_SLOTS) SPELL_IDS_FOR_SLOT[slot] = ['attribute', 'skillRank', 'mitigation'];
 
 // Rolls one full spell instance of a named id: { id, name, level, value, meta,
 // label }. Used where the caller already knows what it wants — Tinkering's

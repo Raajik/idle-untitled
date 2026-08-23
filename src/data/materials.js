@@ -11,6 +11,8 @@
 // the same materials by gathering skill — each POI's `gather` entry in
 // data/regions.js names one member of one pool as its full-clear payout.
 
+import { ARMOR_SLOTS, UNDERCLOTHING_SLOTS } from './items.js';
+
 function mat(id, name, category) {
   return { id, name, category };
 }
@@ -76,11 +78,15 @@ export function getMaterial(id) {
 // material's category can be applied to in Tinkering.
 export const SLOT_MATERIAL_CATEGORY = {
   weapon: 'weapon',
-  armor: 'item',
   shield: 'item',
   amulet: 'magic-item',
+  bracelet: 'magic-item',
   ring: 'magic-item',
 };
+// Every piece of armor takes the same materials the old single armor slot did.
+for (const slot of ARMOR_SLOTS) SLOT_MATERIAL_CATEGORY[slot] = 'item';
+// Cloth, same as the armor pool draws from.
+for (const slot of UNDERCLOTHING_SLOTS) SLOT_MATERIAL_CATEGORY[slot] = 'item';
 
 export function materialsForSlot(slot) {
   const category = SLOT_MATERIAL_CATEGORY[slot];

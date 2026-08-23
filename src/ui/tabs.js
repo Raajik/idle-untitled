@@ -52,9 +52,28 @@ import { buyPrice, sellPrice, healCost } from '../game/shop.js';
 import { TRAINING_TRACKS, trainingCost } from '../game/training.js';
 import { soulsAvailable, canEnlighten, ENLIGHTENMENT_UPGRADES } from '../game/enlightenment.js';
 import { itemScore, salvageYield } from '../game/loot.js';
-import { STARTING_SLOTS, AETHERIA_SLOTS, RARITIES, itemIcon, slotIcon, weaponClass } from '../data/items.js';
+import {
+  STARTING_SLOTS,
+  EQUIP_SLOTS,
+  AETHERIA_SLOTS,
+  RARITIES,
+  SLOT_LABELS,
+  SLOTS,
+  itemIcon,
+  slotIcon,
+  slotKind,
+  weaponClass,
+  isArmorSlot,
+  isUnderclothing,
+} from '../data/items.js';
 import { UNLOCKS } from './unlocks.js';
 import { fmt, formatDuration, plural } from '../engine/format.js';
+
+// "ring1" -> "Ring", "upperArm" -> "Upper Arm". Both instances of a doubled slot
+// read the same; which hand a ring is on isn't information anyone needs.
+function slotLabel(equipSlot) {
+  return SLOT_LABELS[slotKind(equipSlot)] || slotKind(equipSlot);
+}
 
 function cap(s) {
   return s[0].toUpperCase() + s.slice(1);
@@ -747,7 +766,7 @@ export function tinkeringTab(state) {
     })
     .join('');
 
-  const slotRows = ['weapon', 'armor', 'shield', 'amulet', 'ring']
+  const slotRows = EQUIP_SLOTS
     .map((slot) => {
       const item = state.equipment[slot];
       if (!item) return '';
@@ -757,7 +776,7 @@ export function tinkeringTab(state) {
         .concat(slot === 'weapon' ? MATERIALS.filter((m) => !materialsForSlot(slot).includes(m)) : [])
         .filter((m) => tinkerEffectFor(state, slot, m.id));
       const affordable = usable.filter((m) => canTinker(state, slot, m.id));
-      const cls = slot === 'weapon' ? weaponClass(item.baseType) : null;
+      const cls = slotKind(slot) === 'weapon' ? weaponClass(item.baseType) : null;
       const teaches = (m) => {
         const effect = tinkerEffectFor(state, slot, m.id);
         const label = effect && effect !== 'any' ? ` — ${SPELL_ID_LABELS[effect] || effect}` : '';
@@ -770,7 +789,7 @@ export function tinkeringTab(state) {
            <button class="btn" data-action="apply-tinker" data-arg="${slot}">Apply</button>`
         : `<span class="muted">Nothing to work in yet — needs ${usable.length ? usable.map((m) => `${tinkerCostFor(state, slot, m.id)} ${esc(m.name)}`).join(' / ') : `${TINKER_BASE_COST}+ of a matching material`}</span>`;
       return `<div class="upgrade-row">
-        <div><b>${esc(item.name)}</b> <span class="muted">[${cls ? `${cls} weapon` : slot}]</span></div>
+        <div><b>${esc(item.name)}</b> <span class="muted">[${cls ? `${cls} weapon` : esc(slotLabel(slot))}]</span></div>
         <div class="actions">${body}</div>
       </div>`;
     })
@@ -829,10 +848,12 @@ function itemHtml(state, item, equipped) {
   const base =
     item.slot === 'weapon'
       ? `${item.power} ATK`
-      : item.slot === 'armor'
-      ? `${Math.floor(item.power * 0.6)} DEF, +${item.power * 2} HP`
+      : isArmorSlot(item.slot)
+      ? `${item.power} armor value`
       : item.slot === 'shield'
       ? `${Math.floor(item.power * 0.5)} DEF`
+      : isUnderclothing(item.slot)
+      ? 'no armor value — worn for what is on it'
       : `${item.power} power`;
   let cmp = '';
   if (!equipped) {
@@ -874,7 +895,7 @@ function equippedGridHtml(state) {
   return slots
     .map((slot) => {
       const item = state.equipment[slot];
-      const label = slot.startsWith('aetheria') ? `Aetheria ${slot.slice(-1)}` : slot;
+      const label = slot.startsWith('aetheria') ? `Aetheria ${slot.slice(-1)}` : slotLabel(slot);
       const cell = item
         ? slotCellHtml(state, { item, equipped: true, selected: state.ui.selectedItemId === item.id })
         : slotCellHtml(state, { slot, empty: true });
@@ -919,7 +940,7 @@ export function inventoryTab(state) {
 
   const presentSpellIds = [...new Set(state.inventory.flatMap((it) => it.spells.map((sp) => sp.id)))];
   const filterRowHtml = `<div class="filter-row">
-    <div class="filter-group">${['all', ...STARTING_SLOTS].map((sl) => filterBtn('slot', sl, sl === 'all' ? 'All slots' : sl, filter.slot)).join('')}</div>
+    <div class="filter-group">${['all', ...SLOTS].map((sl) => filterBtn('slot', sl, sl === 'all' ? 'All slots' : slotLabel(sl), filter.slot)).join('')}</div>
     <div class="filter-group">${['all', ...RARITIES.map((r) => r.name)].map((r) => filterBtn('rarity', r, r === 'all' ? 'All rarities' : r, filter.rarity)).join('')}</div>
     ${presentSpellIds.length ? `<div class="filter-group">${['all', ...presentSpellIds].map((id) => filterBtn('spellId', id, id === 'all' ? 'All spells' : SPELL_ID_LABELS[id] || id, filter.spellId)).join('')}</div>` : ''}
   </div>`;

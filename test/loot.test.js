@@ -11,7 +11,14 @@ test('generateItem produces valid items', () => {
     assert.ok(RARITIES.some((r) => r.name === item.rarity));
     assert.ok(item.power >= 1);
     assert.ok(item.name.length > 0);
-    assert.ok(item.spells.length <= RARITIES.find((r) => r.name === item.rarity).affixes);
+    const [min, max] = RARITIES.find((r) => r.name === item.rarity).spells;
+    assert.ok(
+      item.spells.length >= min && item.spells.length <= max,
+      `${item.rarity} rolled ${item.spells.length} spells, expected ${min}-${max}`
+    );
+    // One of each kind per item — stacking the same affix is Tinkering's job.
+    const kinds = item.spells.map((sp) => sp.id + JSON.stringify(sp.meta || {}));
+    assert.equal(new Set(kinds).size, kinds.length, 'an item rolled the same spell twice');
   }
 });
 

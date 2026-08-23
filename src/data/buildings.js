@@ -14,7 +14,7 @@
 //     keys from game/hero.js and apply to the hero automatically; the two in
 //     LOCAL_PERK_KEYS are read directly by the system that cares about them.
 
-import { SLOTS } from './items.js';
+import { SLOTS, ARMOR_SLOTS, UNDERCLOTHING_SLOTS } from './items.js';
 
 export const MAX_BUILDING_LEVEL = 10;
 
@@ -79,7 +79,7 @@ export const BUILDINGS = [
     blurb: 'Plate, chain, and shields dented in all the reassuring places.',
     unlock: { pyreals: 2500, materialId: 'granite', materials: 10 },
     upgrade: { pyreals: 1600, growth: 1.7, materialId: 'granite', materials: 5 },
-    stock: { slots: ['armor', 'shield'], min: 3, max: 5 },
+    stock: { slots: [...ARMOR_SLOTS, 'shield'], min: 3, max: 5 },
     perk: { key: 'hpPct', perLevel: 5, text: (v) => `+${v}% Max HP` },
   },
   {
@@ -89,7 +89,7 @@ export const BUILDINGS = [
     blurb: 'Light armor cut to move, because not every hit is worth taking.',
     unlock: { pyreals: 3200, materialId: 'gromnie-hide', materials: 10 },
     upgrade: { pyreals: 2000, growth: 1.7, materialId: 'gromnie-hide', materials: 5 },
-    stock: { slots: ['armor'], min: 2, max: 4 },
+    stock: { slots: [...UNDERCLOTHING_SLOTS, ...ARMOR_SLOTS], min: 2, max: 4 },
     perk: { key: 'dodgeBonus', perLevel: 1.5, text: (v) => `+${v.toFixed(1)}% Dodge chance` },
   },
   {

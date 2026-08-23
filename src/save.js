@@ -6,7 +6,7 @@ import { getPoiById, isSite } from './data/regions.js';
 import { monsterStatsForLevel } from './data/monsterScaling.js';
 import { TUTORIAL_ROAD } from './data/tutorial.js';
 import { generateItem, maybeAutoEquip, DROP_CHANCE } from './game/loot.js';
-import { poiItemPower } from './data/items.js';
+import { poiItemPower, EQUIP_SLOTS } from './data/items.js';
 import { freshBuildings } from './data/buildings.js';
 import { fmt } from './engine/format.js';
 import { skipTravel } from './game/travel.js';
@@ -156,19 +156,26 @@ function migrate(raw) {
   delete state.progress.highestPoi;
   delete state.progress.killsInZone;
 
+  // Armor went from one slot to ten and jewelry gained a second ring and two
+  // bracelets, so equipment is rebuilt against the current slot list. Anything
+  // whose slot no longer exists (the old single 'armor') goes back to the pack
+  // rather than being destroyed.
+  const rebuiltEquipment = {};
+  for (const slot of EQUIP_SLOTS) rebuiltEquipment[slot] = null;
+  const displaced = [];
+  for (const [slot, item] of Object.entries(raw.equipment || {})) {
+    if (!item) continue;
+    if (slot in rebuiltEquipment && !rebuiltEquipment[slot]) rebuiltEquipment[slot] = item;
+    else displaced.push(item);
+  }
+
   // Normalize item slots (trinket -> amulet, charm -> ring) from pre-AC-theme saves.
   const remap = (slot) => (slot === 'trinket' ? 'amulet' : slot === 'charm' ? 'ring' : slot);
-  state.equipment = { ...fresh.equipment, ...(raw.equipment || {}) };
-  for (const slot of Object.keys(state.equipment)) {
-    const item = state.equipment[slot];
-    const newSlot = remap(slot);
-    if (newSlot !== slot) {
-      delete state.equipment[slot];
-      state.equipment[newSlot] = state.equipment[newSlot] || item;
-    }
+  state.equipment = rebuiltEquipment;
+  for (const item of Object.values(state.equipment)) {
     if (item && remap(item.slot) !== item.slot) item.slot = remap(item.slot);
   }
-  state.inventory = (raw.inventory || []).map((it) => ({ ...it, slot: remap(it.slot) }));
+  state.inventory = [...(raw.inventory || []), ...displaced].map((it) => ({ ...it, slot: remap(it.slot) }));
 
   // Migrate the old single Hero/Equipment tabs into the Hero category's subsections.
   if (state.ui.activeTab === 'hero') state.ui.activeTab = 'attributes';

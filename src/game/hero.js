@@ -8,11 +8,16 @@
 
 import { ENLIGHTENMENT_UPGRADES } from '../data/enlightenment.js';
 import { heroBuildingBonuses } from '../data/buildings.js';
-import { weaponClass } from '../data/items.js';
+import { weaponClass, isArmorSlot, slotKind, ARMOR_SLOTS } from '../data/items.js';
 import { achievementBonuses } from '../data/achievements.js';
 import { spellBonusKeys } from '../data/spells.js';
 import { vitaeMultiplier, workOffVitae } from './vitae.js';
 import { buffBonuses } from './buffs.js';
+
+// Split across ARMOR_SLOTS.length pieces: what a complete set is worth, per
+// point of an individual piece's power.
+const ARMOR_DEF_PER_POWER = 0.6 / ARMOR_SLOTS.length;
+const ARMOR_HP_PER_POWER = 1 / ARMOR_SLOTS.length;
 
 export const ATTRIBUTES = [
   { id: 'str', name: 'Strength', short: 'STR', desc: '+1.5 ATK each' },
@@ -53,11 +58,15 @@ export function getBonuses(state) {
     hpRegenFlat: 0, staminaRegenFlat: 0, manaRegenFlat: 0,
     magicAtkFlat: 0, hitChancePct: 0, attackSpeedPct: 0, manaCostPct: 0, minDamagePct: 0,
     dodgeBonus: 0, blockBonus: 0, parryBonus: 0, magicResistanceBonus: 0, resistanceBonus: {},
+    // Nested like resistanceBonus: item spells raise one named attribute or one
+    // named skill's rank, so these are keyed maps rather than single totals.
+    attrBonus: {}, skillRankBonus: {},
   };
 
-  for (const slot of Object.keys(state.equipment)) {
-    const item = state.equipment[slot];
+  for (const equipSlot of Object.keys(state.equipment)) {
+    const item = state.equipment[equipSlot];
     if (!item) continue;
+    const slot = slotKind(equipSlot);
     // A weapon's power feeds whatever it's actually for: a blade or a bow sharpens
     // your ATK, a wand or an orb sharpens what you channel through it. Holding a
     // casting device in melee stance is therefore holding nothing much at all.
@@ -65,9 +74,12 @@ export function getBonuses(state) {
       if (weaponClass(item.baseType) === 'magic') b.magicAtkFlat += item.power;
       else b.weaponAtk += item.power;
     }
-    if (slot === 'armor') {
-      b.armorDef += Math.floor(item.power * 0.6);
-      b.hpFlat += item.power;
+    // Nine armor slots share what one used to carry, so a full set lands roughly
+    // where a single piece did rather than nine-timesing it. A shield is one
+    // thing you either have or don't, so it keeps its own larger share.
+    if (isArmorSlot(slot)) {
+      b.armorDef += item.power * ARMOR_DEF_PER_POWER;
+      b.hpFlat += item.power * ARMOR_HP_PER_POWER;
     }
     if (slot === 'shield') b.armorDef += Math.floor(item.power * 0.5);
     for (const spell of item.spells) {
@@ -124,14 +136,17 @@ export function derivedStats(state) {
   // speed or crit — being weakened should cost you power, not turn the fight
   // into slow motion, which at the 40% floor would be miserable to watch.
   const vitae = vitaeMultiplier(state);
-  const maxHp = Math.floor((21.5 + h.end * 3.5 + b.hpFlat) * (1 + b.hpPct / 100) * vitae);
-  const atk = Math.floor((3 + h.str * 1.5 + b.weaponAtk + b.atkFlat) * (1 + b.atkPct / 100) * vitae);
-  const magicAtk = Math.floor((3 + h.focus * 1.5 + b.magicAtkFlat) * vitae); // Magic's own damage baseline, off Focus not Strength
-  const def = Math.floor((h.end * 0.5 + b.armorDef + b.armorFlat) * vitae);
-  const spd = 1 + h.quick * 0.04; // attacks per second
-  const critChance = 5 + h.coord * 0.2 + b.critPct; // percent
-  const maxStamina = Math.floor((17 + h.end * 1.5 + h.quick * 1.5) * vitae);
-  const maxMana = Math.floor((16.5 + h.self * 3.5 + b.maxManaFlat) * vitae);
+  // Gear that raises an attribute raises everything that attribute feeds, the
+  // same as having earned the points.
+  const attr = (id) => h[id] + (b.attrBonus[id] || 0);
+  const maxHp = Math.floor((21.5 + attr('end') * 3.5 + b.hpFlat) * (1 + b.hpPct / 100) * vitae);
+  const atk = Math.floor((3 + attr('str') * 1.5 + b.weaponAtk + b.atkFlat) * (1 + b.atkPct / 100) * vitae);
+  const magicAtk = Math.floor((3 + attr('focus') * 1.5 + b.magicAtkFlat) * vitae); // Magic's own damage baseline, off Focus not Strength
+  const def = Math.floor((attr('end') * 0.5 + b.armorDef + b.armorFlat) * vitae);
+  const spd = 1 + attr('quick') * 0.04; // attacks per second
+  const critChance = 5 + attr('coord') * 0.2 + b.critPct; // percent
+  const maxStamina = Math.floor((17 + attr('end') * 1.5 + attr('quick') * 1.5) * vitae);
+  const maxMana = Math.floor((16.5 + attr('self') * 3.5 + b.maxManaFlat) * vitae);
   return {
     maxHp,
     atk,
@@ -144,6 +159,8 @@ export function derivedStats(state) {
     hpRegenFlat: b.hpRegenFlat,
     staminaRegenFlat: b.staminaRegenFlat,
     manaRegenFlat: b.manaRegenFlat,
+    attrBonus: b.attrBonus,
+    skillRankBonus: b.skillRankBonus,
     hitChancePct: b.hitChancePct,
     attackSpeedPct: b.attackSpeedPct,
     manaCostPct: b.manaCostPct,
