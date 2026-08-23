@@ -18,7 +18,7 @@ function alcottOutfitsYou(state) {
     const def = getConsumable(id);
     if (def && def.unlocks === 'autoHealUnlocked') state.progress.autoHealUnlocked = true;
   }
-  for (const id of ALCOTT_TAUGHT_SPELLS) learnSpell(state, id);
+  for (const id of ALCOTT_TAUGHT_SPELLS) learnSpell(state, id, 1);
 
   const gifts = ALCOTT_GIFTS.map((id) => getConsumable(id).name).join(' and a ');
   const spells = ALCOTT_TAUGHT_SPELLS.map((id) => getBuffSpell(id).name).join(', ');

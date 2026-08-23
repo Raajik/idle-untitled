@@ -8,6 +8,7 @@
 
 import {
   BUILDINGS,
+  buildingIn,
   getBuilding,
   rotationSeconds,
   unlockCost,
@@ -117,6 +118,32 @@ export function tickBuildings(state, now = Date.now()) {
   }
 }
 
+// The tour is a job like any other: it has a marker on the Town Hall until you
+// go and do it, and doing it is what opens the General Store. Registering it as
+// a quest rather than as a button buried in a building panel means the "go here
+// first" marker is the one consistent way the game points at anything.
+export const TOUR_QUEST = 'Ask how the town works';
+
+export function openTownQuests(state, regionId) {
+  const hallId = buildingIn(regionId, 'town-hall');
+  const def = getBuilding(hallId);
+  if (!def || def.service !== 'tour') return;
+  if (state.progress.tookTownTour) {
+    state.progress.quests[hallId] = 'done';
+    return;
+  }
+  if (!state.progress.quests[hallId]) state.progress.quests[hallId] = 'active';
+}
+
+// Whether this building is currently asking for something.
+export function buildingHasQuest(state, buildingId) {
+  return state.progress.quests[buildingId] === 'active';
+}
+
+export function buildingQuestText(state, buildingId) {
+  return buildingHasQuest(state, buildingId) ? TOUR_QUEST : null;
+}
+
 export function isUnlocked(state, buildingId) {
   const entry = state.buildings[buildingId];
   return !!entry && entry.level > 0;
@@ -143,6 +170,7 @@ export function takeTour(state, buildingId, now = Date.now()) {
   if (state.progress.tookTownTour) return false;
 
   state.progress.tookTownTour = true;
+  state.progress.quests[buildingId] = 'done';
   addLog(state, TOUR_LINE, 'good');
   if (def.unlocksOnService && openBuilding(state, def.unlocksOnService, now)) {
     addLog(state, `The ${getBuilding(def.unlocksOnService).name} opens its doors to you.`, 'good');

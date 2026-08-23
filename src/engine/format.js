@@ -19,3 +19,16 @@ export function formatDuration(totalSeconds) {
   if (m > 0) return `${m}m ${sec}s`;
   return `${sec}s`;
 }
+
+// A clock reading — "0:07", "3:45", "1:02:30". Used where a duration is compared
+// against another duration (travel times against their base), because "1m 30s"
+// and "45s" are hard to weigh against each other at a glance and 1:30 vs 0:45
+// is not.
+export function formatClock(totalSeconds) {
+  const s = Math.max(0, Math.ceil(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = String(s % 60).padStart(2, '0');
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${sec}`;
+  return `${m}:${sec}`;
+}

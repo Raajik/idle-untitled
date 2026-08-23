@@ -17,6 +17,7 @@ import {
   poisInTier,
 } from '../src/data/regions.js';
 import { modifiedWalkTime } from '../src/game/skills.js';
+import { formatClock } from '../src/engine/format.js';
 
 function inTown(poiId = null) {
   const s = createInitialState();
@@ -174,6 +175,10 @@ test('the quoted time is the one the walk will actually take', () => {
   const poi = getRegion('holtburg').pois.find((p) => p.id === 'drudge-hideout');
   const actual = modifiedWalkTime(poi.walkSeconds, 40);
   assert.ok(actual < poi.walkSeconds, 'this test needs Athletics to be doing something');
-  // formatDuration rounds to whole seconds, which is what the tile shows.
-  assert.ok(battleTab(s).includes(`${Math.round(actual)}s`), `expected the tile to quote ${Math.round(actual)}s`);
+  // Tiles quote a clock reading — "Travel: 0:07" — so a long walk and a short one
+  // can be weighed against each other at a glance.
+  assert.ok(
+    battleTab(s).includes(`Travel: ${formatClock(actual)}`),
+    `expected the tile to quote Travel: ${formatClock(actual)}`
+  );
 });

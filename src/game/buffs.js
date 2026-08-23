@@ -6,7 +6,7 @@
 // A buff's `effect` is a bag of getBonuses() keys, folded into the hero's bonus
 // table by game/hero.js — so a buff can raise anything gear can.
 
-import { getBuffSpell } from '../data/buffSpells.js';
+import { getBuffSpell, buffAt, buffSpellName, clampBuffLevel, MAX_BUFF_LEVEL } from '../data/buffSpells.js';
 import { trainSkill } from './skills.js';
 import { formatDuration } from '../engine/format.js';
 import { addLog } from './state.js';
@@ -55,27 +55,46 @@ export function tickBuffs(state, dt) {
   for (const buff of expired) addLog(state, `${buff.name} fades.`, 'dim');
 }
 
+// Known spells are a map of id -> level; 0 or missing means you don't have it.
+export function spellLevel(state, id) {
+  return state.hero.knownSpells[id] || 0;
+}
+
 export function knowsSpell(state, id) {
-  return state.hero.knownSpells.includes(id);
+  return spellLevel(state, id) > 0;
+}
+
+// The spell as you know it, at the level you know it.
+export function knownBuff(state, id) {
+  const level = spellLevel(state, id);
+  return level > 0 ? buffAt(id, level) : null;
 }
 
 export function canCastBuffSpell(state, id) {
-  const spell = getBuffSpell(id);
-  if (!spell || !knowsSpell(state, id)) return false;
+  const known = knownBuff(state, id);
+  if (!known) return false;
   if (state.hero.dead) return false;
-  return state.hero.mana >= spell.manaCost;
+  return state.hero.mana >= known.manaCost;
 }
 
 // Casts a known self-buff. Costs mana up front and trains Life Magic, which is
 // otherwise a skill with nothing to do.
 export function castBuffSpell(state, id) {
   if (!canCastBuffSpell(state, id)) return false;
-  const spell = getBuffSpell(id);
-  state.hero.mana -= spell.manaCost;
-  applyBuff(state, { id: spell.id, name: spell.name, seconds: spell.seconds, effect: spell.effect });
+  const known = knownBuff(state, id);
+  state.hero.mana -= known.manaCost;
+  applyBuff(state, { id: known.id, name: known.name, seconds: known.seconds, effect: known.effect });
   trainSkill(state, state.hero.skills.offense.life, 'Life Magic', CAST_LIFE_XP);
-  addLog(state, `You cast ${spell.name}. (${formatDuration(spell.seconds)})`, 'good');
+  addLog(state, `${known.name} — ${known.desc}.`, `${vitalClass(id)}`);
   return true;
+}
+
+// Which text colour a spell is always drawn in, so what it touches is legible
+// before it's read.
+export function vitalClass(id) {
+  const spell = getBuffSpell(id);
+  if (!spell) return 'good';
+  return { hp: 'hp-text', stamina: 'stamina-text', mana: 'mana-text' }[spell.vital] || 'good';
 }
 
 // Auto-cast: a spell set to refresh itself goes up again as it's about to run
@@ -108,8 +127,14 @@ export function tickAutoCast(state) {
   }
 }
 
-export function learnSpell(state, id) {
-  if (knowsSpell(state, id)) return false;
-  state.hero.knownSpells.push(id);
-  return true;
+// Learns a spell, or raises it if what's offered beats what you have. Returns
+// the new level, or 0 if it taught you nothing.
+export function learnSpell(state, id, level = 1) {
+  if (!getBuffSpell(id)) return 0;
+  const wanted = clampBuffLevel(level);
+  if (spellLevel(state, id) >= wanted) return 0;
+  state.hero.knownSpells[id] = wanted;
+  return wanted;
 }
+
+export { MAX_BUFF_LEVEL };

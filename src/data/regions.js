@@ -21,8 +21,13 @@
 // POI's last wave (see game/waves.js rollSwarmSize). One is the norm everywhere;
 // the Direlands is where being surrounded becomes the actual threat.
 //
-// walkSeconds is the BASE travel time (before the Run skill's speed bonus) it
-// takes to reach a region from town, or a POI from its region's hub.
+// walkSeconds is the BASE travel time (before Athletics' speed bonus) it takes to
+// reach a region from town, or a POI from its region's hub.
+//
+// The spread within a region is deliberately wide — a few seconds to the nearest
+// site, minutes to the far edge. Athletics divides all of it, so the difference
+// between rank 0 and rank 100 on a 225-second haul is most of four minutes, and
+// the skill is worth levelling rather than a rounding error.
 
 export const DAMAGE_TYPES = ['bludgeon', 'pierce', 'slash', 'acid', 'cold', 'fire', 'lightning', 'void'];
 
@@ -46,13 +51,13 @@ export const REGIONS = [
         // the Lifestone itself (see game/lifestone.js). Growing it moves your bind
         // point from the far-off starting stone to Holtburg's town hub, which is what
         // turns a death from a three-minute walk back into a few seconds.
-        id: 'budding-lifestone', name: 'A Budding Lifestone', coords: '42.9N, 33.4E', quest: 'Grow the Lifestone', walkSeconds: 8,
+        id: 'budding-lifestone', name: 'A Budding Lifestone', coords: '42.9N, 33.4E', quest: 'Grow the Lifestone', walkSeconds: 6,
         site: 'lifestone',
         condition: 'budding',
         monsters: [],
       },
       {
-        id: 'drudge-hideout', name: 'Drudge Hideout', coords: '41.4N, 33.3E', quest: "Alfrin's Stolen Supplies", walkSeconds: 12,
+        id: 'drudge-hideout', name: 'Drudge Hideout', coords: '41.4N, 33.3E', quest: "Alfrin's Stolen Supplies", walkSeconds: 8,
         gather: { skill: 'woodcutting', material: 'mahogany' },
         monsters: [
           { name: 'Drudge Skulker', level: 2, dmgType: 'bludgeon' },
@@ -62,7 +67,7 @@ export const REGIONS = [
         boss: { name: 'Drudge Warlord', level: 6, dmgType: 'bludgeon' },
       },
       {
-        id: 'holtburg-redoubt', name: 'Holtburg Redoubt', coords: '40.4N, 34.4E', quest: "Worcer's Missing Heirlooms", walkSeconds: 14,
+        id: 'holtburg-redoubt', name: 'Holtburg Redoubt', coords: '40.4N, 34.4E', quest: "Worcer's Missing Heirlooms", walkSeconds: 12,
         gather: { skill: 'mining', material: 'green-garnet' },
         monsters: [
           { name: 'Banderling', level: 3, dmgType: 'slash' },
@@ -72,7 +77,7 @@ export const REGIONS = [
         boss: { name: 'Banderling Warlord', level: 7, dmgType: 'slash' },
       },
       {
-        id: 'colier-mine', name: 'Colier Mine', coords: '39.9N, 33.8E', quest: 'None', walkSeconds: 15,
+        id: 'colier-mine', name: 'Colier Mine', coords: '39.9N, 33.8E', quest: 'None', walkSeconds: 16,
         gather: { skill: 'mining', material: 'opal' },
         monsters: [
           { name: 'Mine Drudge', level: 3, dmgType: 'bludgeon' },
@@ -82,7 +87,7 @@ export const REGIONS = [
         boss: { name: 'The Deep Foreman', level: 8, dmgType: 'bludgeon' },
       },
       {
-        id: 'green-mire-grave', name: 'Green Mire Grave', coords: '38.4N, 35.1E', quest: 'None', walkSeconds: 17,
+        id: 'green-mire-grave', name: 'Green Mire Grave', coords: '38.4N, 35.1E', quest: 'None', walkSeconds: 24,
         gather: { skill: 'foraging', material: 'velvet' },
         monsters: [
           { name: 'Grave Mite', level: 3, dmgType: 'acid' },
@@ -92,7 +97,7 @@ export const REGIONS = [
         boss: { name: 'The Mire Warden', level: 9, dmgType: 'void' },
       },
       {
-        id: 'rat-nest', name: 'A Rat Nest', coords: '40.2N, 32.5E', quest: 'Rat Tails', walkSeconds: 16,
+        id: 'rat-nest', name: 'A Rat Nest', coords: '40.2N, 32.5E', quest: 'Rat Tails', walkSeconds: 20,
         gather: { skill: 'mining', material: 'copper' },
         monsters: [
           { name: 'Brown Rat', level: 4, dmgType: 'pierce' },
@@ -104,7 +109,7 @@ export const REGIONS = [
       {
         // Skinning has to be somewhere you go on purpose, not a by-product of a
         // dungeon that happened to have an animal in it.
-        id: 'ursuin-run', name: 'The Ursuin Run', coords: '39.1N, 31.7E', quest: 'Hunt Wild Ursuin', walkSeconds: 16,
+        id: 'ursuin-run', name: 'The Ursuin Run', coords: '39.1N, 31.7E', quest: 'Hunt Wild Ursuin', walkSeconds: 28,
         gather: { skill: 'skinning', material: 'ursuin-pelt' },
         monsters: [
           { name: 'Ursuin Cub', level: 4, dmgType: 'slash' },
@@ -114,7 +119,7 @@ export const REGIONS = [
         boss: { name: 'The Grey Ursuin', level: 9, dmgType: 'slash' },
       },
       {
-        id: 'cave-of-alabree', name: 'Cave of Alabree', coords: '41.8N, 32.1E', quest: "Brogord's Demise", walkSeconds: 18,
+        id: 'cave-of-alabree', name: 'Cave of Alabree', coords: '41.8N, 32.1E', quest: "Brogord's Demise", walkSeconds: 34,
         gather: { skill: 'mining', material: 'iron' },
         monsters: [
           { name: 'Drudge Skulker', level: 5, dmgType: 'bludgeon' },
@@ -124,7 +129,7 @@ export const REGIONS = [
         boss: { name: 'Brogord the Axe', level: 9, dmgType: 'bludgeon' },
       },
       {
-        id: 'holtburg-dungeon', name: 'Holtburg Dungeon', coords: '43.6N, 33.0E', quest: 'Sword of Lost Light Quest', walkSeconds: 20,
+        id: 'holtburg-dungeon', name: 'Holtburg Dungeon', coords: '43.6N, 33.0E', quest: 'Sword of Lost Light Quest', walkSeconds: 45,
         gather: { skill: 'mining', material: 'granite' },
         monsters: [
           { name: 'Dungeon Drudge', level: 6, dmgType: 'bludgeon' },
@@ -134,7 +139,7 @@ export const REGIONS = [
         boss: { name: 'The Lost Light', level: 10, dmgType: 'void' },
       },
       {
-        id: 'asuger-temple', name: 'Asuger Temple', coords: '45.1N, 30.4E', quest: "Elysa's Favor", walkSeconds: 22,
+        id: 'asuger-temple', name: 'Asuger Temple', coords: '45.1N, 30.4E', quest: "Elysa's Favor", walkSeconds: 58,
         gather: { skill: 'foraging', material: 'linen' },
         monsters: [
           { name: 'Temple Drudge', level: 7, dmgType: 'bludgeon' },
@@ -144,7 +149,7 @@ export const REGIONS = [
         boss: { name: 'Asuger', level: 11, dmgType: 'void' },
       },
       {
-        id: 'banderling-ruin', name: 'Banderling Ruin', coords: '36.1N, 39.6E', quest: 'Runed Chest', walkSeconds: 26,
+        id: 'banderling-ruin', name: 'Banderling Ruin', coords: '36.1N, 39.6E', quest: 'Runed Chest', walkSeconds: 75,
         gather: { skill: 'mining', material: 'gold' },
         monsters: [
           { name: 'Banderling Scout', level: 8, dmgType: 'slash' },
@@ -154,7 +159,7 @@ export const REGIONS = [
         boss: { name: 'Banderling Chieftain', level: 12, dmgType: 'slash' },
       },
       {
-        id: 'dungeon-fern', name: 'Dungeon Fern', coords: '43.3N, 37.2E', quest: 'Runed Chest', walkSeconds: 28,
+        id: 'dungeon-fern', name: 'Dungeon Fern', coords: '43.3N, 37.2E', quest: 'Runed Chest', walkSeconds: 95,
         gather: { skill: 'woodcutting', material: 'oak' },
         monsters: [
           { name: 'Shreth', level: 9, dmgType: 'pierce' },
@@ -164,7 +169,7 @@ export const REGIONS = [
         boss: { name: 'Fern Guardian', level: 13, dmgType: 'acid' },
       },
       {
-        id: 'mukkir-nest', name: 'Small Fledgling Mukkir Nest', coords: '43.5N, 36.1E', quest: 'Small Fledgling Mukkir Kill Task', walkSeconds: 30,
+        id: 'mukkir-nest', name: 'Small Fledgling Mukkir Nest', coords: '43.5N, 36.1E', quest: 'Small Fledgling Mukkir Kill Task', walkSeconds: 120,
         gather: { skill: 'mining', material: 'silver' },
         monsters: [
           { name: 'Fledgling Mukkir', level: 10, dmgType: 'acid' },
@@ -174,7 +179,7 @@ export const REGIONS = [
         boss: { name: 'Mukkir Queen', level: 14, dmgType: 'acid' },
       },
       {
-        id: 'hunters-leap', name: "Hunter's Leap", coords: '35.7N, 32.6E', quest: "Lilitha's Lost Bow", walkSeconds: 34,
+        id: 'hunters-leap', name: "Hunter's Leap", coords: '35.7N, 32.6E', quest: "Lilitha's Lost Bow", walkSeconds: 150,
         gather: { skill: 'skinning', material: 'gromnie-hide' },
         monsters: [
           { name: 'Shreth', level: 11, dmgType: 'pierce' },
@@ -184,7 +189,7 @@ export const REGIONS = [
         boss: { name: 'Shreth Alpha', level: 15, dmgType: 'pierce' },
       },
       {
-        id: 'daiklos', name: 'Daiklos', coords: '33.7N, 29.2E', quest: 'Runed Chest', walkSeconds: 38,
+        id: 'daiklos', name: 'Daiklos', coords: '33.7N, 29.2E', quest: 'Runed Chest', walkSeconds: 185,
         gather: { skill: 'woodcutting', material: 'ebony' },
         monsters: [
           { name: 'Skeleton', level: 12, dmgType: 'void' },
@@ -194,7 +199,7 @@ export const REGIONS = [
         boss: { name: 'Daiklos the Fallen', level: 16, dmgType: 'void' },
       },
       {
-        id: 'heart-of-innocence', name: 'Heart of Innocence', coords: '34.0N, 39.0E (Approx.)', quest: 'Heart of Innocence Quest', walkSeconds: 40,
+        id: 'heart-of-innocence', name: 'Heart of Innocence', coords: '34.0N, 39.0E (Approx.)', quest: 'Heart of Innocence Quest', walkSeconds: 225,
         gather: { skill: 'fishing', material: 'moonstone' },
         monsters: [
           { name: 'Lost Soul', level: 13, dmgType: 'void' },
@@ -212,13 +217,13 @@ export const REGIONS = [
     walkSeconds: 1200, // 20 min at rank-0 Athletics; ~2 min once Athletics is maxed
     pois: [
       {
-        id: 'glenden-lifestone', name: 'A Cracked Lifestone', coords: '—', quest: 'Restore the Lifestone', walkSeconds: 10,
+        id: 'glenden-lifestone', name: 'A Cracked Lifestone', coords: '—', quest: 'Restore the Lifestone', walkSeconds: 8,
         site: 'lifestone',
         condition: 'cracked',
         monsters: [],
       },
       {
-        id: 'banderling-plains', name: 'Banderling Plains', coords: '—', quest: 'None', walkSeconds: 20,
+        id: 'banderling-plains', name: 'Banderling Plains', coords: '—', quest: 'None', walkSeconds: 30,
         gather: { skill: 'woodcutting', material: 'pine' },
         monsters: [
           { name: 'Banderling', level: 18, dmgType: 'slash' },
@@ -228,7 +233,7 @@ export const REGIONS = [
         boss: { name: 'Banderling Chieftain', level: 23, dmgType: 'slash' },
       },
       {
-        id: 'armoredillo-warren', name: 'Armoredillo Warren', coords: '—', quest: 'Hunt Armoredillos', walkSeconds: 24,
+        id: 'armoredillo-warren', name: 'Armoredillo Warren', coords: '—', quest: 'Hunt Armoredillos', walkSeconds: 70,
         gather: { skill: 'skinning', material: 'armoredillo-hide' },
         monsters: [
           { name: 'Armoredillo', level: 19, dmgType: 'bludgeon' },
@@ -238,7 +243,7 @@ export const REGIONS = [
         boss: { name: 'The Ironback', level: 25, dmgType: 'bludgeon' },
       },
       {
-        id: 'mosswart-horde', name: 'Mosswart Horde', coords: '—', quest: 'None', walkSeconds: 30,
+        id: 'mosswart-horde', name: 'Mosswart Horde', coords: '—', quest: 'None', walkSeconds: 140,
         gather: { skill: 'fishing', material: 'amber' },
         monsters: [
           { name: 'Mosswart Raider', level: 24, dmgType: 'acid' },
@@ -256,13 +261,13 @@ export const REGIONS = [
     walkSeconds: 7200, // 2 hours at rank-0 Athletics; ~12 min once Athletics is maxed
     pois: [
       {
-        id: 'eastham-lifestone', name: 'A Shattered Lifestone', coords: '—', quest: 'Restore the Lifestone', walkSeconds: 12,
+        id: 'eastham-lifestone', name: 'A Shattered Lifestone', coords: '—', quest: 'Restore the Lifestone', walkSeconds: 10,
         site: 'lifestone',
         condition: 'shattered',
         monsters: [],
       },
       {
-        id: 'olthoi-nest', name: 'Olthoi Nest', coords: '—', quest: 'None', walkSeconds: 20,
+        id: 'olthoi-nest', name: 'Olthoi Nest', coords: '—', quest: 'None', walkSeconds: 60,
         gather: { skill: 'fishing', material: 'amber' },
         monsters: [
           { name: 'Olthoi Nymph', level: 32, dmgType: 'acid' },
@@ -280,13 +285,13 @@ export const REGIONS = [
     walkSeconds: 21600, // 6 hours at rank-0 Athletics; ~36 min once Athletics is maxed
     pois: [
       {
-        id: 'direlands-lifestone', name: 'A Dead Lifestone', coords: '—', quest: 'Restore the Lifestone', walkSeconds: 14,
+        id: 'direlands-lifestone', name: 'A Dead Lifestone', coords: '—', quest: 'Restore the Lifestone', walkSeconds: 12,
         site: 'lifestone',
         condition: 'dead',
         monsters: [],
       },
       {
-        id: 'golem-caverns', name: 'Golem Caverns', coords: '—', quest: 'None', walkSeconds: 20,
+        id: 'golem-caverns', name: 'Golem Caverns', coords: '—', quest: 'None', walkSeconds: 90,
         gather: { skill: 'mining', material: 'brass' },
         monsters: [
           { name: 'Sandstone Golem', level: 45, dmgType: 'bludgeon' },
@@ -296,7 +301,7 @@ export const REGIONS = [
         boss: { name: 'Magma Golem', level: 55, dmgType: 'fire' },
       },
       {
-        id: 'virindi-citadel', name: 'Virindi Citadel', coords: '—', quest: 'None', walkSeconds: 40,
+        id: 'virindi-citadel', name: 'Virindi Citadel', coords: '—', quest: 'None', walkSeconds: 240,
         gather: { skill: 'woodcutting', material: 'teak' },
         monsters: [
           { name: 'Virindi', level: 58, dmgType: 'lightning' },

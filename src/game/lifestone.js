@@ -111,6 +111,15 @@ export function claimRegionLifestone(state, regionId) {
   return true;
 }
 
+// What to call a place right now. A budding/cracked/dead Lifestone that has been
+// restored is just a Lifestone — the adjective described a state it is no longer
+// in, and leaving it there reads as though the work didn't take.
+export function poiDisplayName(state, poi) {
+  if (!poi) return '';
+  if (poi.site === 'lifestone' && isGrown(state, poi.id)) return 'Lifestone';
+  return poi.name;
+}
+
 // Whether a POI is currently showing a quest marker.
 export function hasOpenQuest(state, poiId) {
   return state.progress.quests[poiId] === 'active';

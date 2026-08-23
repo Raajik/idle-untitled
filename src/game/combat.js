@@ -38,6 +38,7 @@ import { tickTravel, arrive } from './travel.js';
 import { tickRecallCooldown, respawnAtLifestone, tickLifestoneGrowth } from './lifestone.js';
 import { gainVitae } from './vitae.js';
 import { tickBuffs, tickAutoCast } from './buffs.js';
+import { rollSpellword } from './spellwords.js';
 import { tickAutoHeal, tickAutoDrink } from './consumables.js';
 import { tickJumpCooldown } from './shortcuts.js';
 import { beginWaveIfNeeded, recordWaveKill, waveDifficulty } from './waves.js';
@@ -791,6 +792,9 @@ export function tickCombat(state, dt) {
     attacker.attackTimer += dt;
     while (attacker.attackTimer >= MONSTER_ATTACK_INTERVAL) {
       attacker.attackTimer -= MONSTER_ATTACK_INTERVAL;
+
+      // Casters say their spells out loud, and the words are the spell.
+      rollSpellword(state, attacker);
 
       const avoidedBy = tryDefend(state, stats, attacker);
       if (avoidedBy) {

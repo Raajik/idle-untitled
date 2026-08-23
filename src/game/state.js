@@ -69,7 +69,7 @@ export function createInitialState() {
       // hero's body, arriving in 5-point lumps and leaving one point at a time
       // as `xpRemaining` experience is earned.
       vitae: { pct: 0, xpRemaining: 0 },
-      knownSpells: [], // self-buff spell ids (see data/buffSpells.js); Alcott teaches the first three
+      knownSpells: {}, // self-buff spell id -> level (see data/buffSpells.js); Alcott teaches the first three at I
       // combat timers (each monster carries its own; see game/combat.js)
       attackTimer: 0,
       respawnTimer: 0,

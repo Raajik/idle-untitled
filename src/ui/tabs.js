@@ -39,11 +39,12 @@ import {
   lifestoneGrowth,
   isGrown,
   hasOpenQuest,
+  poiDisplayName,
   conditionOf,
   LIFESTONE_GROWTH_REQUIRED,
 } from '../game/lifestone.js';
 import { BUFF_SPELLS } from '../data/buffSpells.js';
-import { knowsSpell, canCastBuffSpell, isAutoCast } from '../game/buffs.js';
+import { knowsSpell, knownBuff, canCastBuffSpell, isAutoCast } from '../game/buffs.js';
 import { getConsumable } from '../data/consumables.js';
 import { charges, canAutoHeal, isAutoDrink, upkeepConsumables, STAMINA_PER_HP } from '../game/consumables.js';
 import { vitaePct, atMaxVitae, xpToClearStack, VITAE_PER_STACK, MAX_VITAE_PCT } from '../game/vitae.js';
@@ -64,7 +65,7 @@ import {
   perkText,
   MAX_BUILDING_LEVEL,
 } from '../data/buildings.js';
-import { rotationRemaining } from '../game/buildings.js';
+import { rotationRemaining, buildingHasQuest, buildingQuestText } from '../game/buildings.js';
 import { buyPrice, sellPrice, healCost } from '../game/shop.js';
 import { TRAINING_TRACKS, trainingCost } from '../game/training.js';
 import { soulsAvailable, canEnlighten, ENLIGHTENMENT_UPGRADES } from '../game/enlightenment.js';
@@ -84,7 +85,7 @@ import {
   isUnderclothing,
 } from '../data/items.js';
 import { UNLOCKS } from './unlocks.js';
-import { fmt, formatDuration, plural } from '../engine/format.js';
+import { fmt, formatDuration, formatClock, plural } from '../engine/format.js';
 
 // "ring1" -> "Ring", "upperArm" -> "Upper Arm". Both instances of a doubled slot
 // read the same; which hand a ring is on isn't information anyone needs.
@@ -304,13 +305,14 @@ function section(state, id, title, body, { summary = '', defaultOpen = true } = 
 function upkeepHtml(state) {
   const spellRows = BUFF_SPELLS.filter((sp) => knowsSpell(state, sp.id))
     .map((sp) => {
+      const known = knownBuff(state, sp.id);
       const buff = state.buffs.find((b) => b.id === sp.id);
       const auto = isAutoCast(state, sp.id);
       const status = buff
         ? `<span class="xp-text" id="buff-timer-${sp.id}">${formatDuration(buff.remaining)} left</span>`
         : '<span class="muted">not up</span>';
       return `<div class="upgrade-row">
-        <div><b class="${vitalTextClass(sp.effect)}">${esc(sp.name)}</b> ${status}<div class="desc">${esc(sp.desc)} · ${sp.manaCost} mana</div></div>
+        <div><b class="${vitalTextClass(known.effect)}">${esc(known.name)}</b> ${status}<div class="desc">${esc(known.desc)} · ${known.manaCost} mana</div></div>
         <div class="actions">
           <button class="btn" data-action="cast-spell" data-arg="${sp.id}" ${canCastBuffSpell(state, sp.id) ? '' : 'disabled'}>Cast</button>
           <button class="btn small${auto ? ' active' : ''}" data-action="toggle-autocast" data-arg="${sp.id}">Auto ${auto ? 'ON' : 'OFF'}</button>
@@ -452,8 +454,9 @@ function combatDisplayHtml(state, headerHtml, extraHtml = '') {
 function walkTimeHtml(state, baseSeconds) {
   const actual = modifiedWalkTime(baseSeconds, state.hero.skills.athletics.rank);
   const delta = actual - baseSeconds;
-  const tone = Math.abs(delta) < 0.05 ? '' : delta < 0 ? ' faster' : ' slower';
-  return `<span class="sub walk-time${tone}">${formatDuration(actual)}</span>`;
+  const tone = Math.abs(delta) < 0.05 ? ' even' : delta < 0 ? ' faster' : ' slower';
+  const title = `Base ${formatClock(baseSeconds)}${delta < -0.05 ? ` · Athletics saves ${formatClock(-delta)}` : ''}`;
+  return `<span class="sub walk-time${tone}" title="${esc(title)}">Travel: ${formatClock(actual)}</span>`;
 }
 
 // One hunting ground. Fixed-height so a band reads as a grid of equals rather
@@ -475,19 +478,24 @@ function poiTileHtml(state, poi, travel, tone) {
   const yieldNote = material
     ? `<span class="sub gather-note">${esc(material.name)}${clears ? ` · ${fmt(clears)} clears` : ''}</span>`
     : isSite(poi)
-    ? `<span class="sub gather-note">${isGrown(state, poi.id) ? 'grown' : 'no fighting here'}</span>`
+    ? `<span class="sub gather-note">Sanctuary</span>`
     : '';
 
   const level = poiLevelLabel(poi);
   const levelBadge = level ? `<span class="poi-level">${level}</span>` : '<span class="poi-level muted">—</span>';
 
-  const quest = hasOpenQuest(state, poi.id) ? '<span class="quest-mark" title="Something here wants doing">!</span>' : '';
+  // The marker sits in the same corner on every card, so "is there something to
+  // do here" is one glance down a column rather than a read of each name.
+  const quest = hasOpenQuest(state, poi.id)
+    ? `<span class="quest-mark" title="${esc(poi.quest || 'Something here wants doing')}">!</span>`
+    : '';
 
   return `<button class="${cls}" id="poi-tile-${poi.id}" title="Travel" data-action="travel-poi" data-arg="${poi.id}">
-    <span class="poi-name">${quest}${esc(poi.name)}</span>
+    <span class="poi-name">${esc(poiDisplayName(state, poi))}</span>
     ${levelBadge}
     ${when}
     ${yieldNote}
+    ${quest}
   </button>`;
 }
 
@@ -846,7 +854,10 @@ export function battleTab(state) {
             : cost
             ? `<span class="sub">Invest ${fmt(cost.pyreals)}p</span>`
             : `<span class="sub">Not open yet</span>`;
-          return `<button class="${cls}" data-action="open-building" data-arg="${building.id}">${esc(building.name)}${sub}</button>`;
+          const quest = buildingHasQuest(state, building.id)
+            ? `<span class="quest-mark" title="${esc(buildingQuestText(state, building.id))}">!</span>`
+            : '';
+          return `<button class="${cls}" data-action="open-building" data-arg="${building.id}">${esc(building.name)}${sub}${quest}</button>`;
         })
         .join('');
       const open = buildingsForRegion(region.id).filter((b) => (state.buildings[b.id] || {}).level > 0).length;

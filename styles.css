@@ -406,6 +406,8 @@ button.btn.primary { border-color: var(--accent); color: var(--accent); }
 .tile.locked { opacity: 0.55; border-style: dashed; }
 .tile .gather-note { color: var(--mana); opacity: 0.8; }
 .tile.fade-in { animation: tile-fade-in 0.6s ease-out; }
+/* Shop tiles anchor the quest marker the same way POI tiles do. */
+.tile.shop-tile { position: relative; padding-bottom: 22px; }
 
 /* Points of interest, banded by level.
 
@@ -416,6 +418,7 @@ button.btn.primary { border-color: var(--accent); color: var(--accent); }
    levels climb, so where you are is legible at a glance from across the panel. */
 .poi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 8px; align-items: stretch; }
 .poi-grid .tile {
+  position: relative; /* the quest marker anchors to this corner */
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -427,16 +430,22 @@ button.btn.primary { border-color: var(--accent); color: var(--accent); }
 }
 /* Two lines' worth of room whether or not the name needs it, so a long name
    ("Small Fledgling Mukkir Nest") doesn't make its tile taller than its row. */
-/* Something here wants doing. Deliberately loud — it's the only marker in the
+/* Something here wants doing. Pinned to the same corner of every card so it can
+   be scanned down a column, and deliberately loud — it's the only marker in the
    game that says "go here first". */
 .quest-mark {
-  display: inline-block;
-  margin-right: 5px;
+  position: absolute;
+  right: 6px;
+  bottom: 5px;
+  min-width: 15px;
+  text-align: center;
   color: var(--bg);
   background: var(--accent);
   border-radius: 3px;
   padding: 0 4px;
   font-weight: bold;
+  font-size: 11px;
+  line-height: 15px;
   animation: quest-pulse 1.8s ease-in-out infinite;
 }
 @keyframes quest-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
@@ -461,7 +470,10 @@ button.btn.primary { border-color: var(--accent); color: var(--accent); }
 .tier-btn.active { border-color: var(--tier-edge, var(--accent)); color: var(--tier-edge, var(--accent)); }
 
 /* Travel time against what the walk costs at rest: green when Athletics has
-   bought you time, red if anything ever costs you some, plain when it's a wash. */
+   bought you time, red if anything ever costs you some, plain white when it's a
+   wash. White rather than the dim default so "unchanged" reads as a real state
+   rather than as a disabled one. */
+.walk-time.even { color: var(--text); }
 .walk-time.faster { color: var(--xp); }
 .walk-time.slower { color: var(--hp); }
 

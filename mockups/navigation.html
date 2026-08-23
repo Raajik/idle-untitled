@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>III — navigation redesigns</title>
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  /* Mockup chrome only — none of this ships. */
+  body { overflow: auto; }
+  .mock-page { max-width: 1040px; margin: 0 auto; padding: 24px 20px 80px; }
+  .mock-head { margin-bottom: 22px; }
+  .mock-head h1 { font-size: 20px; margin-bottom: 6px; }
+  .mock-head p { color: var(--text-dim); font-size: 13px; max-width: 70ch; }
+  .mock { margin: 34px 0; border-top: 1px solid var(--border); padding-top: 18px; }
+  .mock > h2 { font-size: 16px; margin-bottom: 4px; }
+  .mock > .why { color: var(--text-dim); font-size: 12px; margin-bottom: 14px; max-width: 78ch; }
+  .mock > .why b { color: var(--text); }
+  .frame { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 14px; }
+  .verdict { margin-top: 10px; font-size: 12px; color: var(--text-dim); }
+  .verdict .good { color: var(--xp); }
+  .verdict .bad { color: var(--hp); }
+
+  /* --- A: breadcrumb --- */
+  .crumb-bar {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--bg-panel); border: 1px solid var(--border); border-radius: 6px;
+    padding: 9px 12px; margin-bottom: 12px; font-size: 13px;
+  }
+  .crumb {
+    background: none; border: none; color: var(--accent); font: inherit;
+    cursor: pointer; padding: 2px 4px; border-radius: 3px;
+  }
+  .crumb:hover { background: var(--bg-inset); }
+  .crumb.here { color: var(--text); cursor: default; font-weight: bold; }
+  .crumb-sep { color: var(--text-dim); }
+  .crumb-spacer { flex: 1; }
+  .crumb-act {
+    background: none; border: 1px solid var(--border); color: var(--text-dim);
+    font: inherit; font-size: 11px; padding: 3px 9px; border-radius: 4px; cursor: pointer;
+  }
+  .crumb-act:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* --- B: one destination panel --- */
+  .dest-tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+
+  /* --- C: town as a card --- */
+  .poi-grid .tile.town-card { border-left-color: var(--accent); }
+  .poi-grid .tile.town-card .poi-name { color: var(--accent); }
+
+  /* --- D: sidebar-led --- */
+  .side-demo { display: flex; gap: 14px; }
+  .side-demo .fake-side {
+    width: 210px; flex-shrink: 0; background: var(--bg-panel);
+    border: 1px solid var(--border); border-radius: 6px; padding: 10px;
+  }
+  .side-demo .fake-main { flex: 1; min-width: 0; }
+  .place-group { margin-bottom: 10px; }
+  .place-head {
+    color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em;
+    font-size: 10px; margin-bottom: 4px;
+  }
+  .place-row {
+    display: flex; justify-content: space-between; align-items: center; gap: 6px;
+    width: 100%; background: none; border: 1px solid transparent; color: var(--text);
+    font: inherit; font-size: 12px; text-align: left; padding: 4px 6px;
+    border-radius: 4px; cursor: pointer;
+  }
+  .place-row:hover { border-color: var(--accent); color: var(--accent); }
+  .place-row.here { border-color: var(--accent); color: var(--accent); background: var(--bg-inset); }
+  .place-row .t { color: var(--text-dim); font-size: 10px; font-variant-numeric: tabular-nums; }
+  .place-row.here .t { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="mock-page">
+
+  <div class="mock-head">
+    <h1>Navigation — four takes</h1>
+    <p>Each frame shows the same moment: you're standing at <b>Drudge Hideout</b> in Holtburg, and you want
+       to get back to town. Today that means noticing a sidebar button labelled "→ Holtburg" — while you
+       are, in every meaningful sense, already in Holtburg. The Town panel isn't on screen at all: it only
+       renders when you're already standing in it.</p>
+  </div>
+
+  <!-- ============================== A ============================== -->
+  <div class="mock">
+    <h2>A · Breadcrumb bar</h2>
+    <p class="why">A persistent strip at the top of the Battle tab naming where you are, one clickable
+      segment per level. <b>Town is the region segment</b> — clicking "Holtburg" walks you back to the hub.
+      Smallest change of the four; everything below it stays exactly as it is today.</p>
+    <div class="frame">
+      <div class="crumb-bar">
+        <button class="crumb">Dereth</button>
+        <span class="crumb-sep">›</span>
+        <button class="crumb">Holtburg</button>
+        <span class="crumb-sep">›</span>
+        <span class="crumb here">Drudge Hideout</span>
+        <span class="crumb-spacer"></span>
+        <button class="crumb-act">↩ Back to town</button>
+      </div>
+      <div class="panel section">
+        <button class="section-head"><span class="caret">▾</span><h2>Holtburg &gt; Points of Interest</h2>
+          <span class="section-summary muted">at Drudge Hideout</span></button>
+      </div>
+    </div>
+    <div class="verdict"><span class="good">+</span> Always visible, teaches the region→place model, one obvious
+      "back to town" affordance. &nbsp; <span class="bad">−</span> Another persistent bar in a UI we just spent
+      effort compressing.</div>
+  </div>
+
+  <!-- ============================== B ============================== -->
+  <div class="mock">
+    <h2>B · One "Where to" panel</h2>
+    <p class="why">Regions, Points of Interest and Town collapse into a single destination panel with a
+      segmented control. <b>Town becomes a peer of the hunting grounds</b> rather than a section that appears
+      and disappears. Three sections become one.</p>
+    <div class="frame">
+      <div class="panel section">
+        <button class="section-head"><span class="caret">▾</span><h2>Where to</h2>
+          <span class="section-summary muted">at Drudge Hideout</span></button>
+        <div class="section-body">
+          <div class="dest-tabs">
+            <button class="btn small">🏠 Town</button>
+            <button class="btn small active">Lv 1–10 <span class="muted">12</span></button>
+            <button class="btn small">Lv 11–20 <span class="muted">3</span></button>
+            <button class="btn small">Sites <span class="muted">1</span></button>
+            <button class="btn small">Regions <span class="muted">4</span></button>
+          </div>
+          <div class="tile-list poi-grid">
+            <button class="tile poi-tile tier-0 current">
+              <span class="poi-name">Drudge Hideout</span><span class="poi-level">Lv 2–3</span>
+              <span class="sub">here</span><span class="sub gather-note">Mahogany · 3 clears</span>
+            </button>
+            <button class="tile poi-tile tier-0">
+              <span class="poi-name">Holtburg Redoubt</span><span class="poi-level">Lv 3–4</span>
+              <span class="sub walk-time faster">Travel: 0:09</span><span class="sub gather-note">Green Garnet</span>
+            </button>
+            <button class="tile poi-tile tier-0">
+              <span class="poi-name">Colier Mine</span><span class="poi-level">Lv 3–4</span>
+              <span class="sub walk-time faster">Travel: 0:12</span><span class="sub gather-note">Opal</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="verdict"><span class="good">+</span> One panel instead of three; town is never hidden.
+      &nbsp; <span class="bad">−</span> The band strip now mixes two kinds of thing (a place, and a filter).</div>
+  </div>
+
+  <!-- ============================== C ============================== -->
+  <div class="mock">
+    <h2>C · Town is just another card</h2>
+    <p class="why">Leave the structure alone and add <b>Holtburg Town as a pinned card</b> at the head of the
+      POI grid, in every band. Going home becomes the same gesture as going anywhere else — no new concept,
+      no new bar, nothing to learn.</p>
+    <div class="frame">
+      <div class="panel section">
+        <button class="section-head"><span class="caret">▾</span><h2>Holtburg &gt; Points of Interest</h2>
+          <span class="section-summary muted">at Drudge Hideout</span></button>
+        <div class="section-body">
+          <div class="tile-list poi-grid">
+            <button class="tile poi-tile town-card">
+              <span class="poi-name">🏠 Holtburg Town</span>
+              <span class="poi-level">Hub</span>
+              <span class="sub walk-time faster">Travel: 0:04</span>
+              <span class="sub gather-note">11 businesses</span>
+              <span class="quest-mark">!</span>
+            </button>
+            <button class="tile poi-tile tier-0 current">
+              <span class="poi-name">Drudge Hideout</span><span class="poi-level">Lv 2–3</span>
+              <span class="sub">here</span><span class="sub gather-note">Mahogany · 3 clears</span>
+            </button>
+            <button class="tile poi-tile tier-0">
+              <span class="poi-name">Holtburg Redoubt</span><span class="poi-level">Lv 3–4</span>
+              <span class="sub walk-time faster">Travel: 0:09</span><span class="sub gather-note">Green Garnet</span>
+            </button>
+            <button class="tile poi-tile tier-0">
+              <span class="poi-name">The Ursuin Run</span><span class="poi-level">Lv 4–5</span>
+              <span class="sub walk-time faster">Travel: 0:21</span><span class="sub gather-note">Ursuin Pelt</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="verdict"><span class="good">+</span> Zero new UI; the town gets a quest marker like everything else;
+      travel time to town is finally visible. &nbsp; <span class="bad">−</span> Takes a grid slot in every band.</div>
+  </div>
+
+  <!-- ============================== D ============================== -->
+  <div class="mock">
+    <h2>D · Sidebar becomes the map</h2>
+    <p class="why">Move <em>all</em> travel into the sidebar as a live list of everywhere you can go, grouped by
+      region, with the current spot highlighted. <b>The Battle tab drops its Regions and POI sections entirely</b>
+      and becomes only the fight, the town panel, and the log.</p>
+    <div class="frame">
+      <div class="side-demo">
+        <div class="fake-side">
+          <div class="place-group">
+            <div class="place-head">Holtburg</div>
+            <button class="place-row"><span>🏠 Town</span><span class="t">0:04</span></button>
+            <button class="place-row"><span>Lifestone</span><span class="t">0:03</span></button>
+            <button class="place-row here"><span>Drudge Hideout</span><span class="t">here</span></button>
+            <button class="place-row"><span>Holtburg Redoubt</span><span class="t">0:09</span></button>
+            <button class="place-row"><span>Colier Mine</span><span class="t">0:12</span></button>
+            <button class="place-row"><span class="muted">…9 more</span><span class="t"></span></button>
+          </div>
+          <div class="place-group">
+            <div class="place-head">Glenden Wood</div>
+            <button class="place-row"><span>Travel there</span><span class="t">14:32</span></button>
+          </div>
+        </div>
+        <div class="fake-main">
+          <div class="panel">
+            <h2>Drudge Hideout <span class="muted" style="font-size:0.7em">Wave 4/10 · +36% difficulty</span></h2>
+            <div class="monster-head">
+              <div style="width:32px;height:32px;border:1px dashed var(--border);border-radius:4px"></div>
+              <div class="monster-head-text">
+                <div><b>Drudge (Lv 2)</b></div>
+                <div class="bar hp"><div class="fill" style="width:62%"></div><div class="label">31 / 50</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="verdict"><span class="good">+</span> Everywhere you can go is always on screen with its travel time;
+      the main column is only the fight. &nbsp; <span class="bad">−</span> Biggest change of the four, and a long
+      region needs a scroll or a "…more".</div>
+  </div>
+
+</div>
+</body>
+</html>

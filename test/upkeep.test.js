@@ -5,6 +5,7 @@ import { tickCombat } from '../src/game/combat.js';
 import { derivedStats } from '../src/game/hero.js';
 import { setHeroName, answerSeenLifestone, acknowledgeAlcottIntro } from '../src/game/onboarding.js';
 import {
+  knownBuff,
   castBuffSpell,
   canCastBuffSpell,
   toggleAutoCast,
@@ -14,7 +15,7 @@ import {
   AUTOCAST_REFRESH_SECONDS,
 } from '../src/game/buffs.js';
 import { useConsumable, charges, canAutoHeal, STAMINA_PER_HP } from '../src/game/consumables.js';
-import { BUFF_SPELLS, ALCOTT_TAUGHT_SPELLS } from '../src/data/buffSpells.js';
+import { BUFF_SPELLS, BUFF_SECONDS, ALCOTT_TAUGHT_SPELLS } from '../src/data/buffSpells.js';
 import { ALCOTT_GIFTS, getConsumable } from '../src/data/consumables.js';
 import { MAX_SPELL_LEVEL } from '../src/data/spells.js';
 
@@ -69,13 +70,15 @@ test('the three taught spells each raise their own regeneration', () => {
 test('spells cost mana, run for thirty minutes, and then fade', () => {
   const s = outfittedHero();
   const spell = BUFF_SPELLS[0];
-  assert.equal(spell.seconds, 30 * 60, 'buff spells last half an hour');
+  // Spells carry a level now; what you cast is the rank you know.
+  const known = knownBuff(s, spell.id);
+  assert.equal(known.seconds, BUFF_SECONDS, 'buff spells last half an hour');
 
   const manaBefore = s.hero.mana;
   castBuffSpell(s, spell.id);
-  assert.equal(s.hero.mana, manaBefore - spell.manaCost);
+  assert.equal(s.hero.mana, manaBefore - known.manaCost);
 
-  tickBuffs(s, spell.seconds - 1);
+  tickBuffs(s, known.seconds - 1);
   assert.ok(hasBuff(s, spell.id), 'still up a second before it ends');
   tickBuffs(s, 2);
   assert.equal(hasBuff(s, spell.id), false, 'gone once it runs out');
@@ -89,7 +92,7 @@ test('re-casting refreshes rather than stacking', () => {
   tickBuffs(s, 600);
   castBuffSpell(s, spell.id);
   assert.equal(s.buffs.filter((b) => b.id === spell.id).length, 1, 'one buff, not two');
-  assert.equal(s.buffs.find((b) => b.id === spell.id).remaining, spell.seconds);
+  assert.equal(s.buffs.find((b) => b.id === spell.id).remaining, BUFF_SECONDS);
 });
 
 test('auto-cast refreshes a buff just before it lapses, never after', () => {

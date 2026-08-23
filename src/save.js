@@ -53,7 +53,12 @@ function migrate(raw) {
   state.trophies = { ...fresh.trophies, ...(raw.trophies || {}) };
   state.consumables = { ...fresh.consumables, ...(raw.consumables || {}) };
   state.buffs = Array.isArray(raw.buffs) ? raw.buffs : [];
-  state.hero.knownSpells = Array.isArray(state.hero.knownSpells) ? state.hero.knownSpells : [];
+  // Known spells used to be a flat list of ids; they carry a level now.
+  if (Array.isArray(state.hero.knownSpells)) {
+    state.hero.knownSpells = Object.fromEntries(state.hero.knownSpells.map((id) => [id, 1]));
+  } else if (!state.hero.knownSpells || typeof state.hero.knownSpells !== 'object') {
+    state.hero.knownSpells = {};
+  }
   state.settings.autoCastSpells = Array.isArray(state.settings.autoCastSpells) ? state.settings.autoCastSpells : [];
   state.settings.autoDrink = Array.isArray(state.settings.autoDrink) ? state.settings.autoDrink : [];
   // Void Magic and War's element picker arrived after these saves were written.
