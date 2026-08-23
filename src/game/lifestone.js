@@ -6,22 +6,35 @@
 //   - Binding — the stone you wake up at when you die. You start bound to the one
 //     you woke up beside on the road, a full walk short of Holtburg, so every
 //     death costs that walk back. A budding Lifestone site (see data/regions.js)
-//     can be grown into a real one to move the bind point somewhere convenient:
-//     growing it means repeatedly pouring your own blood and mana into the stone,
-//     which is what meditation (game/meditation.js) exists to refill.
+//     can be grown into a real one to move the bind point somewhere convenient.
+//     It creeps upward on its own once started, slowly enough that waiting it out
+//     is a real option but a dull one; Sacrificing Vitae is how you hurry it. That
+//     costs blood and mana on the spot (which is what meditation exists to refill)
+//     and leaves you carrying vitae afterwards, exactly as if you'd died for it.
 
 import { getRegion, getPoiById } from '../data/regions.js';
 import { derivedStats } from './hero.js';
 import { recallCooldownSeconds, RECALL_XP_ON_USE, trainSkill, trainAttribute } from './skills.js';
+import { gainVitae, atMaxVitae, MAX_VITAE_STACKS } from './vitae.js';
 import { addLog } from './state.js';
 
 // Growth needed to finish a budding Lifestone, and what one offering gives —
 // ten offerings, each of them a real bite out of the hero.
 export const LIFESTONE_GROWTH_REQUIRED = 100;
-export const GROWTH_PER_OFFERING = 10;
+// Derived from the vitae ceiling on purpose: spending every drop of vitae a body
+// can hold is exactly enough to finish the stone, and not a sacrifice more. Any
+// other number either strands the stone half-grown behind a cap you can't
+// exceed, or leaves sacrifices you're not allowed to make.
+export const GROWTH_PER_OFFERING = LIFESTONE_GROWTH_REQUIRED / MAX_VITAE_STACKS;
 export const OFFERING_HP_PCT = 0.6;
 export const OFFERING_MANA_PCT = 0.6;
 const OFFERING_ATTR_XP = 20; // Self/Focus, for giving so much of yourself away
+
+// A budding stone knits itself together on its own, just slowly — about fifty
+// minutes from first sacrifice to full if you never touch it again. That keeps
+// the site from being a hard wall behind a meditation loop while leaving
+// Sacrificing Vitae clearly the faster road.
+const PASSIVE_GROWTH_PER_SECOND = LIFESTONE_GROWTH_REQUIRED / (50 * 60);
 
 export function canRecall(state) {
   return state.progress.recallUnlocked && state.progress.recallCooldown <= 0;
@@ -89,40 +102,59 @@ export function offeringCost(state) {
   };
 }
 
-export function canFeedLifestone(state, poiId) {
+export function canSacrificeVitae(state, poiId) {
   const poi = getPoiById(poiId);
   if (!poi || poi.site !== 'lifestone') return false;
   if (state.location.poiId !== poiId) return false; // you have to be standing at it
   if (state.hero.dead || state.travel || state.meditating) return false;
   if (isGrown(state, poiId)) return false;
+  if (atMaxVitae(state)) return false; // nothing left to give — the stone can't take more
   const cost = offeringCost(state);
   return state.hero.hp >= cost.hp && state.hero.mana >= cost.mana;
 }
 
-// Pours one offering into the stone. Fully growing it re-binds the hero here —
-// or, since a grown stone sits at a POI you'd rather not respawn inside, to the
-// hub town of the region it's in.
-export function feedLifestone(state, poiId) {
-  if (!canFeedLifestone(state, poiId)) return false;
+// Growth the stone makes on its own, once it's been started. Called every tick
+// from game/combat.js, wherever the hero happens to be.
+export function tickLifestoneGrowth(state, dt) {
+  const growth = state.progress.lifestoneGrowth;
+  for (const poiId of Object.keys(growth)) {
+    if (growth[poiId] <= 0 || growth[poiId] >= LIFESTONE_GROWTH_REQUIRED) continue;
+    growth[poiId] = Math.min(LIFESTONE_GROWTH_REQUIRED, growth[poiId] + PASSIVE_GROWTH_PER_SECOND * dt);
+    if (growth[poiId] >= LIFESTONE_GROWTH_REQUIRED) completeLifestone(state, poiId);
+  }
+}
+
+// Binds the hero to a stone that has finished growing. Shared by the sacrifice
+// path and the passive one, since either can be the thing that tops it off.
+function completeLifestone(state, poiId) {
   const poi = getPoiById(poiId);
+  if (!poi) return;
+  // A grown stone sits at a POI you'd rather not respawn inside, so it binds you
+  // to the hub town of the region it's in.
+  state.progress.boundLifestone = { regionId: poi.regionId, poiId: null };
+  state.progress.recallUnlocked = true;
+  const region = getRegion(poi.regionId);
+  addLog(state, `The Lifestone flares awake, full-grown at last. Its light knows you now — you'll wake at ${region.name} from here on.`, 'good');
+}
+
+// Spends blood, mana and a lasting 5% of yourself to hurry the stone along.
+export function sacrificeVitae(state, poiId) {
+  if (!canSacrificeVitae(state, poiId)) return false;
   const cost = offeringCost(state);
 
   state.hero.hp -= cost.hp;
   state.hero.mana -= cost.mana;
   trainAttribute(state, 'self', OFFERING_ATTR_XP);
   trainAttribute(state, 'focus', OFFERING_ATTR_XP);
+  gainVitae(state, 'The stone drinks deep.');
 
   const growth = Math.min(LIFESTONE_GROWTH_REQUIRED, lifestoneGrowth(state, poiId) + GROWTH_PER_OFFERING);
   state.progress.lifestoneGrowth[poiId] = growth;
 
   if (growth < LIFESTONE_GROWTH_REQUIRED) {
-    addLog(state, `You press your hands to the stone and let it drink. It answers with a slow, deepening glow. (${growth}%)`, 'dim');
+    addLog(state, `You press your hands to the stone and let it take. It answers with a slow, deepening glow. (${Math.floor(growth)}%)`, 'dim');
     return true;
   }
-
-  state.progress.boundLifestone = { regionId: poi.regionId, poiId: null };
-  state.progress.recallUnlocked = true;
-  const region = getRegion(poi.regionId);
-  addLog(state, `The Lifestone flares awake, full-grown at last. Its light knows you now — you'll wake at ${region.name} from here on.`, 'good');
+  completeLifestone(state, poiId);
   return true;
 }

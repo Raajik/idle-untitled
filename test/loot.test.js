@@ -49,7 +49,7 @@ test('maybeAutoEquip only equips strictly better items', () => {
 
 test('later waves drop more powerful gear than wave 1', () => {
   const s = createInitialState();
-  s.location = { regionId: 'holtburg', poiId: 'holtburg-meeting-hall' };
+  s.location = { regionId: 'holtburg', poiId: 'drudge-hideout' };
   const avgPowerAtWave = (wave) => {
     s.progress.wave = wave;
     let total = 0;

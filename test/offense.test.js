@@ -37,7 +37,7 @@ test('a level-1 monster takes multiple successful hits for a modestly-geared her
 test('offense skill trains through use and unarmed misses land less often at rank 0', () => {
   const s = createInitialState();
   s.progress.unlockedRegions = ['holtburg'];
-  s.location = { regionId: 'holtburg', poiId: 'holtburg-meeting-hall' };
+  s.location = { regionId: 'holtburg', poiId: 'drudge-hideout' };
   s.hero.end = 50; // survive long enough to land plenty of swings
   for (let i = 0; i < 400; i++) tickCombat(s, 0.25);
   assert.ok(s.hero.skills.offense.unarmed.xp > 0 || s.hero.skills.offense.unarmed.rank > 0);

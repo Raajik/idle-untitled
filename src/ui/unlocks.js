@@ -42,12 +42,14 @@ export const UNLOCKS = [
   { id: 'training', kind: 'tab', label: '💰 Training', when: (s) => s.progress.totalPyrealsEarned >= 200, toast: '💰 Training unlocked — spend pyreals on permanent % upgrades!' },
   { id: 'enlightenment', kind: 'tab', label: '✦ Enlightenment', when: (s) => s.progress.totalClears >= 1, toast: '✦ Enlightenment unlocked — a greater power stirs...', teaser: (s) => !canEnlighten(s) },
   { id: 'overview', kind: 'tab', label: '📊 Overview', when: (s) => s.enlightenment.count >= 1, toast: '📊 Overview unlocked — monitor everything at once!' },
-  { id: 'settings', kind: 'tab', label: '⚙ Settings', when: () => true },
+  // Routable, but deliberately not in the nav list — index.html has a gear button
+  // in the sidebar footer that selects it (see ui/render.js renderNav).
+  { id: 'settings', kind: 'tab', label: '⚙ Settings', when: () => true, hidden: true },
 ];
 
 // Flat top-level nav entries: routable tabs with no parent, plus category headers.
 export function topLevelEntries(state) {
-  return UNLOCKS.filter((u) => !u.parent && u.when(state));
+  return UNLOCKS.filter((u) => !u.parent && !u.hidden && u.when(state));
 }
 
 // Routable child tabs under a category id.

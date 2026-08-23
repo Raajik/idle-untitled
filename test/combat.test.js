@@ -14,18 +14,18 @@ function atPoi(poiId) {
 }
 
 test('spawnMonster creates a monster with full hp and opens a wave', () => {
-  const s = atPoi('holtburg-meeting-hall');
+  const s = atPoi('drudge-hideout');
   spawnMonster(s);
   assert.ok(s.monster);
   assert.equal(s.monster.hp, s.monster.maxHp);
-  const poi = getPoiById('holtburg-meeting-hall');
+  const poi = getPoiById('drudge-hideout');
   assert.ok(poi.monsters.some((m) => m.name === s.monster.name));
   assert.ok(s.progress.waveMonstersLeft >= 1 && s.progress.waveMonstersLeft <= 3);
 });
 
 test('monsters hit harder on later waves', () => {
-  const early = atPoi('holtburg-meeting-hall');
-  const late = atPoi('holtburg-meeting-hall');
+  const early = atPoi('drudge-hideout');
+  const late = atPoi('drudge-hideout');
   late.progress.wave = WAVES_PER_POI;
   // Same monster name on both sides so only the wave multiplier differs.
   let matched = false;
@@ -39,8 +39,8 @@ test('monsters hit harder on later waves', () => {
 });
 
 test('no boss spawns inside a POI any more — bosses are becoming their own POIs', () => {
-  const s = atPoi('holtburg-meeting-hall');
-  const poi = getPoiById('holtburg-meeting-hall');
+  const s = atPoi('drudge-hideout');
+  const poi = getPoiById('drudge-hideout');
   for (let i = 0; i < 300; i++) {
     spawnMonster(s);
     assert.notEqual(s.monster.name, poi.boss.name);
@@ -48,7 +48,7 @@ test('no boss spawns inside a POI any more — bosses are becoming their own POI
 });
 
 test('combat ticks eventually kill the monster and grant rewards', () => {
-  const s = atPoi('holtburg-meeting-hall');
+  const s = atPoi('drudge-hideout');
   // make hero strong enough to one-shot
   s.hero.str = 500;
   s.hero.end = 500;
@@ -60,7 +60,7 @@ test('combat ticks eventually kill the monster and grant rewards', () => {
 });
 
 test('waves advance as the hero clears them', () => {
-  const s = atPoi('holtburg-meeting-hall');
+  const s = atPoi('drudge-hideout');
   s.hero.str = 500;
   s.hero.end = 500;
   assert.equal(s.progress.wave, 1);
@@ -92,7 +92,7 @@ test('hero death respawns them at their bound Lifestone', () => {
 });
 
 test('the Devastating melee stance applies a stacking bleed that ticks damage over time', () => {
-  const s = atPoi('holtburg-meeting-hall');
+  const s = atPoi('drudge-hideout');
   s.hero.combat.meleeStance = 4; // Devastating: 4s swing, applies Bleed
   s.hero.str = 30;
   s.hero.end = 30;
@@ -112,7 +112,7 @@ test('the Devastating melee stance applies a stacking bleed that ticks damage ov
 });
 
 test('melee swings grow STR, COORD, and QUICK', () => {
-  const s = atPoi('holtburg-meeting-hall');
+  const s = atPoi('drudge-hideout');
   for (let i = 0; i < 40; i++) tickCombat(s, 0.25);
   assert.ok(s.hero.attrXp.str > 0 || s.hero.str > 5);
   assert.ok(s.hero.attrXp.coord > 0 || s.hero.coord > 5);
@@ -120,8 +120,8 @@ test('melee swings grow STR, COORD, and QUICK', () => {
 });
 
 test('archery grows COORD markedly faster than melee', () => {
-  const melee = atPoi('holtburg-meeting-hall');
-  const archery = atPoi('holtburg-meeting-hall');
+  const melee = atPoi('drudge-hideout');
+  const archery = atPoi('drudge-hideout');
   archery.hero.combat.mode = 'archery';
   archery.equipment.weapon = { slot: 'weapon', power: 5, spells: [], rarity: 'Common', name: 'Worn Bow', baseType: 'bow' };
   for (let i = 0; i < 40; i++) {
@@ -154,14 +154,14 @@ test('Magic Resistance only trains against magic-based attacks', () => {
   assert.ok(magic.hero.attrXp.focus > 0 || magic.hero.focus > 5);
   assert.ok(magic.hero.attrXp.self > 0 || magic.hero.self > 5);
 
-  const physical = atPoi('holtburg-meeting-hall'); // all-bludgeon monster pool
+  const physical = atPoi('drudge-hideout'); // all-bludgeon monster pool
   for (let i = 0; i < 40; i++) tickCombat(physical, 0.25);
   assert.equal(physical.hero.skills.magicResistance.rank, 0);
   assert.equal(physical.hero.skills.magicResistance.xp, 0);
 });
 
 test('magic casting drains mana, trains War Magic, and deals damage', () => {
-  const s = atPoi('holtburg-meeting-hall');
+  const s = atPoi('drudge-hideout');
   s.hero.combat.mode = 'magic';
   s.hero.combat.magicSpell = 'streak'; // fast and cheap, easy to land several casts
   s.hero.focus = 30;

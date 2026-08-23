@@ -18,7 +18,7 @@ import {
   LONGEST_WINDUP_SECONDS,
 } from '../src/data/combatStances.js';
 
-function atPoi(poiId = 'holtburg-meeting-hall') {
+function atPoi(poiId = 'drudge-hideout') {
   const s = createInitialState();
   s.progress.unlockedRegions = ['holtburg'];
   s.location = { regionId: 'holtburg', poiId };
@@ -122,6 +122,10 @@ test('a fresh hero is genuinely limited by stamina, but still kills', () => {
   // Endurance worth raising and recovery worth seeking out. It has to bite
   // without stopping progress outright.
   const s = atPoi();
+  // Padded with armor rather than Endurance: dying would skip ticks and hand out
+  // vitae, both of which move the number this test is trying to measure, and
+  // raising END would shrink the very stamina pressure under test.
+  s.equipment.armor = { id: 1, slot: 'armor', power: 200, spells: [], rarity: 'Common', name: 'Test Plate' };
   let stalledTicks = 0;
   let liveTicks = 0;
   for (let i = 0; i < 2400; i++) {

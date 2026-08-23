@@ -8,7 +8,9 @@
 
 import { ENLIGHTENMENT_UPGRADES } from '../data/enlightenment.js';
 import { heroBuildingBonuses } from '../data/buildings.js';
+import { achievementBonuses } from '../data/achievements.js';
 import { spellBonusKey } from '../data/spells.js';
+import { vitaeMultiplier, workOffVitae } from './vitae.js';
 
 export const ATTRIBUTES = [
   { id: 'str', name: 'Strength', short: 'STR', desc: '+1.5 ATK each' },
@@ -46,6 +48,7 @@ export function getBonuses(state) {
   const b = {
     atkPct: 0, atkFlat: 0, hpFlat: 0, hpPct: 0, pyrealsPct: 0, xpPct: 0, critPct: 0, luckPct: 0,
     weaponAtk: 0, armorDef: 0, armorFlat: 0, maxManaFlat: 0, startStats: 0,
+    hpRegenFlat: 0, staminaRegenFlat: 0, manaRegenFlat: 0,
     dodgeBonus: 0, blockBonus: 0, parryBonus: 0, magicResistanceBonus: 0, resistanceBonus: {},
   };
 
@@ -77,6 +80,10 @@ export function getBonuses(state) {
     b[key] = (b[key] || 0) + val;
   }
 
+  for (const [key, val] of Object.entries(achievementBonuses(state))) {
+    b[key] = (b[key] || 0) + val;
+  }
+
   for (const up of ENLIGHTENMENT_UPGRADES) {
     const rank = state.enlightenment.upgrades[up.id] || 0;
     if (rank === 0) continue;
@@ -91,14 +98,19 @@ export function getBonuses(state) {
 export function derivedStats(state) {
   const h = state.hero;
   const b = getBonuses(state);
-  const maxHp = Math.floor((20 + h.end * 5 + b.hpFlat) * (1 + b.hpPct / 100));
-  const atk = Math.floor((3 + h.str * 1.5 + b.weaponAtk + b.atkFlat) * (1 + b.atkPct / 100));
-  const magicAtk = Math.floor(3 + h.focus * 1.5); // Magic's own damage baseline, off Focus not Strength
-  const def = Math.floor(h.end * 0.5 + b.armorDef + b.armorFlat);
+  // Vitae diminishes the body and what it can do with a weapon: the pools you
+  // fight out of, and the numbers you hit and soak with. Deliberately NOT attack
+  // speed or crit — being weakened should cost you power, not turn the fight
+  // into slow motion, which at the 40% floor would be miserable to watch.
+  const vitae = vitaeMultiplier(state);
+  const maxHp = Math.floor((20 + h.end * 5 + b.hpFlat) * (1 + b.hpPct / 100) * vitae);
+  const atk = Math.floor((3 + h.str * 1.5 + b.weaponAtk + b.atkFlat) * (1 + b.atkPct / 100) * vitae);
+  const magicAtk = Math.floor((3 + h.focus * 1.5) * vitae); // Magic's own damage baseline, off Focus not Strength
+  const def = Math.floor((h.end * 0.5 + b.armorDef + b.armorFlat) * vitae);
   const spd = 1 + h.quick * 0.04; // attacks per second
   const critChance = 5 + h.coord * 0.2 + b.critPct; // percent
-  const maxStamina = Math.floor(20 + h.end * 2 + h.quick * 2);
-  const maxMana = Math.floor(20 + h.self * 4 + b.maxManaFlat);
+  const maxStamina = Math.floor((20 + h.end * 2 + h.quick * 2) * vitae);
+  const maxMana = Math.floor((20 + h.self * 4 + b.maxManaFlat) * vitae);
   return {
     maxHp,
     atk,
@@ -108,6 +120,9 @@ export function derivedStats(state) {
     critChance,
     maxStamina,
     maxMana,
+    hpRegenFlat: b.hpRegenFlat,
+    staminaRegenFlat: b.staminaRegenFlat,
+    manaRegenFlat: b.manaRegenFlat,
     xpPct: b.xpPct,
     pyrealsPct: b.pyrealsPct,
     luckPct: b.luckPct,
@@ -128,6 +143,7 @@ export function grantXp(state, amount) {
   const newLevel = levelFromTotalXp(state.progress.totalXpEarned);
   const levels = newLevel - state.hero.level;
   state.hero.level = newLevel;
+  workOffVitae(state, gained); // experience is the only thing that burns vitae off
   return levels;
 }
 

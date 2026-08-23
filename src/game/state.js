@@ -56,6 +56,9 @@ export function createInitialState() {
       hp: null,
       stamina: null,
       mana: null,
+      // Asheron's Call's death penalty (see game/vitae.js): `stacks` x 5% off the
+      // hero's body, worked back off by earning `xpRemaining` experience.
+      vitae: { stacks: 0, xpRemaining: 0 },
       // combat timers
       attackTimer: 0,
       monsterTimer: 0,
@@ -77,6 +80,7 @@ export function createInitialState() {
         offense: freshOffense(),
         gathering: freshGathering(),
         tinkering: freshSkill(),
+        salvaging: freshSkill(), // scales how much material breaking an item down returns
         lifestone: { recall: freshSkill() },
       },
     },
@@ -110,6 +114,7 @@ export function createInitialState() {
     monster: null, // current monster instance { name, hp, maxHp, atk, def, xp, pyreals }
     equipment: { weapon: null, armor: null, shield: null, amulet: null, ring: null },
     inventory: [],
+    achievements: [], // earned achievement ids (see data/achievements.js); permanent, survives Enlightenment
     materials: {}, // materialId -> count, no cap
     buildings: freshBuildings(), // buildingId -> { level, stock, rotatesAt }; only the General Store starts open
     training: { atk: 0, hp: 0, pyreals: 0 },
@@ -157,7 +162,8 @@ export function resetRun(state) {
   state.buildings = freshBuildings(); // town is rebuilt from scratch: buildings cost run currency, like Training
   state.training = fresh.training;
   state.log = fresh.log;
-  // keep: enlightenment, settings, ui.seenUnlocks, lastSeen, onboarding, hero.name, Recall skill/unlock
+  // keep: enlightenment, achievements, settings, ui.seenUnlocks, lastSeen, onboarding,
+  // hero.name, Recall skill/unlock. Vitae lives on state.hero, so a reborn hero starts clean.
 }
 
 const MAX_LOG = 60;

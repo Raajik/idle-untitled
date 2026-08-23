@@ -5,9 +5,9 @@
 
 export const SHORTCUTS = [
   {
-    id: 'meeting-hall-rat-nest',
+    id: 'drudge-hideout-rat-nest',
     name: 'Back Alley Cut-Through',
-    from: 'holtburg-meeting-hall',
+    from: 'drudge-hideout',
     to: 'rat-nest',
     athleticsRank: 10,
   },

@@ -5,8 +5,8 @@ import { tickCombat } from '../src/game/combat.js';
 import { derivedStats } from '../src/game/hero.js';
 import { isSite, getPoiById } from '../src/data/regions.js';
 import {
-  feedLifestone,
-  canFeedLifestone,
+  sacrificeVitae,
+  canSacrificeVitae,
   offeringCost,
   isGrown,
   lifestoneGrowth,
@@ -48,25 +48,25 @@ test('an offering costs a big bite of HP and mana and cannot be repeated on empt
   const cost = offeringCost(s);
   assert.ok(cost.hp > 0 && cost.mana > 0);
 
-  assert.equal(feedLifestone(s, SITE), true);
+  assert.equal(sacrificeVitae(s, SITE), true);
   assert.equal(lifestoneGrowth(s, SITE), GROWTH_PER_OFFERING);
   assert.ok(s.hero.hp < derivedStats(s).maxHp);
 
   // 60% of each vital is gone, so a second offering has to wait for a refill.
-  assert.equal(canFeedLifestone(s, SITE), false);
-  assert.equal(feedLifestone(s, SITE), false);
+  assert.equal(canSacrificeVitae(s, SITE), false);
+  assert.equal(sacrificeVitae(s, SITE), false);
 });
 
 test('meditation refills vitals so the next offering can be made', () => {
   const s = atSite();
-  feedLifestone(s, SITE);
+  sacrificeVitae(s, SITE);
   assert.ok(!isRested(s));
 
   assert.equal(startMeditating(s), true);
   for (let i = 0; i < 2000 && s.meditating; i++) tickMeditation(s, 0.25);
   assert.equal(s.meditating, false); // stops itself once rested
   assert.ok(isRested(s));
-  assert.equal(canFeedLifestone(s, SITE), true);
+  assert.equal(canSacrificeVitae(s, SITE), true);
 });
 
 test('meditating suspends combat rather than running alongside it', () => {
@@ -87,12 +87,12 @@ test('fully growing the Lifestone rebinds the hero to the region hub', () => {
   for (let i = 0; i < LIFESTONE_GROWTH_REQUIRED / GROWTH_PER_OFFERING; i++) {
     s.hero.hp = d.maxHp;
     s.hero.mana = d.maxMana;
-    assert.equal(feedLifestone(s, SITE), true);
+    assert.equal(sacrificeVitae(s, SITE), true);
   }
   assert.ok(isGrown(s, SITE));
   assert.deepEqual(s.progress.boundLifestone, { regionId: 'holtburg', poiId: null });
   assert.equal(s.progress.recallUnlocked, true);
-  assert.equal(feedLifestone(s, SITE), false); // nothing left to grow
+  assert.equal(sacrificeVitae(s, SITE), false); // nothing left to grow
 });
 
 test('respawning moves the hero to their bound Lifestone and resets the wave', () => {

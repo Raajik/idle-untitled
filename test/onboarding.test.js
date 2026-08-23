@@ -63,7 +63,7 @@ test('the tutorial journey runs combat in parallel with the countdown and can be
 test('dying for the first time unlocks Lifestone Recall', () => {
   const s = createInitialState();
   s.progress.unlockedRegions = ['holtburg'];
-  s.location = { regionId: 'holtburg', poiId: 'holtburg-meeting-hall' };
+  s.location = { regionId: 'holtburg', poiId: 'drudge-hideout' };
   s.hero.end = 1; // squishy, dies fast
   assert.equal(s.progress.recallUnlocked, false);
   let ticks = 0;
@@ -79,7 +79,7 @@ test('recall instantly moves the hero to an unlocked region and starts its coold
   const s = createInitialState();
   s.progress.unlockedRegions = ['holtburg', 'glenden-wood'];
   s.progress.recallUnlocked = true;
-  s.location = { regionId: 'holtburg', poiId: 'holtburg-meeting-hall' };
+  s.location = { regionId: 'holtburg', poiId: 'drudge-hideout' };
   assert.equal(canRecall(s), true);
 
   assert.equal(recallTo(s, 'glenden-wood'), true);

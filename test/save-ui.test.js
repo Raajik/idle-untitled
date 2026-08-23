@@ -9,7 +9,7 @@ test('offline progress grants kills, pyreals and xp proportional to time away', 
   s.hero.str = 50; // strong enough to farm drudges quickly
   s.hero.end = 50;
   s.progress.unlockedRegions = ['holtburg'];
-  s.location = { regionId: 'holtburg', poiId: 'holtburg-meeting-hall' };
+  s.location = { regionId: 'holtburg', poiId: 'drudge-hideout' };
   s.lastSeen = Date.now() - 3600 * 1000; // 1 hour ago
   const summary = applyOfflineProgress(s);
   assert.ok(summary);
@@ -47,7 +47,7 @@ test('progressive UI unlocks derive from game state', () => {
   s.inventory.push({ id: 1, slot: 'weapon', power: 5, spells: [], rarity: 'Common', name: 'Worn Sword' });
   s.progress.totalPyrealsEarned = 10000;
   s.progress.totalClears = 1;
-  s.progress.visitedPois = ['holtburg-meeting-hall'];
+  s.progress.visitedPois = ['drudge-hideout'];
   s.enlightenment.count = 1;
   tabs = unlockedTabs(s).map((t) => t.id);
   for (const id of ['attributes', 'skills', 'inventory', 'training', 'enlightenment', 'overview']) {

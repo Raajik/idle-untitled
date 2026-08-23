@@ -20,13 +20,15 @@ import { WAVES_PER_POI, waveDifficulty, clearYield } from '../game/waves.js';
 import { MELEE_STANCES, ARCHERY_STANCES, MAGIC_SPELLS, staminaCostForWindup } from '../data/combatStances.js';
 import {
   canRecall,
-  canFeedLifestone,
+  canSacrificeVitae,
   offeringCost,
   lifestoneGrowth,
   isGrown,
   LIFESTONE_GROWTH_REQUIRED,
 } from '../game/lifestone.js';
 import { canMeditate, isRested } from '../game/meditation.js';
+import { vitaePct, atMaxVitae, xpToClearStack, VITAE_PER_STACK, MAX_VITAE_PCT } from '../game/vitae.js';
+import { ACHIEVEMENTS } from '../data/achievements.js';
 import { availableShortcutsFrom, canJump } from '../game/shortcuts.js';
 import { getMaterial, materialsForSlot } from '../data/materials.js';
 import { canTinker, TINKER_COST } from '../game/tinkering.js';
@@ -43,7 +45,7 @@ import { rotationRemaining } from '../game/buildings.js';
 import { buyPrice, sellPrice, healCost } from '../game/shop.js';
 import { TRAINING_TRACKS, trainingCost } from '../game/training.js';
 import { soulsAvailable, canEnlighten, ENLIGHTENMENT_UPGRADES } from '../game/enlightenment.js';
-import { itemScore } from '../game/loot.js';
+import { itemScore, salvageYield } from '../game/loot.js';
 import { STARTING_SLOTS, AETHERIA_SLOTS, RARITIES, itemIcon, slotIcon } from '../data/items.js';
 import { UNLOCKS } from './unlocks.js';
 import { fmt, formatDuration, plural } from '../engine/format.js';
@@ -52,13 +54,17 @@ function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function bar(cls, pct, label, id, target) {
+// `vitae: true` adds the hatched overlay that eats into the right-hand end of a
+// vitals bar — see vitaeOverlayHtml. Always emitted (hidden at 0%) so the
+// renderer can size it every frame without rebuilding the bar.
+function bar(cls, pct, label, id, target, { vitae = false } = {}) {
   const w = Math.max(0, Math.min(100, pct));
   const bid = id ? ` id="${id}"` : '';
   const fid = id ? ` id="${id}-fill"` : '';
   const lid = id ? ` id="${id}-label"` : '';
   const tgt = target ? ` data-target="${target}"` : '';
-  return `<div class="bar ${cls}"${bid}${tgt}><div class="fill"${fid} style="width:${w}%"></div><div class="fx-flash"></div><div class="label"${lid}>${esc(label)}</div></div>`;
+  const overlay = vitae ? '<div class="vitae-overlay"></div>' : '';
+  return `<div class="bar ${cls}"${bid}${tgt}><div class="fill"${fid} style="width:${w}%"></div>${overlay}<div class="fx-flash"></div><div class="label"${lid}>${esc(label)}</div></div>`;
 }
 
 function logHtml(state, limit = 40) {
@@ -196,9 +202,9 @@ function combatDisplayHtml(state, headerHtml, extraHtml = '') {
       ${extraHtml}
       <h2 style="margin-top:14px">You — Level ${h.level}</h2>
       <div class="vitals-row">
-        ${bar('hp', (h.hp / d.maxHp) * 100, h.dead ? 'Dead... reviving' : `${Math.ceil(h.hp)} / ${d.maxHp} HP`, 'h-hp', 'hero')}
-        ${bar('stamina', (h.stamina / d.maxStamina) * 100, `${Math.ceil(h.stamina)} / ${d.maxStamina} Stamina`, 'h-sta')}
-        ${bar('mana', (h.mana / d.maxMana) * 100, `${Math.ceil(h.mana)} / ${d.maxMana} Mana`, 'h-mana')}
+        ${bar('hp', (h.hp / d.maxHp) * 100, h.dead ? 'Dead... reviving' : `${Math.ceil(h.hp)} / ${d.maxHp} HP`, 'h-hp', 'hero', { vitae: true })}
+        ${bar('stamina', (h.stamina / d.maxStamina) * 100, `${Math.ceil(h.stamina)} / ${d.maxStamina} Stamina`, 'h-sta', null, { vitae: true })}
+        ${bar('mana', (h.mana / d.maxMana) * 100, `${Math.ceil(h.mana)} / ${d.maxMana} Mana`, 'h-mana', null, { vitae: true })}
       </div>
       ${bar('xp', (xpProgress / xpForLevel(h.level)) * 100, `XP ${fmt(xpProgress)} / ${fmt(xpForLevel(h.level))}`, 'h-xp')}
       ${attackBarHtml(state, d)}
@@ -314,9 +320,9 @@ function restHtml(state) {
   const h = state.hero;
   return `
     <div class="vitals-row">
-      ${bar('hp', (h.hp / d.maxHp) * 100, `${Math.ceil(h.hp)} / ${d.maxHp} HP`, 'h-hp', 'hero')}
-      ${bar('stamina', (h.stamina / d.maxStamina) * 100, `${Math.ceil(h.stamina)} / ${d.maxStamina} Stamina`, 'h-sta')}
-      ${bar('mana', (h.mana / d.maxMana) * 100, `${Math.ceil(h.mana)} / ${d.maxMana} Mana`, 'h-mana')}
+      ${bar('hp', (h.hp / d.maxHp) * 100, `${Math.ceil(h.hp)} / ${d.maxHp} HP`, 'h-hp', 'hero', { vitae: true })}
+      ${bar('stamina', (h.stamina / d.maxStamina) * 100, `${Math.ceil(h.stamina)} / ${d.maxStamina} Stamina`, 'h-sta', null, { vitae: true })}
+      ${bar('mana', (h.mana / d.maxMana) * 100, `${Math.ceil(h.mana)} / ${d.maxMana} Mana`, 'h-mana', null, { vitae: true })}
     </div>
     <div class="actions" style="margin-top:8px">
       ${meditateButtonHtml(state)}
@@ -331,12 +337,14 @@ function lifestoneSiteHtml(state, poi) {
   const story = grown
     ? `<p>The stone stands full-grown, waist-high and steady, its light breathing slow and blue. It knows you now.</p>`
     : `<p>A <span class="lifestone-glow">Lifestone</span> no bigger than a fist juts from the turf here, its light thin and guttering — a stone that never finished becoming one. It wants for something living. <em>Yours</em> would do.</p>
-       <p style="margin-top:8px">Press your hands to it and it will take <b>${fmt(cost.hp)} health</b> and <b>${fmt(cost.mana)} mana</b>, and grow a little for it. Sit and meditate to make that back, then give again.</p>`;
+       <p style="margin-top:8px">It thickens on its own, given long enough. Press your hands to it and it will take <b>${fmt(cost.hp)} health</b>, <b>${fmt(cost.mana)} mana</b> and <b>${VITAE_PER_STACK}% of you</b> that won't come back until you've earned it back — and grow all at once for it.</p>`;
 
+  const maxed = atMaxVitae(state);
   const action = grown
     ? `<p class="muted" style="margin-top:8px">This is your Lifestone now — die anywhere and you'll wake at ${esc(getRegion(poi.regionId).name)}.</p>`
     : `<div class="actions" style="margin-top:8px">
-        <button class="btn primary" data-action="feed-lifestone" data-arg="${poi.id}" ${canFeedLifestone(state, poi.id) ? '' : 'disabled'}>Give of yourself — ${fmt(cost.hp)} HP, ${fmt(cost.mana)} mana</button>
+        <button class="btn primary" data-action="sacrifice-vitae" data-arg="${poi.id}" ${canSacrificeVitae(state, poi.id) ? '' : 'disabled'}>Sacrifice Vitae — ${fmt(cost.hp)} HP, ${fmt(cost.mana)} mana, +${VITAE_PER_STACK}% vitae</button>
+        ${maxed ? `<span class="muted">You have nothing left to give at ${MAX_VITAE_PCT}% vitae.</span>` : ''}
       </div>`;
 
   return `<div class="panel intro-panel">
@@ -431,7 +439,7 @@ export function battleTab(state) {
         return travelBtn + jumpBtn;
       })
       .join('');
-    poiSection = `<div class="panel"><h2>Points of Interest — ${esc(region.name)}</h2><div class="tile-list">${poiTiles}</div></div>`;
+    poiSection = `<div class="panel"><h2>${esc(region.name)} &gt; Points of Interest</h2><div class="tile-list">${poiTiles}</div></div>`;
 
     if (!state.location.poiId) {
       const buildingTiles = buildingsForRegion(region.id)
@@ -476,6 +484,21 @@ export function battleTab(state) {
 }
 
 // --- Hero / Attributes ---
+// The vitae banner: what it's costing you and what it takes to shed it. Only
+// rendered when you're actually carrying some.
+function vitaeHtml(state) {
+  const pct = vitaePct(state);
+  if (pct <= 0) return '';
+  const v = state.hero.vitae;
+  const need = xpToClearStack(state.hero.level);
+  const done = Math.max(0, need - v.xpRemaining);
+  return `<div class="panel">
+    <h2>Vitae — ${pct}%</h2>
+    <p class="muted">Death and sacrifice both leave their mark. Everything your body does is ${pct}% weaker until you earn it back${pct >= MAX_VITAE_PCT ? ' — and you are carrying all of it there is' : ''}.</p>
+    ${bar('hp', (done / need) * 100, `${fmt(done)} / ${fmt(need)} XP toward shedding 5%`)}
+  </div>`;
+}
+
 export function attributesTab(state) {
   const h = state.hero;
   const d = derivedStats(state);
@@ -490,11 +513,20 @@ export function attributesTab(state) {
     </div>`;
   }).join('');
 
+  const earned = ACHIEVEMENTS.filter((a) => state.achievements.includes(a.id));
+  const achievementPanel = earned.length
+    ? `<div class="panel"><h2>Achievements</h2>${earned
+        .map((a) => `<div class="upgrade-row"><div><b>★ ${esc(a.name)}</b><div class="desc">${esc(a.desc)}</div></div><span class="gold">${esc(a.reward)}</span></div>`)
+        .join('')}</div>`
+    : '';
+
   return `
     <div class="panel">
       <h2>Level ${h.level}</h2>
       ${bar('xp', (progress / xpForLevel(h.level)) * 100, `XP to level ${h.level + 1}: ${fmt(progress)} / ${fmt(xpForLevel(h.level))}`)}
     </div>
+    ${vitaeHtml(state)}
+    ${achievementPanel}
     <div class="panel"><h2>Attributes</h2>${attrRows}</div>
     <div class="panel"><h2>Derived Stats</h2><div class="stat-grid">
       <div class="stat-row"><span class="k">Max HP</span><span class="v">${d.maxHp}</span></div>
@@ -585,6 +617,8 @@ export function skillsTab(state) {
     <div class="panel">
       ${skillRow('Tinkering', skills.tinkering)}
       <p class="muted" style="margin-top:4px">Consumes materials to add or boost an affix on equipped gear. See the Tinkering tab.</p>
+      ${skillRow('Salvaging', skills.salvaging, `about ${fmt(salvageYield('Common', skills.salvaging.rank))}x from a Common item`)}
+      <p class="muted" style="margin-top:4px">Breaking gear down returns its material. Each rank compounds the haul, so the same drop is worth far more to a trained salvager.</p>
     </div>`;
 }
 
@@ -816,7 +850,7 @@ export function overviewTab(state) {
   const xpProgress = state.progress.totalXpEarned - totalXpForLevel(h.level);
   tiles.push(`<div class="panel"><h2>Hero</h2>
     <span id="ov-hero-line">Level ${h.level} · <span class="gold">${fmt(state.pyreals)} pyreals</span> · <span class="soul">${state.enlightenment.souls} souls</span></span><br/>
-    ${bar('hp', (h.hp / d.maxHp) * 100, `${Math.ceil(h.hp)} / ${d.maxHp} HP`, 'h-hp', 'hero')}
+    ${bar('hp', (h.hp / d.maxHp) * 100, `${Math.ceil(h.hp)} / ${d.maxHp} HP`, 'h-hp', 'hero', { vitae: true })}
     ${bar('xp', (xpProgress / xpForLevel(h.level)) * 100, `XP ${fmt(xpProgress)} / ${fmt(xpForLevel(h.level))}`, 'h-xp')}
     <div class="muted">ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s</div></div>`);
 
@@ -888,9 +922,9 @@ export function battleDockHtml(state) {
     <div class="dock-where">${where}</div>
     ${monsterHtml}
     <div class="dock-hero">
-      ${bar('hp mini', (h.hp / d.maxHp) * 100, `${Math.ceil(h.hp)}/${d.maxHp}`, 'dock-h-hp')}
-      ${bar('stamina mini', (h.stamina / d.maxStamina) * 100, `${Math.ceil(h.stamina)}/${d.maxStamina}`, 'dock-h-sta')}
-      ${bar('mana mini', (h.mana / d.maxMana) * 100, `${Math.ceil(h.mana)}/${d.maxMana}`, 'dock-h-mana')}
+      ${bar('hp mini', (h.hp / d.maxHp) * 100, `${Math.ceil(h.hp)}/${d.maxHp}`, 'dock-h-hp', null, { vitae: true })}
+      ${bar('stamina mini', (h.stamina / d.maxStamina) * 100, `${Math.ceil(h.stamina)}/${d.maxStamina}`, 'dock-h-sta', null, { vitae: true })}
+      ${bar('mana mini', (h.mana / d.maxMana) * 100, `${Math.ceil(h.mana)}/${d.maxMana}`, 'dock-h-mana', null, { vitae: true })}
     </div>`;
 }
 

@@ -41,6 +41,8 @@ function migrate(raw) {
   state.hero.skills.resistance = { ...fresh.hero.skills.resistance, ...(rawSkills.resistance || {}) };
   state.hero.skills.offense = { ...fresh.hero.skills.offense, ...(rawSkills.offense || {}) };
   state.hero.skills.gathering = { ...fresh.hero.skills.gathering, ...(rawSkills.gathering || {}) };
+  state.hero.vitae = { ...fresh.hero.vitae, ...((raw.hero && raw.hero.vitae) || {}) };
+  state.achievements = Array.isArray(raw.achievements) ? raw.achievements : [];
   // Run was renamed to Athletics — carry an old save's progress over rather than losing it.
   if (rawSkills.run && !rawSkills.athletics) {
     state.hero.skills.athletics = { ...rawSkills.run };
@@ -105,6 +107,18 @@ function migrate(raw) {
   for (const vital of ['hp', 'stamina', 'mana']) {
     if (state.hero[vital] === 0 || state.hero[vital] === undefined) state.hero[vital] = null;
   }
+
+  // Holtburg's Meeting Hall is gone, and Holtburg's dungeons were re-cut so that
+  // Mahogany and Green Garnet turn up early. Anyone standing in (or bound to, or
+  // walking toward) the deleted POI gets moved out to the town hub.
+  const GONE_POIS = ['holtburg-meeting-hall'];
+  if (GONE_POIS.includes(state.location.poiId)) state.location = { regionId: 'holtburg', poiId: null };
+  if (GONE_POIS.includes(state.progress.boundLifestone.poiId)) {
+    state.progress.boundLifestone = { regionId: 'holtburg', poiId: null };
+  }
+  if (state.travel && state.travel.kind === 'poi' && GONE_POIS.includes(state.travel.id)) state.travel = null;
+  state.progress.visitedPois = state.progress.visitedPois.filter((id) => !GONE_POIS.includes(id));
+  for (const id of GONE_POIS) delete state.progress.poiClears[id];
 
   // Pre-level-rework saves may have a stale in-progress monster instance missing the
   // newer fields (level, dmgType, stamina) — drop it so a fresh one spawns next tick.

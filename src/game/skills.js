@@ -30,6 +30,7 @@ export const MAGIC_RESIST_ATTR_XP = 3; // FOCUS/SELF per Magic Resistance proc
 export const HIT_TAKEN_END_XP = 1; // END per landed hit
 export const DEATH_END_XP = 15; // additional END on death, on top of the hit's own grant
 export const SALVAGE_ATTR_XP = { str: 3, coord: 2, focus: 2 };
+export const SALVAGE_SKILL_XP = 6; // Salvaging, per item broken down
 export const TINKER_ATTR_XP = { coord: 2, focus: 2 };
 export const QUICK_XP_PER_ATHLETICS_SECOND = 0.4; // same ~1/4 ratio to ATHLETICS_XP_PER_SECOND
 export const JUMP_QUICK_XP_ON_USE = 4; // scaled down from JUMP_XP_ON_USE, same ratio

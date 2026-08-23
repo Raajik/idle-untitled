@@ -15,11 +15,12 @@ import { drainFx } from '../engine/fx.js';
 import { TICK_MS } from '../engine/loop.js';
 import { fmt, formatDuration } from '../engine/format.js';
 import { fleeTutorialEncounter, activeAttackInterval, activeAttackResource } from '../game/combat.js';
-import { isSite, getPoiById } from '../data/regions.js';
+import { isSite, getPoiById, REGIONS } from '../data/regions.js';
 import { unlockBuilding, upgradeBuilding, rotationRemaining } from '../game/buildings.js';
 import { activeWeaponSkill } from '../game/skills.js';
+import { vitaePct } from '../game/vitae.js';
 import { setHeroName, answerSeenLifestone, acknowledgeAlcottIntro } from '../game/onboarding.js';
-import { recallTo, feedLifestone } from '../game/lifestone.js';
+import { recallTo, sacrificeVitae } from '../game/lifestone.js';
 import { startMeditating, stopMeditating } from '../game/meditation.js';
 import { jumpTo } from '../game/shortcuts.js';
 import { applyTinkering } from '../game/tinkering.js';
@@ -67,6 +68,8 @@ export function createRenderer(state, { onImport }) {
   const sidebar = document.getElementById('sidebar');
   const nav = document.getElementById('tab-nav');
   const summary = document.getElementById('hero-summary');
+  const shortcuts = document.getElementById('nav-shortcuts');
+  const settingsBtn = document.getElementById('settings-btn');
   const main = document.getElementById('main');
   const dock = document.getElementById('battle-dock');
 
@@ -82,7 +85,9 @@ export function createRenderer(state, { onImport }) {
     const d = derivedStats(state);
     summary.innerHTML = `<b>Lv ${state.hero.level}</b> · <span class="gold">${fmt(state.pyreals)}p</span>` +
       (state.enlightenment.count > 0 ? `\n<span class="soul">${state.enlightenment.souls} souls</span> · run ${state.enlightenment.count + 1}` : '') +
-      `\nATK ${d.atk} · HP ${Math.ceil(state.hero.hp)}/${d.maxHp}`;
+      `\nATK ${d.atk} · HP ${Math.ceil(state.hero.hp)}/${d.maxHp}` +
+      // Vitae is a penalty you want to notice without going looking for it.
+      (vitaePct(state) > 0 ? `\n<span class="hp-text">Vitae ${vitaePct(state)}%</span>` : '');
   }
 
   function renderNav() {
@@ -115,12 +120,26 @@ export function createRenderer(state, { onImport }) {
       .join('');
   }
 
+  // Quick travel back to a region hub you've already reached, so "go to town" is
+  // one click from any tab instead of a scroll through the region list.
+  function renderShortcuts() {
+    const rows = REGIONS.filter((r) => state.progress.unlockedRegions.includes(r.id)).map((r) => {
+      const here = state.location.regionId === r.id && !state.location.poiId && !state.travel;
+      const heading = state.travel && state.travel.kind === 'region' && state.travel.id === r.id;
+      const label = here ? `${r.name} — here` : heading ? `${r.name} — on the way` : `→ ${r.name}`;
+      return `<button class="nav-shortcut" data-action="travel-region" data-arg="${r.id}" ${here || heading ? 'disabled' : ''}>${label}</button>`;
+    });
+    shortcuts.innerHTML = rows.join('');
+    settingsBtn.classList.toggle('active', state.ui.activeTab === 'settings');
+  }
+
   function updateDock() {
     if (state.ui.activeTab === 'battle' || state.onboarding.step !== 'done') {
       dock.classList.add('hidden');
     } else {
       dock.classList.remove('hidden');
       dock.innerHTML = battleDockHtml(state);
+      updateVitaeOverlay();
     }
   }
 
@@ -129,9 +148,11 @@ export function createRenderer(state, { onImport }) {
     for (const u of drainNewUnlocks(state)) toast(u.toast);
 
     renderNav();
+    renderShortcuts();
     updateSummary();
     main.innerHTML = TAB_RENDERERS[state.ui.activeTab](state);
     updateDock();
+    updateVitaeOverlay();
     lastLogLen = state.log.length;
     menuRenderFrames = 0;
     lastBattleKey = battleStructureKey(state);
@@ -228,6 +249,14 @@ export function createRenderer(state, { onImport }) {
     if (lab) lab.textContent = label;
   }
 
+  // The hatched slice on every vitals bar, sized to whatever vitae the hero is
+  // carrying. Patched rather than rebuilt so it tracks a stack burning off
+  // mid-fight without tearing the panel down.
+  function updateVitaeOverlay() {
+    const pct = vitaePct(state);
+    for (const el of document.querySelectorAll('.vitae-overlay')) el.style.width = `${pct}%`;
+  }
+
   function setText(id, text) {
     const el = document.getElementById(id);
     if (el) el.textContent = text;
@@ -259,6 +288,7 @@ export function createRenderer(state, { onImport }) {
     const m = state.monster;
 
     updateSummary();
+    updateVitaeOverlay();
 
     if (m) {
       const nameEl = document.getElementById('m-name');
@@ -309,6 +339,7 @@ export function createRenderer(state, { onImport }) {
     const d = derivedStats(state);
     const h = state.hero;
     updateSummary();
+    updateVitaeOverlay();
     setBar('h-hp', (h.hp / d.maxHp) * 100, `${Math.ceil(h.hp)} / ${d.maxHp} HP`);
     setBar('h-sta', (h.stamina / d.maxStamina) * 100, `${Math.ceil(h.stamina)} / ${d.maxStamina} Stamina`);
     setBar('h-mana', (h.mana / d.maxMana) * 100, `${Math.ceil(h.mana)} / ${d.maxMana} Mana`);
@@ -401,7 +432,7 @@ export function createRenderer(state, { onImport }) {
         if (state.meditating) stopMeditating(state, 'You rise, and the quiet lets go of you.');
         else startMeditating(state);
         break;
-      case 'feed-lifestone': feedLifestone(state, arg); break;
+      case 'sacrifice-vitae': sacrificeVitae(state, arg); break;
       case 'jump-shortcut': jumpTo(state, arg); break;
       case 'open-building': state.ui.activeBuilding = arg; break;
       case 'close-building': state.ui.activeBuilding = null; break;

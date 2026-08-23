@@ -90,16 +90,23 @@ export function slotsForMaterialCategory(category) {
   return Object.keys(SLOT_MATERIAL_CATEGORY).filter((slot) => SLOT_MATERIAL_CATEGORY[slot] === category);
 }
 
-// Flat salvage yield by rarity — no workmanship/success roll, just a fixed
-// quantity of the item's material.
-export const SALVAGE_YIELD = { Common: 1, Uncommon: 2, Rare: 3, Epic: 5, Legendary: 8 };
+// Salvage yield. Every item breaks down into a base 1-2 of whatever it's made
+// of, nudged up by rarity, and then multiplied by the Salvaging skill — which
+// compounds per rank rather than adding, so a trained salvager pulls an order of
+// magnitude more out of the same drop. That's what makes farming a dungeon for
+// its material worth doing twice: the gear it drops is made of the same stuff
+// (see game/loot.js rollDrop), so the whole clear feeds one pile.
+export const SALVAGE_BASE_MIN = 1;
+export const SALVAGE_BASE_MAX = 2;
+export const SALVAGE_RARITY_BONUS = { Common: 0, Uncommon: 1, Rare: 2, Epic: 3, Legendary: 5 };
+export const SALVAGE_GROWTH_PER_RANK = 1.03; // ~19x by rank 100
 
 // What each gathering skill can yield — subsets of the lists above, so gathering
 // and salvage feed the same shared material pool. A POI's full-clear material
 // must be a member of the pool for the skill that clear trains
 // (test/waves.test.js enforces this).
 export const GATHER_MATERIAL_POOLS = {
-  mining: ['iron', 'brass', 'granite', 'jet', 'copper', 'silver', 'gold'],
+  mining: ['iron', 'brass', 'granite', 'jet', 'copper', 'silver', 'gold', 'green-garnet'],
   woodcutting: ['oak', 'mahogany', 'pine', 'teak', 'ebony'],
   skinning: ['gromnie-hide'],
   foraging: ['linen', 'satin', 'porcelain'],

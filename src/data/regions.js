@@ -46,18 +46,8 @@ export const REGIONS = [
         monsters: [],
       },
       {
-        id: 'holtburg-meeting-hall', name: 'Holtburg Meeting Hall', coords: '42.2N, 33.9E', quest: 'None', walkSeconds: 6,
-        gather: { skill: 'foraging', material: 'linen' },
-        monsters: [
-          { name: 'Militia Recruit', level: 1, dmgType: 'bludgeon' },
-          { name: 'Training Dummy', level: 1, dmgType: 'bludgeon' },
-          { name: 'Town Guard', level: 2, dmgType: 'bludgeon' },
-        ],
-        boss: { name: 'Militia Captain', level: 5, dmgType: 'bludgeon' },
-      },
-      {
         id: 'drudge-hideout', name: 'Drudge Hideout', coords: '41.4N, 33.3E', quest: "Alfrin's Stolen Supplies", walkSeconds: 12,
-        gather: { skill: 'mining', material: 'copper' },
+        gather: { skill: 'woodcutting', material: 'mahogany' },
         monsters: [
           { name: 'Drudge Skulker', level: 2, dmgType: 'bludgeon' },
           { name: 'Drudge', level: 2, dmgType: 'bludgeon' },
@@ -67,7 +57,7 @@ export const REGIONS = [
       },
       {
         id: 'holtburg-redoubt', name: 'Holtburg Redoubt', coords: '40.4N, 34.4E', quest: "Worcer's Missing Heirlooms", walkSeconds: 14,
-        gather: { skill: 'mining', material: 'iron' },
+        gather: { skill: 'mining', material: 'green-garnet' },
         monsters: [
           { name: 'Banderling', level: 3, dmgType: 'slash' },
           { name: 'Banderling Guard', level: 3, dmgType: 'slash' },
@@ -77,7 +67,7 @@ export const REGIONS = [
       },
       {
         id: 'rat-nest', name: 'A Rat Nest', coords: '40.2N, 32.5E', quest: 'Rat Tails', walkSeconds: 16,
-        gather: { skill: 'foraging', material: 'porcelain' },
+        gather: { skill: 'mining', material: 'copper' },
         monsters: [
           { name: 'Brown Rat', level: 4, dmgType: 'pierce' },
           { name: 'Grey Rat', level: 4, dmgType: 'pierce' },
@@ -87,7 +77,7 @@ export const REGIONS = [
       },
       {
         id: 'cave-of-alabree', name: 'Cave of Alabree', coords: '41.8N, 32.1E', quest: "Brogord's Demise", walkSeconds: 18,
-        gather: { skill: 'mining', material: 'granite' },
+        gather: { skill: 'mining', material: 'iron' },
         monsters: [
           { name: 'Drudge Skulker', level: 5, dmgType: 'bludgeon' },
           { name: 'Drudge Mystic', level: 5, dmgType: 'lightning' },
@@ -97,7 +87,7 @@ export const REGIONS = [
       },
       {
         id: 'holtburg-dungeon', name: 'Holtburg Dungeon', coords: '43.6N, 33.0E', quest: 'Sword of Lost Light Quest', walkSeconds: 20,
-        gather: { skill: 'mining', material: 'silver' },
+        gather: { skill: 'mining', material: 'granite' },
         monsters: [
           { name: 'Dungeon Drudge', level: 6, dmgType: 'bludgeon' },
           { name: 'Skeleton Lord', level: 6, dmgType: 'void' },
@@ -107,7 +97,7 @@ export const REGIONS = [
       },
       {
         id: 'asuger-temple', name: 'Asuger Temple', coords: '45.1N, 30.4E', quest: "Elysa's Favor", walkSeconds: 22,
-        gather: { skill: 'foraging', material: 'satin' },
+        gather: { skill: 'foraging', material: 'linen' },
         monsters: [
           { name: 'Temple Drudge', level: 7, dmgType: 'bludgeon' },
           { name: 'Skeleton', level: 7, dmgType: 'void' },
@@ -137,7 +127,7 @@ export const REGIONS = [
       },
       {
         id: 'mukkir-nest', name: 'Small Fledgling Mukkir Nest', coords: '43.5N, 36.1E', quest: 'Small Fledgling Mukkir Kill Task', walkSeconds: 30,
-        gather: { skill: 'mining', material: 'jet' },
+        gather: { skill: 'mining', material: 'silver' },
         monsters: [
           { name: 'Fledgling Mukkir', level: 10, dmgType: 'acid' },
           { name: 'Mukkir Drone', level: 10, dmgType: 'acid' },

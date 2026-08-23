@@ -52,7 +52,7 @@ test('selling an inventory item removes it and grants pyreals', () => {
 test('the Physician heals the hero to full for pyreals, once unlocked', () => {
   const s = createInitialState();
   s.progress.unlockedRegions = ['holtburg'];
-  s.location = { regionId: 'holtburg', poiId: 'holtburg-meeting-hall' };
+  s.location = { regionId: 'holtburg', poiId: 'drudge-hideout' };
   s.hero.hp = 1;
 
   assert.equal(healService(s), false); // Physician is still closed

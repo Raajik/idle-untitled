@@ -25,8 +25,9 @@ import { derivedStats, grantXp } from './hero.js';
 import { rollDrop, maybeAutoEquip } from './loot.js';
 import { addLog } from './state.js';
 import { tickTravel, arrive } from './travel.js';
-import { tickRecallCooldown, respawnAtLifestone } from './lifestone.js';
+import { tickRecallCooldown, respawnAtLifestone, tickLifestoneGrowth } from './lifestone.js';
 import { tickMeditation } from './meditation.js';
+import { gainVitae } from './vitae.js';
 import { tickJumpCooldown } from './shortcuts.js';
 import { beginWaveIfNeeded, recordWaveKill, waveDifficulty } from './waves.js';
 import { tickBuildings } from './buildings.js';
@@ -281,6 +282,7 @@ function handleHeroDeath(state) {
   const p = state.progress;
   trainSkill(state, state.hero.skills.lifestone.recall, 'Lifestone Recall', RECALL_XP_ON_DEATH);
   trainAttribute(state, 'end', DEATH_END_XP);
+  gainVitae(state, 'Death takes something with it.');
   if (p.firstDeathHandled) return;
   p.firstDeathHandled = true;
   p.recallUnlocked = true;
@@ -354,6 +356,7 @@ export function tickCombat(state, dt) {
   tickRecallCooldown(state, dt);
   tickJumpCooldown(state, dt);
   tickBuildings(state);
+  tickLifestoneGrowth(state, dt);
 
   if (state.travel && state.travel.tutorial) {
     tickTutorialJourney(state, dt);
@@ -516,9 +519,9 @@ export function tickCombat(state, dt) {
   }
 
   // Slow passive regen for all three vitals (healing/meditation are skills, not a given)
-  h.hp = Math.min(stats.maxHp, h.hp + stats.maxHp * HP_REGEN_PER_SECOND * dt);
-  h.stamina = Math.min(stats.maxStamina, h.stamina + stats.maxStamina * STAMINA_REGEN_PER_SECOND * dt);
-  h.mana = Math.min(stats.maxMana, h.mana + stats.maxMana * MANA_REGEN_PER_SECOND * dt);
+  h.hp = Math.min(stats.maxHp, h.hp + (stats.maxHp * HP_REGEN_PER_SECOND + stats.hpRegenFlat) * dt);
+  h.stamina = Math.min(stats.maxStamina, h.stamina + (stats.maxStamina * STAMINA_REGEN_PER_SECOND + stats.staminaRegenFlat) * dt);
+  h.mana = Math.min(stats.maxMana, h.mana + (stats.maxMana * MANA_REGEN_PER_SECOND + stats.manaRegenFlat) * dt);
 }
 
 // Bail on the current tutorial-road encounter instead of fighting it. Always
