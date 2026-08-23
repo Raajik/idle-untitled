@@ -29,8 +29,7 @@ export function startTravelToRegion(state, regionId) {
     state.travel = { kind: 'region', id: regionId, remaining: TUTORIAL_JOURNEY_SECONDS, duration: TUTORIAL_JOURNEY_SECONDS, tutorial: true };
     state.location = { regionId: null, poiId: TUTORIAL_ROAD.id };
     state.monsters = [];
-    state.meditating = false;
-    addLog(state, `You set out for Holtburg, alone on the open road...`, 'dim');
+      addLog(state, `You set out for Holtburg, alone on the open road...`, 'dim');
     return true;
   }
 
@@ -38,7 +37,6 @@ export function startTravelToRegion(state, regionId) {
   state.travel = { kind: 'region', id: regionId, remaining: duration, duration };
   state.location = { regionId: null, poiId: null };
   state.monsters = [];
-  state.meditating = false;
   addLog(state, `You set out for ${region.name}...`, 'dim');
   return true;
 }
@@ -52,7 +50,6 @@ export function startTravelToPoi(state, poiId) {
   state.travel = { kind: 'poi', id: poiId, remaining: duration, duration };
   state.location = { regionId: poi.regionId, poiId: null };
   state.monsters = [];
-  state.meditating = false;
   addLog(state, `Walking to ${poi.name}...`, 'dim');
   return true;
 }

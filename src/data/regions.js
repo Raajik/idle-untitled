@@ -289,3 +289,72 @@ export function isSite(poi) {
 export function regionIndex(regionId) {
   return REGIONS.findIndex((r) => r.id === regionId);
 }
+
+// --- Level tiers ---
+// Hunting grounds are grouped into ten-level bands. Two reasons: it sorts a long
+// undifferentiated list into somewhere you belong now and somewhere you're
+// working toward, and it gives the UI a single number to key a tile's look off
+// so a band reads as a place before you've read a word of it.
+//
+// The bands run past anything currently in the game on purpose. Empty ones are
+// never rendered (see ui/tabs.js), so the ceiling costs nothing and the shape of
+// the progression is visible from the first region.
+
+export const TIER_SIZE = 10;
+export const MAX_TIER_LEVEL = 100;
+
+// `tone` keys the band's colour in the UI and is deliberately absolute: Lv 1-10
+// is the same colour in the first region as in the last, so the accent means a
+// level rather than a position in whatever list you happen to be looking at.
+export const LEVEL_TIERS = Array.from({ length: MAX_TIER_LEVEL / TIER_SIZE }, (_, i) => ({
+  id: `t${i + 1}`,
+  min: i * TIER_SIZE + 1,
+  max: (i + 1) * TIER_SIZE,
+  label: `Lv ${i * TIER_SIZE + 1}–${(i + 1) * TIER_SIZE}`,
+  tone: i,
+}));
+
+// The span of monster levels you'll actually meet here, or null for a site.
+// Bosses are deliberately excluded — they're being split out into POIs of their
+// own, and a level-6 warlord shouldn't advertise a level 2-3 hideout as harder
+// than it is.
+export function poiLevelRange(poi) {
+  if (!poi || !poi.monsters || !poi.monsters.length) return null;
+  const levels = poi.monsters.map((m) => m.level).filter((l) => typeof l === 'number');
+  if (!levels.length) return null;
+  return { min: Math.min(...levels), max: Math.max(...levels) };
+}
+
+// "Lv 2-3", or "Lv 4" when everything here is the same level.
+export function poiLevelLabel(poi) {
+  const range = poiLevelRange(poi);
+  if (!range) return '';
+  return range.min === range.max ? `Lv ${range.min}` : `Lv ${range.min}–${range.max}`;
+}
+
+// Which band a POI belongs to, keyed on the weakest thing in it — the level you
+// can turn up at, not the level you leave at. Null for sites, which have no
+// levels and get a band of their own in the UI.
+export function tierForPoi(poi) {
+  const range = poiLevelRange(poi);
+  if (!range) return null;
+  const index = Math.min(LEVEL_TIERS.length - 1, Math.floor((range.min - 1) / TIER_SIZE));
+  return LEVEL_TIERS[index];
+}
+
+// Every band a region actually has ground in, in order. Sites come first under
+// their own heading: they're not harder or easier, they're a different errand.
+export function tiersForRegion(region) {
+  if (!region) return [];
+  const used = new Set(region.pois.map((p) => (tierForPoi(p) || {}).id).filter(Boolean));
+  const tiers = LEVEL_TIERS.filter((t) => used.has(t.id));
+  const sites = region.pois.filter((p) => isSite(p));
+  return sites.length ? [{ id: 'sites', label: 'Sites', min: 0, max: 0, tone: 'site' }, ...tiers] : tiers;
+}
+
+// The POIs shown under one band.
+export function poisInTier(region, tierId) {
+  if (!region) return [];
+  if (tierId === 'sites') return region.pois.filter((p) => isSite(p));
+  return region.pois.filter((p) => !isSite(p) && (tierForPoi(p) || {}).id === tierId);
+}

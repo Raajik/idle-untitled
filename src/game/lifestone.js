@@ -9,7 +9,8 @@
 //     can be grown into a real one to move the bind point somewhere convenient.
 //     It creeps upward on its own once started, slowly enough that waiting it out
 //     is a real option but a dull one; Sacrificing Vitae is how you hurry it. That
-//     costs blood and mana on the spot (which is what meditation exists to refill)
+//     costs blood and mana on the spot, which passive regen refills in its own
+//     slow time,
 //     and leaves you carrying vitae afterwards, exactly as if you'd died for it.
 
 import { getRegion, getPoiById } from '../data/regions.js';
@@ -32,7 +33,7 @@ const OFFERING_ATTR_XP = 20; // Self/Focus, for giving so much of yourself away
 
 // A budding stone knits itself together on its own, just slowly — about fifty
 // minutes from first sacrifice to full if you never touch it again. That keeps
-// the site from being a hard wall behind a meditation loop while leaving
+// the site from being a hard wall behind a regen loop while leaving
 // Sacrificing Vitae clearly the faster road.
 const PASSIVE_GROWTH_PER_SECOND = LIFESTONE_GROWTH_REQUIRED / (50 * 60);
 
@@ -48,7 +49,6 @@ export function recallTo(state, regionId) {
 
   state.travel = null;
   state.monsters = [];
-  state.meditating = false;
   state.location = { regionId, poiId: null };
   state.progress.recallCooldown = recallCooldownSeconds(state.hero.skills.lifestone.recall.rank);
   trainSkill(state, state.hero.skills.lifestone.recall, 'Lifestone Recall', RECALL_XP_ON_USE);
@@ -106,7 +106,7 @@ export function canSacrificeVitae(state, poiId) {
   const poi = getPoiById(poiId);
   if (!poi || poi.site !== 'lifestone') return false;
   if (state.location.poiId !== poiId) return false; // you have to be standing at it
-  if (state.hero.dead || state.travel || state.meditating) return false;
+  if (state.hero.dead || state.travel) return false;
   if (isGrown(state, poiId)) return false;
   if (atMaxVitae(state)) return false; // nothing left to give — the stone can't take more
   const cost = offeringCost(state);

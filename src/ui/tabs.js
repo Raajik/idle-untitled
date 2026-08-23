@@ -1,6 +1,16 @@
 // Tab views: each returns an HTML string. Events are delegated via data-action attributes.
 
-import { REGIONS, getRegion, getPoiById, isSite, DAMAGE_TYPES } from '../data/regions.js';
+import {
+  REGIONS,
+  getRegion,
+  getPoiById,
+  isSite,
+  DAMAGE_TYPES,
+  poiLevelLabel,
+  tierForPoi,
+  tiersForRegion,
+  poisInTier,
+} from '../data/regions.js';
 import { derivedStats, xpForLevel, totalXpForLevel, ATTRIBUTES } from '../game/hero.js';
 import {
   xpToNextRank,
@@ -14,6 +24,7 @@ import {
   OFFENSE_SKILLS,
   GATHERING_SKILLS,
   MAX_SKILL_RANK,
+  modifiedWalkTime,
 } from '../game/skills.js';
 import { activeAttackInterval, activeAttackResource, activeAttackCost, canAffordAttack } from '../game/combat.js';
 import { WAVES_PER_POI, waveDifficulty, clearYield } from '../game/waves.js';
@@ -26,11 +37,10 @@ import {
   isGrown,
   LIFESTONE_GROWTH_REQUIRED,
 } from '../game/lifestone.js';
-import { canMeditate, isRested } from '../game/meditation.js';
 import { BUFF_SPELLS } from '../data/buffSpells.js';
 import { knowsSpell, canCastBuffSpell, isAutoCast } from '../game/buffs.js';
-import { CONSUMABLES, getConsumable } from '../data/consumables.js';
-import { charges, canAutoHeal, STAMINA_PER_HP } from '../game/consumables.js';
+import { getConsumable } from '../data/consumables.js';
+import { charges, canAutoHeal, isAutoDrink, upkeepConsumables, STAMINA_PER_HP } from '../game/consumables.js';
 import { vitaePct, atMaxVitae, xpToClearStack, VITAE_PER_STACK, MAX_VITAE_PCT } from '../game/vitae.js';
 import { ACHIEVEMENTS } from '../data/achievements.js';
 import { availableShortcutsFrom, canJump } from '../game/shortcuts.js';
@@ -246,7 +256,9 @@ function upkeepHtml(state) {
     .map((sp) => {
       const buff = state.buffs.find((b) => b.id === sp.id);
       const auto = isAutoCast(state, sp.id);
-      const status = buff ? `<span class="xp-text">${formatDuration(buff.remaining)} left</span>` : '<span class="muted">not up</span>';
+      const status = buff
+        ? `<span class="xp-text" id="buff-timer-${sp.id}">${formatDuration(buff.remaining)} left</span>`
+        : '<span class="muted">not up</span>';
       return `<div class="upgrade-row">
         <div><b class="${vitalTextClass(sp.effect)}">${esc(sp.name)}</b> ${status}<div class="desc">${esc(sp.desc)} · ${sp.manaCost} mana</div></div>
         <div class="actions">
@@ -257,13 +269,25 @@ function upkeepHtml(state) {
     })
     .join('');
 
-  const packRows = CONSUMABLES.filter((c) => charges(state, c.id) > 0)
-    .map(
-      (c) => `<div class="upgrade-row">
-        <div><b class="${c.buff ? vitalTextClass(c.buff.effect) : `rarity-${c.rarity}`}">${esc(c.name)}</b> <span class="muted">${plural(charges(state, c.id), 'charge')}</span><div class="desc">${esc(c.desc)}</div></div>
-        <div class="actions">${c.buff ? `<button class="btn" data-action="use-consumable" data-arg="${c.id}">Use</button>` : '<span class="muted">Spent by auto-healing</span>'}</div>
-      </div>`
-    )
+  const packRows = upkeepConsumables(state)
+    .map((c) => {
+      const left = charges(state, c.id);
+      const buff = c.buff && state.buffs.find((b) => b.id === c.buff.id);
+      const status = buff
+        ? `<span class="xp-text" id="buff-timer-${buff.id}">${formatDuration(buff.remaining)} left</span>`
+        : `<span class="muted">${left ? plural(left, 'charge') : 'none left'}</span>`;
+      const held = buff && left ? `<span class="muted"> · ${plural(left, 'charge')}</span>` : '';
+      const auto = isAutoDrink(state, c.id);
+      // A drinkable can be kept up on its own; the kit has its own toggle above.
+      const actions = c.buff
+        ? `<button class="btn" data-action="use-consumable" data-arg="${c.id}" ${left ? '' : 'disabled'}>Use</button>
+           <button class="btn small${auto ? ' active' : ''}" data-action="toggle-autodrink" data-arg="${c.id}">Auto ${auto ? 'ON' : 'OFF'}</button>`
+        : '<span class="muted">Spent by auto-healing</span>';
+      return `<div class="upgrade-row${left ? '' : ' spent'}">
+        <div><b class="${c.buff ? vitalTextClass(c.buff.effect) : `rarity-${c.rarity}`}">${esc(c.name)}</b> ${status}${held}<div class="desc">${esc(c.desc)}${c.buff && !left && auto ? ' · Nothing left to drink.' : ''}</div></div>
+        <div class="actions">${actions}</div>
+      </div>`;
+    })
     .join('');
 
   // Auto-heal stays listed once you've owned a kit — it's worth knowing the
@@ -294,8 +318,7 @@ function upkeepHtml(state) {
     state,
     'upkeep',
     'Upkeep',
-    `<div class="actions" style="margin-bottom:8px">${meditateButtonHtml(state)}</div>
-     ${autoHealRow}
+    `${autoHealRow}
      ${spellRows}
      ${packRows}`,
     { summary, defaultOpen: false }
@@ -310,16 +333,6 @@ export function monsterLabel(monster) {
   return monster.level == null ? monster.name : `${monster.name} (Lv ${monster.level})`;
 }
 
-// Meditation is the only way to get stamina back at any speed, and fighting is
-// tuned to run you out of it, so this control has to be within reach wherever
-// you might run dry — not just at the Lifestone that introduced it.
-function meditateButtonHtml(state) {
-  const resting = state.meditating;
-  const disabled = resting ? false : !canMeditate(state);
-  const label = resting ? 'Stop meditating' : 'Meditate';
-  const hint = !resting && isRested(state) ? ' <span class="muted">(fully rested)</span>' : '';
-  return `<button class="btn ${resting ? '' : 'primary'}" data-action="toggle-meditate" ${disabled ? 'disabled' : ''}>${label}</button>${hint}`;
-}
 
 // Shared monster/hero combat display used by both real POI fights and the tutorial
 // road — `extraHtml` slots in anything extra (e.g. a Flee button during the tutorial).
@@ -327,7 +340,6 @@ function meditateButtonHtml(state) {
 // the full-size bar and the fx target; the rest are shown small, because knowing
 // how many are on you and roughly how hurt they are is the point.
 function engagedMonstersHtml(state) {
-  if (state.meditating) return `<div><b id="m-name">Resting — the fight can wait.</b></div>`;
   const monsters = state.monsters;
   if (!monsters.length) return `<div><b id="m-name">Searching...</b></div>`;
 
@@ -369,10 +381,106 @@ function combatDisplayHtml(state, headerHtml, extraHtml = '') {
       </div>
       ${bar('xp', (xpProgress / xpForLevel(h.level)) * 100, `XP ${fmt(xpProgress)} / ${fmt(xpForLevel(h.level))}`, 'h-xp')}
       ${attackBarHtml(state, d)}
-      <div class="actions" style="margin-top:8px">${meditateButtonHtml(state)}</div>
       <div id="h-attack-line" class="muted">${attackLine}, ${esc(aw.label)} (Rank ${aw.skill.rank}).</div>
       <div id="h-stats" class="muted">ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s · Crit ${d.critChance.toFixed(1)}% · ${fmt(state.pyreals)} pyreals</div>
     </div>`;
+}
+
+// --- Points of interest, banded by level ---
+
+// What the walk will actually cost you, coloured against what it costs at rest.
+// Athletics only ever shortens a walk today, so in practice this reads grey at
+// rank 0 and green after — but the comparison is written both ways so that the
+// first thing that slows you down (encumbrance, a curse, a heavy haul) turns
+// these red without anyone having to remember this function exists.
+function walkTimeHtml(state, baseSeconds) {
+  const actual = modifiedWalkTime(baseSeconds, state.hero.skills.athletics.rank);
+  const delta = actual - baseSeconds;
+  const tone = Math.abs(delta) < 0.05 ? '' : delta < 0 ? ' faster' : ' slower';
+  return `<span class="sub walk-time${tone}">${formatDuration(actual)}</span>`;
+}
+
+// One hunting ground. Fixed-height so a band reads as a grid of equals rather
+// than a ragged list — every tile carries the same four lines whether or not it
+// has anything to say on them.
+function poiTileHtml(state, poi, travel, tone) {
+  const here = state.location.poiId === poi.id;
+  const travelling = travel && travel.kind === 'poi' && travel.id === poi.id;
+  const cls = ['tile', 'poi-tile', `tier-${tone}`, here ? 'current' : '', travelling ? 'travelling' : ''].join(' ');
+
+  const when = travelling
+    ? `<span class="travel-timer" id="poi-timer-${poi.id}">${formatDuration(travel.remaining)}</span>`
+    : here
+    ? '<span class="sub">here</span>'
+    : walkTimeHtml(state, poi.walkSeconds);
+
+  const material = poi.gather ? getMaterial(poi.gather.material) : null;
+  const clears = state.progress.poiClears[poi.id] || 0;
+  const yieldNote = material
+    ? `<span class="sub gather-note">${esc(material.name)}${clears ? ` · ${fmt(clears)} clears` : ''}</span>`
+    : isSite(poi)
+    ? `<span class="sub gather-note">${isGrown(state, poi.id) ? 'grown' : 'no fighting here'}</span>`
+    : '';
+
+  const level = poiLevelLabel(poi);
+  const levelBadge = level ? `<span class="poi-level">${level}</span>` : '<span class="poi-level muted">—</span>';
+
+  return `<button class="${cls}" id="poi-tile-${poi.id}" title="Travel" data-action="travel-poi" data-arg="${poi.id}">
+    <span class="poi-name">${esc(poi.name)}</span>
+    ${levelBadge}
+    ${when}
+    ${yieldNote}
+  </button>`;
+}
+
+// The bands themselves. A region with one band shows its name rather than a row
+// of one button, the same way a specialist shop skips its tab strip.
+function poiTiersHtml(state, region, travel, jumpTargets) {
+  const tiers = tiersForRegion(region);
+  if (!tiers.length) return '<p class="muted">Nothing mapped here yet.</p>';
+
+  // Default to wherever the hero actually is, so arriving somewhere doesn't
+  // leave you looking at a band that doesn't contain you.
+  const currentPoi = state.location.poiId ? getPoiById(state.location.poiId) : null;
+  const homeTier = currentPoi ? (isSite(currentPoi) ? 'sites' : (tierForPoi(currentPoi) || {}).id) : null;
+  const stored = state.ui.activePoiTier;
+  // Falling back to the first band skips Sites deliberately: it's listed first
+  // because it's a different errand, not because it's where you meant to go.
+  const fallback = (tiers.find((t) => t.id !== 'sites') || tiers[0]).id;
+  const active = tiers.some((t) => t.id === stored)
+    ? stored
+    : homeTier && tiers.some((t) => t.id === homeTier)
+    ? homeTier
+    : fallback;
+
+  const strip =
+    tiers.length > 1
+      ? `<div class="filter-group tier-strip" style="margin-bottom:8px">${tiers
+          .map((t) => {
+            const count = poisInTier(region, t.id).length;
+            return `<button class="btn small tier-btn tier-${t.tone}${t.id === active ? ' active' : ''}" data-action="set-poi-tier" data-arg="${t.id}">${t.label} <span class="muted">${count}</span></button>`;
+          })
+          .join('')}</div>`
+      : `<div class="muted" style="margin-bottom:6px">${tiers[0].label}</div>`;
+
+  const activeTone = (tiers.find((t) => t.id === active) || tiers[0]).tone;
+  const tiles = poisInTier(region, active)
+    .map((poi) => {
+      const tile = poiTileHtml(state, poi, travel, activeTone);
+      const shortcut = jumpTargets.get(poi.id);
+      // A shortcut sits beside the place it reaches, as a tile of the same size.
+      const jump = shortcut
+        ? `<button class="tile poi-tile jump-tile" title="${esc(shortcut.name)}" data-action="jump-shortcut" data-arg="${shortcut.id}" ${canJump(state) ? '' : 'disabled'}>
+            <span class="poi-name">⚡ Jump</span>
+            <span class="poi-level">${esc(poi.name)}</span>
+            <span class="sub">${canJump(state) ? 'ready' : formatDuration(state.progress.jumpCooldown)}</span>
+          </button>`
+        : '';
+      return tile + jump;
+    })
+    .join('');
+
+  return `${strip}<div class="tile-list poi-grid">${tiles || '<p class="muted">Nothing here yet.</p>'}</div>`;
 }
 
 // --- Town buildings (rendered inside the Battle tab's Town panel) ---
@@ -428,15 +536,18 @@ const SHOP_TABS = [
   { id: 'sell', label: 'Sell', has: (state) => state.inventory.length > 0 },
 ];
 
-function consumablesHtml(state, entry) {
-  if (!entry.sells.length) return '<p class="muted">Nothing behind the counter today.</p>';
+function consumablesHtml(state, buildingId, entry) {
+  // Worth saying out loud that a shelf can be empty by chance, so an absent
+  // potion reads as "come back later" rather than "this shop doesn't stock it".
+  if (!entry.sells.length) return '<p class="muted">Nothing behind the counter today. Check back after the next delivery.</p>';
   return entry.sells
     .map(({ id, price }) => {
       const def = getConsumable(id);
+      const held = charges(state, id);
       return `<div class="item">
         <div class="name rarity-${def.rarity}">${esc(def.name)}</div>
-        <div class="stats">${esc(def.desc)}</div>
-        <div class="actions"><button class="btn" data-action="buy-consumable" data-arg="${entry === state.buildings['general-store'] ? 'general-store' : ''}:${id}" ${state.pyreals >= price ? '' : 'disabled'}>Buy ${plural(def.startingCharges, 'charge')} — ${fmt(price)}p</button></div>
+        <div class="stats">${esc(def.desc)}${held ? ` <span class="muted">· ${plural(held, 'charge')} in your pack</span>` : ''}</div>
+        <div class="actions"><button class="btn" data-action="buy-consumable" data-arg="${buildingId}:${id}" ${state.pyreals >= price ? '' : 'disabled'}>Buy ${plural(def.startingCharges, 'charge')} — ${fmt(price)}p</button></div>
       </div>`;
     })
     .join('');
@@ -476,7 +587,7 @@ function shopTabsHtml(state, buildingId, entry) {
   let body;
   if (active === 'weapons') body = stockHtml(state, buildingId, entry, (it) => it.slot === 'weapon');
   else if (active === 'armor') body = stockHtml(state, buildingId, entry, (it) => it.slot !== 'weapon');
-  else if (active === 'consumables') body = consumablesHtml(state, entry);
+  else if (active === 'consumables') body = consumablesHtml(state, buildingId, entry);
   else if (active === 'materials') body = exchangeHtml(state, buildingId, entry);
   else body = sellHtml(state);
 
@@ -511,7 +622,7 @@ function buildingPanelHtml(state) {
   const perk = perkText(building, entry.level);
   const next = upgradeCost(building, entry.level, state);
   const nextPerk = perkText(building, entry.level + 1);
-  const rotationLine = building.stock
+  const rotationLine = building.stock || building.sells
     ? `<div class="muted">Shelves turn over in <span id="rotation-timer">${formatDuration(rotationRemaining(state, buildingId))}</span>.</div>`
     : '';
   const investLine = next
@@ -544,11 +655,10 @@ function buildingPanelHtml(state) {
 
 // --- Sites (POIs you visit for something other than a fight) ---
 
-// The vitals + Meditate control shown wherever resting matters. Meditation is the
-// only way to recover outside a fight, so it lives next to whatever spends vitals.
-// Vitals plus the Meditate control. Only the Lifestone site draws this on its
-// own now; everywhere else the vitals live in the combat panel and the Meditate
-// button lives in Upkeep, rather than being repeated in a third place.
+// Just the vitals. Only the Lifestone site draws these on their own — everywhere
+// else they live in the combat panel. Recovery needs no control: regen runs
+// wherever you are, so standing at the stone is itself how you refill for the
+// next offering.
 function restHtml(state) {
   const d = derivedStats(state);
   const h = state.hero;
@@ -557,9 +667,6 @@ function restHtml(state) {
       ${bar('hp', (h.hp / d.maxHp) * 100, `${Math.ceil(h.hp)} / ${d.maxHp} HP`, 'h-hp', 'hero', { vitae: true })}
       ${bar('stamina', (h.stamina / d.maxStamina) * 100, `${Math.ceil(h.stamina)} / ${d.maxStamina} Stamina`, 'h-sta', null, { vitae: true })}
       ${bar('mana', (h.mana / d.maxMana) * 100, `${Math.ceil(h.mana)} / ${d.maxMana} Mana`, 'h-mana', null, { vitae: true })}
-    </div>
-    <div class="actions" style="margin-top:8px">
-      ${meditateButtonHtml(state)}
     </div>`;
 }
 
@@ -649,37 +756,12 @@ export function battleTab(state) {
         jumpTargets.set(destId, s);
       }
     }
-    const poiTiles = region.pois
-      .map((poi) => {
-        const here = state.location.poiId === poi.id;
-        const travelling = travel && travel.kind === 'poi' && travel.id === poi.id;
-        const cls = ['tile', 'poi-tile', here ? 'current' : '', travelling ? 'travelling' : ''].join(' ');
-        const sub = travelling
-          ? `<span class="travel-timer" id="poi-timer-${poi.id}">${formatDuration(travel.remaining)}</span>`
-          : here
-          ? '<span class="sub">here</span>'
-          : `<span class="sub">Travel (${formatDuration(poi.walkSeconds)})</span>`;
-        const material = poi.gather ? getMaterial(poi.gather.material) : null;
-        const clears = p.poiClears[poi.id] || 0;
-        const yieldNote = material
-          ? `<span class="sub gather-note">${esc(material.name)}${clears ? ` · ${fmt(clears)} clears` : ''}</span>`
-          : isSite(poi)
-          ? `<span class="sub gather-note">${isGrown(state, poi.id) ? 'grown' : 'no fighting here'}</span>`
-          : '';
-        const travelBtn = `<button class="${cls}" id="poi-tile-${poi.id}" title="Travel" data-action="travel-poi" data-arg="${poi.id}">${esc(poi.name)}${sub}${yieldNote}</button>`;
-        const shortcut = jumpTargets.get(poi.id);
-        const jumpBtn = shortcut
-          ? `<button class="tile poi-tile jump-tile" title="${esc(shortcut.name)}" data-action="jump-shortcut" data-arg="${shortcut.id}" ${canJump(state) ? '' : 'disabled'}>⚡ Jump${canJump(state) ? '' : ` (${formatDuration(state.progress.jumpCooldown)})`}</button>`
-          : '';
-        return travelBtn + jumpBtn;
-      })
-      .join('');
     const here = state.location.poiId ? getPoiById(state.location.poiId) : null;
     poiSection = section(
       state,
       'pois',
       `${esc(region.name)} &gt; Points of Interest`,
-      `${here ? '' : '<p class="muted" style="margin-bottom:6px">Pick a point of interest to start hunting.</p>'}<div class="tile-list">${poiTiles}</div>`,
+      `${here ? '' : '<p class="muted" style="margin-bottom:6px">Pick a point of interest to start hunting.</p>'}${poiTiersHtml(state, region, travel, jumpTargets)}`,
       { summary: here ? `at ${here.name}` : 'in town' }
     );
 

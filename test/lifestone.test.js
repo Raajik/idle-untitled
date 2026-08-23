@@ -14,9 +14,16 @@ import {
   LIFESTONE_GROWTH_REQUIRED,
   GROWTH_PER_OFFERING,
 } from '../src/game/lifestone.js';
-import { startMeditating, tickMeditation, isRested } from '../src/game/meditation.js';
 
 const SITE = 'budding-lifestone';
+
+// Recovery is passive now, so "rested" is just a reading of the vitals rather
+// than the end of a channelled action.
+function isRested(state) {
+  const d = derivedStats(state);
+  const h = state.hero;
+  return h.hp >= d.maxHp && h.stamina >= d.maxStamina && h.mana >= d.maxMana;
+}
 
 function atSite() {
   const s = createInitialState();
@@ -57,28 +64,17 @@ test('an offering costs a big bite of HP and mana and cannot be repeated on empt
   assert.equal(sacrificeVitae(s, SITE), false);
 });
 
-test('meditation refills vitals so the next offering can be made', () => {
+test('waiting at the stone refills vitals so the next offering can be made', () => {
   const s = atSite();
   sacrificeVitae(s, SITE);
   assert.ok(!isRested(s));
+  assert.equal(canSacrificeVitae(s, SITE), false);
 
-  assert.equal(startMeditating(s), true);
-  for (let i = 0; i < 2000 && s.meditating; i++) tickMeditation(s, 0.25);
-  assert.equal(s.meditating, false); // stops itself once rested
-  assert.ok(isRested(s));
+  // A site has no fight in it, so the only thing that can refill these is passive
+  // regen — which has to run here, or the site is a dead end.
+  for (let i = 0; i < 2000 && !isRested(s); i++) tickCombat(s, 0.25);
+  assert.ok(isRested(s), 'standing at the stone should eventually restore you');
   assert.equal(canSacrificeVitae(s, SITE), true);
-});
-
-test('meditating suspends combat rather than running alongside it', () => {
-  const s = createInitialState();
-  s.progress.unlockedRegions = ['holtburg'];
-  s.location = { regionId: 'holtburg', poiId: 'drudge-hideout' };
-  s.hero.hp = 1;
-  startMeditating(s);
-  for (let i = 0; i < 10; i++) tickCombat(s, 0.25);
-  assert.equal(s.monsters.length, 0);
-  assert.equal(s.progress.totalKills, 0);
-  assert.ok(s.hero.hp > 1);
 });
 
 test('fully growing the Lifestone rebinds the hero to the region hub', () => {

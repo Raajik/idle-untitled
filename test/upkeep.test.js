@@ -165,8 +165,8 @@ test('tinkered properties now reach level 10', () => {
 
 test('a hero has vitals before ever reaching a POI', () => {
   // They start as null and used to be filled in only inside the "standing at a
-  // POI" branch, which left anyone in town or on the road unable to cast, drink
-  // or meditate — all of which check whether there's anything to spend.
+  // POI" branch, which left anyone in town or on the road unable to cast or
+  // drink — both of which check whether there's anything to spend.
   const s = createInitialState();
   setHeroName(s, 'Probe');
   answerSeenLifestone(s, true);

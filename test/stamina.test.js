@@ -9,7 +9,6 @@ import {
   DEFENSIVE_STAMINA_RESERVE,
 } from '../src/game/combat.js';
 import { derivedStats } from '../src/game/hero.js';
-import { startMeditating } from '../src/game/meditation.js';
 import {
   MELEE_STANCES,
   ARCHERY_STANCES,
@@ -190,19 +189,51 @@ test('attacks stop while there is still stamina left to defend with', () => {
   assert.ok(ready.hero.stamina < cost + DEFENSIVE_STAMINA_RESERVE, 'the swing should have spent its cost');
 });
 
-test('meditating restores stamina far faster than fighting does', () => {
+test('not fighting restores stamina faster than fighting does', () => {
   const fighting = atPoi();
   const resting = atPoi();
+  resting.location = { regionId: 'holtburg', poiId: null }; // stood in town, swinging at nothing
   for (const st of [fighting, resting]) {
     const d = derivedStats(st);
     st.hero.hp = d.maxHp;
     st.hero.mana = d.maxMana;
     st.hero.stamina = 1;
   }
-  startMeditating(resting);
   for (let i = 0; i < 40; i++) {
     tickCombat(fighting, 0.25);
     tickCombat(resting, 0.25);
   }
-  assert.ok(resting.hero.stamina > fighting.hero.stamina * 2, `rest ${resting.hero.stamina} vs fight ${fighting.hero.stamina}`);
+  assert.ok(resting.hero.stamina > fighting.hero.stamina, `idle ${resting.hero.stamina} vs fight ${fighting.hero.stamina}`);
+});
+
+test('regen runs wherever you are, so idling is always a way back', () => {
+  // In town, at a site, and on the road: none of these have a fight to tick, and
+  // all of them have to give stamina back or you can be stranded empty.
+  const places = [
+    { regionId: 'holtburg', poiId: null },
+    { regionId: 'holtburg', poiId: 'budding-lifestone' },
+    { regionId: null, poiId: null },
+  ];
+  for (const location of places) {
+    const s = atPoi();
+    s.location = location;
+    s.hero.hp = 1;
+    s.hero.stamina = 1;
+    s.hero.mana = 0;
+    for (let i = 0; i < 40; i++) tickCombat(s, 0.25);
+    const where = `${location.regionId}/${location.poiId}`;
+    assert.ok(s.hero.stamina > 1, `no stamina regen at ${where}`);
+    assert.ok(s.hero.hp > 1, `no health regen at ${where}`);
+    assert.ok(s.hero.mana > 0, `no mana regen at ${where}`);
+  }
+});
+
+test('the dead do not regenerate', () => {
+  const s = atPoi();
+  s.hero.hp = 1;
+  s.hero.stamina = 1;
+  s.hero.dead = true;
+  s.hero.respawnTimer = 999;
+  for (let i = 0; i < 20; i++) tickCombat(s, 0.25);
+  assert.equal(s.hero.stamina, 1, 'a corpse should not catch its breath');
 });

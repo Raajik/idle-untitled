@@ -11,7 +11,10 @@
 // A building offers up to four things:
 //   - `stock`: a rotating catalog of generated gear. Every stock-bearing business
 //     restocks on its own timer, and investing shortens that timer.
-//   - `sells`: consumable ids it keeps behind the counter.
+//   - `sells`: consumables it keeps behind the counter, as { id, chance } — the
+//     chance it's on the shelf at all after any given restock. A generalist has
+//     a bit of everything *sometimes*; the specialist who actually brews the
+//     thing always has it.
 //   - `exchange`: true if it deals in raw materials at rates that move with the
 //     stock (see game/buildings.js rollExchangeRates) — a pyreal sink for anyone
 //     short of one particular thing.
@@ -62,7 +65,12 @@ export const BUILDINGS = [
     // the specialists has to be paid for like one of each.
     upgrade: { pyreals: 1400, growth: 2.1, materialId: 'copper', materials: 4 },
     stock: { slots: SLOTS, min: 4, max: 6, perLevel: 1, luckPerLevel: 4 },
-    sells: ['healing-kit', 'stamina-potion'],
+    // Neither is guaranteed: the Store is where you find out a potion exists and
+    // learn to resent its supply, which is the argument for opening a Physician.
+    sells: [
+      { id: 'healing-kit', chance: 0.55 },
+      { id: 'stamina-potion', chance: 0.35 },
+    ],
     exchange: true,
     perk: null, // more of everything, better, faster — that IS the perk
   },
@@ -73,6 +81,12 @@ export const BUILDINGS = [
     blurb: 'Bandages, poultices, and no questions about how you got that.',
     unlock: { pyreals: 500, materialId: 'linen', materials: 5 },
     upgrade: { pyreals: 400, growth: 1.6, materialId: 'linen', materials: 3 },
+    // The reliable supply. The Store might have a potion; the healer always does,
+    // which is most of the reason to put money into this place.
+    sells: [
+      { id: 'healing-kit', chance: 1 },
+      { id: 'stamina-potion', chance: 1 },
+    ],
     service: 'heal',
     perk: { key: 'healCostPct', perLevel: -8, text: (v) => `${v}% healing cost` },
   },

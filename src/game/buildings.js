@@ -77,20 +77,31 @@ function rollExchangeRates(level) {
   }));
 }
 
+// Which consumables made it onto the shelf this rotation. Anything below a
+// chance of 1 is a thing you check back for, which is what makes the reliable
+// stockist worth opening.
+function rollShelf(def) {
+  return (def.sells || [])
+    .filter((offer) => (offer.chance ?? 1) >= 1 || Math.random() < offer.chance)
+    .map((offer) => ({ id: offer.id, price: getConsumable(offer.id).price }));
+}
+
 function restock(state, def, entry, now, { quiet = false } = {}) {
   const firstRoll = !entry.rotatesAt;
   entry.stock = rollBuildingStock(state, def, entry.level);
-  entry.sells = (def.sells || []).map((id) => ({ id, price: getConsumable(id).price }));
+  entry.sells = rollShelf(def);
   entry.exchange = def.exchange ? rollExchangeRates(entry.level) : [];
   entry.rotatesAt = now + rotationSeconds(entry.level) * 1000;
   if (!firstRoll && !quiet) addLog(state, `The ${def.name} has restocked.`, 'dim');
 }
 
-// Seconds until this building's next restock (0 if it doesn't carry stock).
+// Seconds until this building's next restock (0 if it carries nothing that
+// turns over). Counts `sells` as well as `stock`, so a shop whose only rotating
+// shelf is its potions can still tell you when to come back.
 export function rotationRemaining(state, buildingId, now = Date.now()) {
   const def = getBuilding(buildingId);
   const entry = state.buildings[buildingId];
-  if (!def || !def.stock || !entry || entry.level === 0) return 0;
+  if (!def || (!def.stock && !def.sells) || !entry || entry.level === 0) return 0;
   return Math.max(0, (entry.rotatesAt - now) / 1000);
 }
 

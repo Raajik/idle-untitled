@@ -80,7 +80,10 @@ test('the General Store stocks a little of everything, and more as you invest', 
 test('the General Store deals in consumables and raw materials; specialists do not', () => {
   const s = townWithStore();
   const store = s.buildings['general-store'];
-  assert.ok(store.sells.length > 0, 'it should keep consumables behind the counter');
+  // Its shelf is a roll, so any single rotation may come up empty — what must
+  // hold is that it deals in these things at all, and prices whatever it has.
+  assert.ok(getBuilding('general-store').sells.length > 0, 'it should deal in consumables');
+  for (const offer of store.sells) assert.ok(offer.price > 0, `${offer.id} was priced at ${offer.price}`);
   assert.ok(store.exchange.length > 0, 'and quote a price on raw goods');
   for (const offer of store.exchange) assert.ok(offer.price > 0);
 

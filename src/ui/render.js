@@ -21,9 +21,8 @@ import { activeWeaponSkill } from '../game/skills.js';
 import { vitaePct } from '../game/vitae.js';
 import { setHeroName, answerSeenLifestone, acknowledgeAlcottIntro } from '../game/onboarding.js';
 import { recallTo, sacrificeVitae } from '../game/lifestone.js';
-import { startMeditating, stopMeditating } from '../game/meditation.js';
 import { castBuffSpell, toggleAutoCast } from '../game/buffs.js';
-import { useConsumable } from '../game/consumables.js';
+import { useConsumable, toggleAutoDrink } from '../game/consumables.js';
 import { jumpTo } from '../game/shortcuts.js';
 import { applyTinkering } from '../game/tinkering.js';
 import { buyItem, sellItem, healService, buyConsumable, buyMaterial } from '../game/shop.js';
@@ -64,7 +63,7 @@ function battleStructureKey(state) {
     .filter((k) => state.ui.collapsed[k])
     .sort()
     .join(',');
-  return `${state.onboarding.step}|${t ? t.kind + ':' + t.id : ''}|${state.location.regionId}|${state.location.poiId}|${tutorialMonster}|${buildingKey}|${state.meditating ? 'med' : ''}|${buffKey}|${engaged}|${folded}`;
+  return `${state.onboarding.step}|${t ? t.kind + ':' + t.id : ''}|${state.location.regionId}|${state.location.poiId}|${tutorialMonster}|${buildingKey}|${state.ui.activePoiTier}|${buffKey}|${engaged}|${folded}`;
 }
 
 function toast(text) {
@@ -303,7 +302,7 @@ export function createRenderer(state, { onImport }) {
 
     if (m) {
       const nameEl = document.getElementById('m-name');
-      if (nameEl) nameEl.textContent = state.meditating ? 'Resting — the fight can wait.' : monsterLabel(m);
+      if (nameEl) nameEl.textContent = monsterLabel(m);
       setBar('m-hp', (m.hp / m.maxHp) * 100, `${Math.max(0, Math.ceil(m.hp))} / ${m.maxHp}`);
       setText('m-meta', `ATK ${m.atk} · DEF ${m.def} · ${m.dmgType}`);
       for (let i = 1; i < state.monsters.length; i++) {
@@ -311,6 +310,8 @@ export function createRenderer(state, { onImport }) {
         setBar(`m-hp-${i}`, (other.hp / other.maxHp) * 100, `${Math.max(0, Math.ceil(other.hp))} / ${other.maxHp}`);
       }
     }
+
+    updateBuffTimers();
 
     setBar('h-hp', (h.hp / d.maxHp) * 100, h.dead ? 'Dead... reviving' : `${Math.ceil(h.hp)} / ${d.maxHp} HP`);
     const xpProgress = state.progress.totalXpEarned - totalXpForLevel(h.level);
@@ -348,8 +349,15 @@ export function createRenderer(state, { onImport }) {
     setText(t.kind === 'region' ? `region-timer-${t.id}` : `poi-timer-${t.id}`, text);
   }
 
+  // Buff countdowns are the one bit of Upkeep that moves every second. The panel
+  // is only rebuilt when a buff comes or goes (see battleStructureKey), so
+  // without this the timers sit frozen at whatever they read when drawn.
+  function updateBuffTimers() {
+    for (const buff of state.buffs) setText(`buff-timer-${buff.id}`, `${formatDuration(buff.remaining)} left`);
+  }
+
   // The hero's three vitals bars, without any of the monster/attack-bar patching
-  // updateLive() does — used wherever there's no fight on (sites, meditating).
+  // updateLive() does — used wherever there's no fight on (sites, town, the road).
   function updateVitals() {
     const d = derivedStats(state);
     const h = state.hero;
@@ -358,6 +366,7 @@ export function createRenderer(state, { onImport }) {
     setBar('h-hp', (h.hp / d.maxHp) * 100, `${Math.ceil(h.hp)} / ${d.maxHp} HP`);
     setBar('h-sta', (h.stamina / d.maxStamina) * 100, `${Math.ceil(h.stamina)} / ${d.maxStamina} Stamina`);
     setBar('h-mana', (h.mana / d.maxMana) * 100, `${Math.ceil(h.mana)} / ${d.maxMana} Mana`);
+    updateBuffTimers();
     appendLog();
   }
 
@@ -387,11 +396,15 @@ export function createRenderer(state, { onImport }) {
         updateTravelCountdown();
         if (state.travel.tutorial) updateLive(dtMs);
       } else if (state.location.poiId) {
-        // Sites have no monster, but their vitals bars still move while meditating.
+        // Sites have no monster, but their vitals bars still move as regen ticks.
         if (isSite(getPoiById(state.location.poiId))) updateVitals();
         else updateLive(dtMs);
       } else {
-        updateRotationCountdown(); // standing in town: only the open shop's restock clock moves
+        // Standing in town. There's no fight to patch, but regen runs everywhere
+        // now (see game/combat.js tickRegen) and buffs keep burning down, so the
+        // vitals and timers have to keep moving alongside the restock clock.
+        updateVitals();
+        updateRotationCountdown();
       }
     } else if (state.ui.activeTab === 'overview') {
       updateLive(dtMs);
@@ -445,12 +458,9 @@ export function createRenderer(state, { onImport }) {
       case 'recall': recallTo(state, arg); break;
       case 'cast-spell': castBuffSpell(state, arg); break;
       case 'toggle-autocast': toggleAutoCast(state, arg); break;
+      case 'toggle-autodrink': toggleAutoDrink(state, arg); break;
       case 'use-consumable': useConsumable(state, arg); break;
       case 'toggle-autoheal': state.settings.autoHeal = !state.settings.autoHeal; break;
-      case 'toggle-meditate':
-        if (state.meditating) stopMeditating(state, 'You rise, and the quiet lets go of you.');
-        else startMeditating(state);
-        break;
       case 'sacrifice-vitae': sacrificeVitae(state, arg); break;
       case 'jump-shortcut': jumpTo(state, arg); break;
       case 'open-building': state.ui.activeBuilding = arg; break;
@@ -458,6 +468,7 @@ export function createRenderer(state, { onImport }) {
       case 'invest-open': investToOpen(state, arg); break;
       case 'invest-building': investInBuilding(state, arg); break;
       case 'take-tour': takeTour(state, arg); break;
+      case 'set-poi-tier': state.ui.activePoiTier = arg; break;
       case 'set-shop-tab': state.ui.activeShopTab = arg; break;
       case 'toggle-section': state.ui.collapsed[arg] = !state.ui.collapsed[arg]; break;
       case 'buy-consumable': {

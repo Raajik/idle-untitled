@@ -95,7 +95,6 @@ export function createInitialState() {
     },
     location: { regionId: null, poiId: null }, // null,null = still on the road to Holtburg
     travel: null, // { kind: 'region'|'poi', id, remaining, duration }
-    meditating: false, // channelled rest; suspends combat like travel does (see game/meditation.js)
     progress: {
       unlockedRegions: [], // arrived at
       visitedPois: [],
@@ -144,6 +143,7 @@ export function createInitialState() {
       autoEquip: true, // charter: QoL free from the start
       autoHeal: false, // spend Stamina and Healing Kit charges to stay standing
       autoCastSpells: [], // self-buff spell ids kept up automatically
+      autoDrink: [], // consumable ids re-drunk when their buff lapses
     },
     log: [], // recent combat log lines (newest last)
     ui: {
@@ -151,6 +151,7 @@ export function createInitialState() {
       activeTab: 'battle',
       activeBuilding: null, // which building panel is expanded in the Battle tab's town view
       activeShopTab: 'weapons', // which shelf of an open shop you're looking at
+      activePoiTier: null, // which level band of POIs is showing; null = wherever you are
       collapsed: {}, // sectionId -> true when folded away (see `section` in ui/tabs.js)
       inventoryFilter: { slot: 'all', rarity: 'all', spellId: 'all' },
       selectedItemId: null, // which slot in the Inventory grid is open in the detail panel
@@ -172,7 +173,6 @@ export function resetRun(state) {
   state.hero.skills.lifestone = recallSkill;
   state.location = fresh.location;
   state.travel = fresh.travel;
-  state.meditating = false;
   state.progress = fresh.progress;
   state.progress.recallUnlocked = recallUnlocked;
   state.progress.firstDeathHandled = firstDeathHandled;

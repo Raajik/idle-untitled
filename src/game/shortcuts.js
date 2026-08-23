@@ -34,7 +34,6 @@ export function jumpTo(state, shortcutId) {
 
   state.location = { regionId: destPoi.regionId, poiId: destPoiId };
   state.monsters = [];
-  state.meditating = false;
   state.progress.wave = 1;
   state.progress.waveMonstersLeft = 0;
   state.progress.timeInPoi = 0;

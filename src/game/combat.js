@@ -1,6 +1,7 @@
 // Combat: pure tick-based battle resolution. Mutates state; no DOM access.
 // Combat only runs when the hero is standing at a hunting POI — not travelling,
-// not meditating, not in town, and not at a site POI like a budding Lifestone.
+// not in town, and not at a site POI like a budding Lifestone. Regen is the
+// exception: it ticks wherever you are, so standing still is always a way back.
 // Monsters arrive in waves (see game/waves.js) — difficulty rises with the wave
 // number, and clearing the last wave pays out the POI's gathering material and
 // starts the waves over.
@@ -27,10 +28,9 @@ import { getTrophy } from '../data/trophies.js';
 import { addLog } from './state.js';
 import { tickTravel, arrive } from './travel.js';
 import { tickRecallCooldown, respawnAtLifestone, tickLifestoneGrowth } from './lifestone.js';
-import { tickMeditation } from './meditation.js';
 import { gainVitae } from './vitae.js';
 import { tickBuffs, tickAutoCast } from './buffs.js';
-import { tickAutoHeal } from './consumables.js';
+import { tickAutoHeal, tickAutoDrink } from './consumables.js';
 import { tickJumpCooldown } from './shortcuts.js';
 import { beginWaveIfNeeded, recordWaveKill, waveDifficulty } from './waves.js';
 import { tickBuildings } from './buildings.js';
@@ -67,13 +67,15 @@ const MONSTER_STAMINA_COST_PER_DODGE = 3;
 // spiral rather than a slower fight.
 export const DEFENSIVE_STAMINA_RESERVE = HERO_STAMINA_COST_PER_DEFEND;
 
-// Passive in-combat regen, as a fraction of each vital's maximum per second.
+// Passive regen, as a fraction of each vital's maximum per second. It runs
+// everywhere and always — in a fight, in town, on the road — so idling is itself
+// a way to recover and no place can strand you empty.
 //
 // Stamina's rate is deliberately below what swinging costs (roughly 1.1-1.6 a
 // second, see data/combatStances.js), so fighting runs you down and your attack
 // rate settles at whatever regen can pay for. That's the intended pressure: it
 // makes Endurance and Quickness worth raising, and it's the problem that
-// Meditation answers now and that healing/alchemy/magic will answer better.
+// healing/alchemy/magic answer faster than standing still does.
 const HP_REGEN_PER_SECOND = 0.01;
 const STAMINA_REGEN_PER_SECOND = 0.015;
 const MANA_REGEN_PER_SECOND = 0.02;
@@ -425,9 +427,8 @@ export function canAffordAttack(state, stats = derivedStats(state)) {
 
 // Vitals start as null (see game/state.js) and get their real values here. This
 // runs before any of the location guards below, because a hero standing in town
-// or walking the road still has HP — and still needs to be able to meditate or
-// cast the spells Alcott taught them, both of which check that they have the
-// mana to spend.
+// or walking the road still has HP — still regenerates it, and still needs to be
+// able to cast the spells Alcott taught them, which check the mana to spend.
 function fillInVitals(state) {
   const h = state.hero;
   if (h.hp !== null && h.stamina !== null && h.mana !== null) return;
@@ -446,14 +447,14 @@ export function tickCombat(state, dt) {
   fillInVitals(state);
   tickBuffs(state, dt);
   tickAutoCast(state);
+  tickAutoDrink(state);
+  tickRegen(state, dt); // wherever you are, including nowhere in particular
 
   if (state.travel && state.travel.tutorial) {
     tickTutorialJourney(state, dt);
   } else if (tickTravel(state, dt)) {
     return; // travelling: no combat, Athletics trains instead
   }
-
-  if (tickMeditation(state, dt)) return; // meditating: resting instead of fighting
 
   const h = state.hero;
   if (!state.location.poiId) return; // in town: nothing to fight
@@ -621,7 +622,15 @@ export function tickCombat(state, dt) {
     }
   }
 
-  // Slow passive regen for all three vitals (healing/meditation are skills, not a given)
+}
+
+// Slow passive regen for all three vitals. Called once a tick from anywhere the
+// hero can be — a fight, a town, a site, the road — so waiting is always an
+// option, however slow a one. The dead don't recover; respawning refills them.
+export function tickRegen(state, dt) {
+  const h = state.hero;
+  if (h.dead) return;
+  const stats = derivedStats(state);
   h.hp = Math.min(stats.maxHp, h.hp + regenPerSecond(stats.maxHp, HP_REGEN_PER_SECOND, HP_REGEN_FLOOR, stats.hpRegenFlat) * dt);
   h.stamina = Math.min(stats.maxStamina, h.stamina + regenPerSecond(stats.maxStamina, STAMINA_REGEN_PER_SECOND, STAMINA_REGEN_FLOOR, stats.staminaRegenFlat) * dt);
   h.mana = Math.min(stats.maxMana, h.mana + regenPerSecond(stats.maxMana, MANA_REGEN_PER_SECOND, MANA_REGEN_FLOOR, stats.manaRegenFlat) * dt);

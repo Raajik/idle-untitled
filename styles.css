@@ -323,6 +323,52 @@ button.btn.primary { border-color: var(--accent); color: var(--accent); }
 .tile.locked { opacity: 0.55; border-style: dashed; }
 .tile .gather-note { color: var(--mana); opacity: 0.8; }
 .tile.fade-in { animation: tile-fade-in 0.6s ease-out; }
+
+/* Points of interest, banded by level.
+
+   Every hunting ground is the same size tile so a band reads as a set of equals
+   and the eye can compare them; the four lines inside are fixed, and a POI with
+   nothing to say on one still reserves its row. Bands are told apart by colour
+   rather than by reading the header again: the accent runs cool-to-hot as the
+   levels climb, so where you are is legible at a glance from across the panel. */
+.poi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 8px; align-items: stretch; }
+.poi-grid .tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 88px;
+  padding: 8px 10px;
+  min-width: 0;
+  background: linear-gradient(160deg, var(--tier-tint, transparent), transparent 62%);
+  border-left: 3px solid var(--tier-edge, var(--border));
+}
+/* Two lines' worth of room whether or not the name needs it, so a long name
+   ("Small Fledgling Mukkir Nest") doesn't make its tile taller than its row. */
+.poi-grid .poi-name { font-weight: bold; line-height: 1.2; overflow-wrap: anywhere; min-height: 2.4em; }
+.poi-grid .poi-level { font-size: 10px; color: var(--tier-edge, var(--text-dim)); letter-spacing: 0.04em; }
+.poi-grid .sub, .poi-grid .travel-timer { margin-top: 0; }
+/* The gather note is the last line and the one most often absent — pinning it to
+   the bottom keeps the walk time on the same row across every tile in a band. */
+.poi-grid .gather-note { margin-top: auto; }
+
+/* Band accents, cool (early) to hot (late). --tier-edge is the border and the
+   level text; --tier-tint is the wash behind the tile. */
+.tier-site { --tier-edge: #6ab0a4; --tier-tint: rgba(106, 176, 164, 0.10); }
+.tier-0 { --tier-edge: #6ab06a; --tier-tint: rgba(106, 176, 106, 0.10); }
+.tier-1 { --tier-edge: #5a8fd4; --tier-tint: rgba(90, 143, 212, 0.10); }
+.tier-2 { --tier-edge: #9a7ae8; --tier-tint: rgba(154, 122, 232, 0.10); }
+.tier-3 { --tier-edge: #d47ab0; --tier-tint: rgba(212, 122, 176, 0.10); }
+.tier-4 { --tier-edge: #e8963e; --tier-tint: rgba(232, 150, 62, 0.10); }
+.tier-5 { --tier-edge: #d45a5a; --tier-tint: rgba(212, 90, 90, 0.10); }
+.tier-btn { border-left: 3px solid var(--tier-edge, var(--border)); }
+.tier-btn.active { border-color: var(--tier-edge, var(--accent)); color: var(--tier-edge, var(--accent)); }
+
+/* Travel time against what the walk costs at rest: green when Athletics has
+   bought you time, red if anything ever costs you some, plain when it's a wash. */
+.walk-time.faster { color: var(--xp); }
+.walk-time.slower { color: var(--hp); }
+
+.poi-grid .jump-tile { border-left-color: var(--soul); background: none; }
 @keyframes tile-fade-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 
 /* Items */
