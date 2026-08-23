@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createInitialState } from '../src/game/state.js';
-import { sidebarMapHtml, poiCardHtml, ROWS_PER_BAND } from '../src/ui/sidebarMap.js';
+import { sidebarMapHtml, poiCardHtml, hoverCardHtml, ROWS_PER_BAND } from '../src/ui/sidebarMap.js';
 import { battleTab } from '../src/ui/tabs.js';
 import { REGIONS, getRegion, getPoiById, tiersForRegion, poisInTier } from '../src/data/regions.js';
 import { takeTour, tickBuildings } from '../src/game/buildings.js';
@@ -145,6 +145,44 @@ test('a card mentions the jobs that point at the place', () => {
   const hideout = poiCardHtml(s, getPoiById('drudge-hideout'), 'holtburg');
   assert.ok(hideout.includes('Wanted: Mahogany'), 'a bounty you could work here should say so');
   assert.ok(hideout.includes('0 / 10'), 'with how far along you are');
+});
+
+test('the map names its cards rather than carrying them', () => {
+  // A scroll container clips its children on BOTH axes whatever overflow-x
+  // says, so a card anchored inside the map and drawn to its right was clipped
+  // away to nothing. Rows carry a key; the card is built into a layer outside
+  // the sidebar (ui/render.js).
+  const s = inHoltburg('drudge-hideout');
+  const html = sidebarMapHtml(s);
+  assert.ok(!html.includes('hovercard'), 'no card should be inlined into the scroller');
+  assert.match(html, /id="map-poi-drudge-hideout"[^>]*data-card="poi:holtburg:drudge-hideout"/);
+  assert.match(html, /id="map-town-holtburg"[^>]*data-card="town:holtburg"/);
+});
+
+test('every key a row carries resolves to a card', () => {
+  const s = inHoltburg('drudge-hideout');
+  s.ui.expandedBands['holtburg:t1'] = 'all';
+  s.ui.expandedBands['holtburg:t2'] = 'all';
+  const keys = [...sidebarMapHtml(s).matchAll(/data-card="([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(keys.length > 5, 'this test needs a populated map');
+  for (const key of keys) {
+    const card = hoverCardHtml(s, key);
+    assert.ok(card.includes('hovercard'), `${key} produced no card`);
+  }
+});
+
+test('a key for somewhere that no longer exists is silence, not a crash', () => {
+  // Saves outlive data files; a stale key must not take the sidebar down.
+  const s = inHoltburg();
+  for (const key of ['', null, 'poi:holtburg:no-such-place', 'town:atlantis', 'nonsense']) {
+    assert.equal(hoverCardHtml(s, key), '');
+  }
+});
+
+test('an unvisited region offers no card, because it has nothing to say', () => {
+  const s = inHoltburg();
+  const html = sidebarMapHtml(s);
+  assert.match(html, /id="map-region-glenden-wood"(?![^>]*data-card)/);
 });
 
 // --- Not colliding with the grid -----------------------------------------

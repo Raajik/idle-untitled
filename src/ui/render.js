@@ -4,8 +4,9 @@
 //   - frame():  per-animation-frame in-place updates for live combat + fx
 
 import { topLevelEntries, childTabs, drainNewUnlocks, UNLOCKS } from './unlocks.js';
-import { sidebarMapHtml } from './sidebarMap.js';
-import { battleTab, attributesTab, skillsTab, inventoryTab, trainingTab, enlightenmentTab, recallTab, tinkeringTab, overviewTab, settingsTab, battleDockHtml, sidebarUpkeepHtml, waveLine, attackBarLabel, monsterLabel } from './tabs.js';
+import { sidebarMapHtml, hoverCardHtml } from './sidebarMap.js';
+import { battleTab, attributesTab, skillsTab, inventoryTab, trainingTab, enlightenmentTab, recallTab, tinkeringTab, overviewTab, settingsTab,
+  upkeepTab, battleDockHtml, sidebarUpkeepHtml, waveLine, attackBarLabel, monsterLabel } from './tabs.js';
 import { startTravelToRegion, startTravelToPoi } from '../game/travel.js';
 import { derivedStats, xpForLevel, totalXpForLevel } from '../game/hero.js';
 import { equipItem, salvageItem, salvageAll } from '../game/loot.js';
@@ -23,6 +24,7 @@ import { vitaePct } from '../game/vitae.js';
 import { setHeroName, answerSeenLifestone, acknowledgeAlcottIntro } from '../game/onboarding.js';
 import { recallTo, sacrificeVitae } from '../game/lifestone.js';
 import { castBuffSpell, toggleAutoCast } from '../game/buffs.js';
+import { toggleAllUpkeep, setAllUpkeep } from '../game/upkeep.js';
 import { useConsumable, toggleAutoDrink } from '../game/consumables.js';
 import { jumpTo } from '../game/shortcuts.js';
 import { applyTinkering } from '../game/tinkering.js';
@@ -44,6 +46,7 @@ const TAB_RENDERERS = {
   tinkering: tinkeringTab,
   overview: overviewTab,
   settings: settingsTab,
+  upkeep: upkeepTab,
 };
 
 // A compact key describing the Battle tab's current "shape" — which panels exist
@@ -85,6 +88,7 @@ export function createRenderer(state, { onImport }) {
   const shortcuts = document.getElementById('nav-shortcuts');
   const upkeepPanel = document.getElementById('sidebar-upkeep');
   const settingsBtn = document.getElementById('settings-btn');
+  const cardLayer = document.getElementById('hovercard-layer');
   const main = document.getElementById('main');
   const dock = document.getElementById('battle-dock');
 
@@ -153,7 +157,63 @@ export function createRenderer(state, { onImport }) {
     shortcuts.innerHTML = sidebarMapHtml(state);
     upkeepPanel.innerHTML = sidebarUpkeepHtml(state);
     settingsBtn.classList.toggle('active', state.ui.activeTab === 'settings');
+    // The rows were just replaced, so the card is pointing at a dead element.
+    // Redraw it against the new row if that place is still listed, rather than
+    // blinking it away every time the map redraws under a resting cursor.
+    if (shownCardKey) {
+      const row = shortcuts.querySelector(`[data-card="${shownCardKey}"]`);
+      if (row) showCard(row);
+      else hideCard();
+    }
   }
+
+  // --- The sidebar map's hover card ---------------------------------------
+  // Drawn into a layer at the end of <body> and placed by hand. It cannot live
+  // beside its row: the map scrolls, and a scroll container clips its children
+  // on both axes no matter what overflow-x says, so a card drawn to the right of
+  // the sidebar was clipped away entirely.
+  let shownCardKey = null;
+
+  function hideCard() {
+    shownCardKey = null;
+    cardLayer.innerHTML = '';
+  }
+
+  function showCard(row) {
+    const key = row.dataset.card;
+    const html = key ? hoverCardHtml(state, key) : '';
+    if (!html) return hideCard();
+    shownCardKey = key;
+    cardLayer.innerHTML = html;
+    const card = cardLayer.firstElementChild;
+    const r = row.getBoundingClientRect();
+    const c = card.getBoundingClientRect();
+    const pad = 8;
+    // Right of the row by default; flipped to its left if it would run off the
+    // window, which is what happens on a narrow one.
+    let left = r.right + pad;
+    if (left + c.width > window.innerWidth - pad) left = Math.max(pad, r.left - c.width - pad);
+    // Top-aligned with the row, lifted just enough to stay on screen.
+    let top = Math.max(pad, Math.min(r.top - 6, window.innerHeight - pad - c.height));
+    card.style.left = `${Math.round(left)}px`;
+    card.style.top = `${Math.round(top)}px`;
+  }
+
+  shortcuts.addEventListener('pointerover', (e) => {
+    const row = e.target.closest('[data-card]');
+    if (!row) return hideCard();
+    if (row.dataset.card !== shownCardKey) showCard(row);
+  });
+  shortcuts.addEventListener('pointerleave', hideCard);
+  // Keyboard users get the same card, so it isn't mouse-only.
+  shortcuts.addEventListener('focusin', (e) => {
+    const row = e.target.closest('[data-card]');
+    if (row) showCard(row);
+  });
+  shortcuts.addEventListener('focusout', hideCard);
+  // A card placed in window coordinates goes stale the moment anything moves.
+  shortcuts.addEventListener('scroll', hideCard);
+  window.addEventListener('resize', hideCard);
 
   function updateDock() {
     if (state.ui.activeTab === 'battle' || state.onboarding.step !== 'done') {
@@ -585,6 +645,14 @@ export function createRenderer(state, { onImport }) {
       case 'recall': recallTo(state, arg); break;
       case 'cast-spell': castBuffSpell(state, arg); break;
       case 'toggle-autocast': toggleAutoCast(state, arg); break;
+      // One switch for the lot. Announced in the log because it changes five
+      // things at once and the sidebar only has room to show the count.
+      case 'toggle-all-upkeep': {
+        const on = toggleAllUpkeep(state);
+        addLog(state, on ? 'You resolve to keep everything up.' : 'You let your upkeep lapse.', 'muted');
+        break;
+      }
+      case 'set-all-upkeep': setAllUpkeep(state, arg === 'on'); break;
       case 'toggle-autodrink': toggleAutoDrink(state, arg); break;
       case 'use-consumable': useConsumable(state, arg); break;
       case 'toggle-autoheal': state.settings.autoHeal = !state.settings.autoHeal; break;

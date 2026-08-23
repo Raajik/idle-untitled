@@ -37,7 +37,9 @@ test('offline progress ignores short absences', () => {
 test('progressive UI unlocks derive from game state', () => {
   const s = createInitialState();
   let tabs = unlockedTabs(s).map((t) => t.id);
-  assert.deepEqual(tabs, ['battle', 'settings']); // minimal start
+  // Both hidden ones are routable from the start: the footer gear and the
+  // Upkeep panel's gear have to work on a save with nothing else open.
+  assert.deepEqual(tabs, ['battle', 'settings', 'upkeep']); // minimal start
 
   s.hero.level = 2;
   tabs = unlockedTabs(s).map((t) => t.id);

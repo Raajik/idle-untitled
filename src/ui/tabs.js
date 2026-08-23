@@ -47,6 +47,7 @@ import { BUFF_SPELLS, getBuffSpell, buffSpellName, effectText } from '../data/bu
 import { knowsSpell, knownBuff, canCastBuffSpell, isAutoCast, spellLevel as knownSpellLevel } from '../game/buffs.js';
 import { getConsumable } from '../data/consumables.js';
 import { charges, canAutoHeal, isAutoDrink, upkeepConsumables, STAMINA_PER_HP } from '../game/consumables.js';
+import { upkeepAllOn, upkeepEntries } from '../game/upkeep.js';
 import { vitaePct, atMaxVitae, xpToClearStack, VITAE_PER_STACK, MAX_VITAE_PCT } from '../game/vitae.js';
 import { ACHIEVEMENTS } from '../data/achievements.js';
 import { availableShortcutsFrom, canJump } from '../game/shortcuts.js';
@@ -303,10 +304,12 @@ function section(state, id, title, body, { summary = '', defaultOpen = true } = 
   </div>`;
 }
 
-// Everything you can keep running or keep drinking: the three self-buffs, the
+// Everything you can keep running or keep drinking: the self-buffs, the
 // automation toggles they and the Healing Kit unlock, and whatever is in your
-// pack. Lives next to the vitals because that's what all of it is for.
-function upkeepHtml(state) {
+// pack. It used to be a section folded away on the Battle tab, where it was both
+// easy to miss and only reachable from one tab; it is now the sidebar panel
+// (a summary and one switch) plus this, its own screen, behind the gear.
+function upkeepHtml(state, { asScreen = false } = {}) {
   const spellRows = BUFF_SPELLS.filter((sp) => knowsSpell(state, sp.id))
     .map((sp) => {
       const known = knownBuff(state, sp.id);
@@ -362,6 +365,7 @@ function upkeepHtml(state) {
     : '';
 
   if (!spellRows && !packRows && !autoHealRow) return '';
+  if (asScreen) return `${autoHealRow}${spellRows}${packRows}`;
   const running = state.buffs.length;
   const kit = charges(state, 'healing-kit');
   const summary = [
@@ -932,7 +936,6 @@ export function battleTab(state) {
     const fleeBtn = state.monsters.length ? `<div class="actions" style="margin:8px 0"><button class="btn" data-action="flee-tutorial">Flee</button></div>` : '';
     return `
       ${combatDisplayHtml(state, header, fleeBtn)}
-      ${upkeepHtml(state)}
       <div class="panel"><h2>Combat Log</h2><div class="log" id="combat-log">${logHtml(state)}</div></div>`;
   }
 
@@ -1040,7 +1043,6 @@ export function battleTab(state) {
     ${poiSection}
     ${townSection}
     ${combatPanel}
-    ${upkeepHtml(state)}
     ${section(state, 'log', 'Combat Log', `<div class="log" id="combat-log">${logHtml(state)}</div>`)}`;
 }
 
@@ -1669,7 +1671,50 @@ export function sidebarUpkeepHtml(state) {
   // Nothing running and nothing to run: say nothing at all rather than taking up
   // room to report the absence.
   if (!rows.length) return '';
-  return `<div class="up-head">Upkeep</div>${rows.join('')}`;
+
+  // Two controls, because keeping things up is two different jobs. The switch is
+  // the one you use constantly — everything on, or everything off, in one press.
+  // The gear is the one you use rarely, when you want to keep one thing up and
+  // not another, and it opens a screen with room to say what each choice costs.
+  const entries = upkeepEntries(state);
+  const allOn = upkeepAllOn(state);
+  const on = entries.filter((e) => e.on).length;
+  const controls = entries.length
+    ? `<button class="up-switch${allOn ? ' on' : ''}" data-action="toggle-all-upkeep"
+         title="${esc(allOn ? `Stop keeping all ${entries.length} up` : `Keep all ${entries.length} up automatically`)}"
+         aria-pressed="${allOn}"><span class="knob"></span></button>
+       <button class="up-gear${state.ui.activeTab === 'upkeep' ? ' active' : ''}" data-tab="upkeep" title="Choose what to keep up">&#9881;</button>`
+    : '';
+  const count = entries.length ? `<span class="up-count">${on}/${entries.length}</span>` : '';
+  return `<div class="up-head"><span>Upkeep</span>${count}${controls}</div>${rows.join('')}`;
+}
+
+// The larger choice screen behind the sidebar's gear. Same rows the Battle tab
+// used to fold away, but given a page of their own so each one has room for what
+// it does and what it spends — and reachable from any tab, which the folded
+// section never was.
+export function upkeepTab(state) {
+  const body = upkeepHtml(state, { asScreen: true });
+  if (!body) {
+    return `<div class="panel"><h2>Upkeep</h2>
+      <p class="muted">Nothing to keep running yet. Self-buffs are learned from casters you fight,
+      potions are sold at the General Store, and auto-heal arrives with your first Healing Kit.</p></div>`;
+  }
+  const entries = upkeepEntries(state);
+  const on = entries.filter((e) => e.on).length;
+  return `<div class="panel">
+    <div class="upkeep-screen-head">
+      <h2>Upkeep</h2>
+      <div class="actions">
+        <span class="muted">${on} of ${entries.length} kept up</span>
+        <button class="btn small" data-action="set-all-upkeep" data-arg="on">All on</button>
+        <button class="btn small" data-action="set-all-upkeep" data-arg="off">All off</button>
+      </div>
+    </div>
+    <p class="muted small">Anything switched on here keeps itself going while you fight, and spends
+    the mana or the charges to do it. The sidebar switch flips all of it at once.</p>
+    ${body}
+  </div>`;
 }
 
 export function battleDockHtml(state) {

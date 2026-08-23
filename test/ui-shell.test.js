@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createInitialState } from '../src/game/state.js';
-import { battleTab, skillsTab, sidebarUpkeepHtml } from '../src/ui/tabs.js';
+import { battleTab, skillsTab, sidebarUpkeepHtml, upkeepTab } from '../src/ui/tabs.js';
 import { startTravelToRegion } from '../src/game/travel.js';
 import { tickCombat } from '../src/game/combat.js';
 import { learnSpell, castBuffSpell } from '../src/game/buffs.js';
@@ -112,29 +112,32 @@ test('every upkeep row says what it does on hover', () => {
   const s = createInitialState();
   for (const id of ['regeneration', 'rejuvenation', 'renewal']) learnSpell(s, id, 2);
   const html = sidebarUpkeepHtml(s);
-  const titles = [...html.matchAll(/title="([^"]*)"/g)].map((m) => m[1]);
+  // Only the rows; the head's switch and gear carry titles of their own.
+  const titles = [...html.matchAll(/class="up-row" title="([^"]*)"/g)].map((m) => m[1]);
   assert.equal(titles.length, 3, 'every row should carry one');
   assert.ok(titles.some((t) => /Regeneration II .* \+2 Health regeneration/.test(t)), titles.join(' | '));
   assert.ok(titles.some((t) => /Stamina regeneration/.test(t)));
   assert.ok(titles.some((t) => /Mana regeneration/.test(t)));
 });
 
-test('sidebar timers never collide with the Upkeep panel on the Battle tab', () => {
+test('sidebar timers never collide with the Upkeep screen', () => {
   // Same id in two places means getElementById only ever finds one of them, and
-  // the other sits frozen.
+  // the other sits frozen. The sidebar panel and the Upkeep screen both draw a
+  // countdown for the same buff, and both can be on screen at once.
   const s = createInitialState();
   s.hero.name = 'Probe';
   s.onboarding.step = 'done';
   s.progress.unlockedRegions = ['holtburg'];
   s.location = { regionId: 'holtburg', poiId: null };
-  s.ui.collapsed = { upkeep: false };
   learnSpell(s, 'regeneration');
   s.hero.mana = derivedStats(s).maxMana;
   castBuffSpell(s, 'regeneration');
 
-  const both = battleTab(s) + sidebarUpkeepHtml(s);
+  const both = upkeepTab(s) + sidebarUpkeepHtml(s);
   assert.equal((both.match(/id="buff-timer-regeneration"/g) || []).length, 1);
   assert.equal((both.match(/id="sb-buff-timer-regeneration"/g) || []).length, 1);
+  // And the Battle tab is out of the upkeep business entirely now.
+  assert.ok(!battleTab(s).includes('buff-timer-regeneration'), 'upkeep left the Battle tab');
 });
 
 test('the sidebar reports automation, not just spells', () => {

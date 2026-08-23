@@ -14,7 +14,7 @@
 // map- prefixed: the Battle tab's grid can be unfolded at the same time, and two
 // elements sharing an id leaves one of them frozen.
 
-import { REGIONS, getRegion, isSite, poiLevelRange, tiersForRegion, poisInTier } from '../data/regions.js';
+import { REGIONS, getRegion, getPoiById, isSite, poiLevelRange, tiersForRegion, poisInTier } from '../data/regions.js';
 import { weaknessesOf, speciesOf } from '../data/species.js';
 import { damageGlyph, damageLabel } from '../data/elements.js';
 import { getMaterial } from '../data/materials.js';
@@ -143,20 +143,38 @@ function townCardHtml(state, region) {
   </div>`;
 }
 
+// Resolves the `data-card` key a row carries into the card itself. Returns ''
+// for a row that has none (an unvisited region has nothing to say yet).
+export function hoverCardHtml(state, key) {
+  const [kind, a, b] = String(key || '').split(':');
+  if (kind === 'town') {
+    const region = getRegion(a);
+    return region ? townCardHtml(state, region) : '';
+  }
+  if (kind === 'poi') {
+    const poi = getPoiById(b);
+    return poi ? poiCardHtml(state, poi, a) : '';
+  }
+  return '';
+}
+
 // --- Rows ----------------------------------------------------------------
 
+// A row names its card rather than carrying it. The map scrolls, and a scroll
+// container clips on BOTH axes whatever `overflow-x` says — so a card anchored
+// inside one and drawn to its right was clipped away to nothing. The card is now
+// built on demand into a layer outside the sidebar (see ui/render.js), which
+// also stops every render rebuilding ten cards nobody is looking at.
 function rowHtml({ action, arg, id, cls = '', tone = null, lv, name, time, mark = '', card = '' }) {
   const classes = ['place-row', ...cls.split(' ').filter(Boolean)].join(' ');
   const style = tone ? ` style="--tier-edge:var(--tone-${tone})"` : '';
-  return `<div class="map-row-wrap">
-    <button class="${classes}" id="${id}"${style} data-action="${action}" data-arg="${arg}">
+  const cardAttr = card ? ` data-card="${card}"` : '';
+  return `<button class="${classes}" id="${id}"${style} data-action="${action}" data-arg="${arg}"${cardAttr}>
       <span class="lv">${lv}</span>
       <span class="nm">${esc(name)}</span>
       <span class="t ${time.cls}">${time.text}</span>
       ${mark}
-    </button>
-    ${card}
-  </div>`;
+    </button>`;
 }
 
 function poiRow(state, poi, regionId, travel, tone) {
@@ -188,7 +206,7 @@ function poiRow(state, poi, regionId, travel, tone) {
     name: poiDisplayName(state, poi),
     time,
     mark,
-    card: poiCardHtml(state, poi, regionId),
+    card: `poi:${regionId}:${poi.id}`,
   });
 }
 
@@ -214,7 +232,7 @@ function townRow(state, region, travel) {
     name: region.name,
     time,
     mark: asking ? '<span class="mk">!</span>' : '',
-    card: townCardHtml(state, region),
+    card: `town:${region.id}`,
   });
 }
 

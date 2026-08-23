@@ -182,3 +182,106 @@ test('a hero has vitals before ever reaching a POI', () => {
   assert.equal(s.hero.mana, d.maxMana);
   assert.ok(canCastBuffSpell(s, 'regeneration'), 'should be able to cast what Alcott just taught');
 });
+
+// --- The one switch ------------------------------------------------------
+// Upkeep used to be five separate toggles behind a folded section on the Battle
+// tab. The sidebar now carries a single switch for all of it, and a gear to the
+// screen where you can still choose between them.
+
+import { upkeepEntries, upkeepAllOn, setAllUpkeep, toggleAllUpkeep } from '../src/game/upkeep.js';
+import { learnSpell, isAutoCast } from '../src/game/buffs.js';
+import { grantConsumable, isAutoDrink } from '../src/game/consumables.js';
+import { sidebarUpkeepHtml, upkeepTab } from '../src/ui/tabs.js';
+
+function withEverything() {
+  const s = createInitialState();
+  for (const id of ['regeneration', 'rejuvenation', 'renewal']) learnSpell(s, id, 1);
+  grantConsumable(s, 'stamina-potion', 3);
+  grantConsumable(s, 'healing-kit', 5);
+  s.progress.autoHealUnlocked = true;
+  return s;
+}
+
+test('only what you actually have counts as a choice', () => {
+  const bare = createInitialState();
+  assert.deepEqual(upkeepEntries(bare), [], 'a hero who knows nothing has nothing to keep up');
+  assert.equal(upkeepAllOn(bare), false, 'and "all on" is not vacuously true');
+
+  const s = withEverything();
+  const kinds = upkeepEntries(s).map((e) => e.kind);
+  assert.equal(kinds.filter((k) => k === 'spell').length, 3);
+  assert.ok(kinds.includes('drink'), 'a potion in the pack is a choice');
+  assert.ok(kinds.includes('heal'), 'so is auto-heal, once a kit has taught you it exists');
+});
+
+test('the switch turns everything on, then everything off', () => {
+  const s = withEverything();
+  assert.equal(toggleAllUpkeep(s), true);
+  assert.ok(upkeepAllOn(s));
+  for (const id of ['regeneration', 'rejuvenation', 'renewal']) assert.ok(isAutoCast(s, id), id);
+  assert.ok(isAutoDrink(s, 'stamina-potion'));
+  assert.equal(s.settings.autoHeal, true);
+
+  assert.equal(toggleAllUpkeep(s), false);
+  assert.equal(upkeepAllOn(s), false);
+  assert.deepEqual(s.settings.autoCastSpells, []);
+  assert.deepEqual(s.settings.autoDrink, []);
+  assert.equal(s.settings.autoHeal, false);
+});
+
+test('a half-on upkeep goes all the way on, not the other way', () => {
+  // Pressing the switch while some of it is running must never turn OFF the
+  // thing you were relying on — the case you mean is "and the rest of it too".
+  const s = withEverything();
+  setAllUpkeep(s, true);
+  s.settings.autoHeal = false; // now partial
+  assert.equal(upkeepAllOn(s), false);
+  assert.equal(toggleAllUpkeep(s), true, 'partial reads as off');
+  assert.equal(s.settings.autoHeal, true);
+  assert.ok(isAutoCast(s, 'regeneration'), 'and what was already on stays on');
+});
+
+test('switching all of something already switched changes nothing', () => {
+  const s = withEverything();
+  setAllUpkeep(s, true);
+  assert.equal(setAllUpkeep(s, true), 0, 'nothing gets double-toggled back off');
+  assert.ok(upkeepAllOn(s));
+  assert.equal(s.settings.autoCastSpells.length, 3, 'and no duplicate entries');
+});
+
+test('the sidebar head carries the switch, the count, and the way in', () => {
+  const s = withEverything();
+  const off = sidebarUpkeepHtml(s);
+  assert.ok(off.includes('data-action="toggle-all-upkeep"'), 'one press for the lot');
+  assert.ok(off.includes('data-tab="upkeep"'), 'and a gear to the full screen');
+  assert.ok(off.includes('0/5'), `expected a count of what is running, got: ${off.slice(0, 200)}`);
+  assert.ok(!/class="up-switch on"/.test(off));
+
+  setAllUpkeep(s, true);
+  const on = sidebarUpkeepHtml(s);
+  assert.ok(on.includes('5/5'));
+  assert.ok(on.includes('up-switch on'), 'the switch shows its state');
+  assert.ok(on.includes('aria-pressed="true"'));
+});
+
+test('the panel offers no switch when there is nothing to switch', () => {
+  const s = createInitialState();
+  grantConsumable(s, 'healing-kit', 1); // a kit alone is not something you drink
+  assert.ok(!sidebarUpkeepHtml(s).includes('toggle-all-upkeep'), 'a switch over nothing is a broken button');
+});
+
+test('the Upkeep screen is reachable and says what it is even when empty', () => {
+  const bare = createInitialState();
+  const empty = upkeepTab(bare);
+  assert.ok(empty.includes('Upkeep'), 'the route must never throw, however bare the save');
+  assert.ok(empty.includes('General Store'), 'and should say where the rest of it comes from');
+
+  const s = withEverything();
+  const full = upkeepTab(s);
+  assert.ok(full.includes('data-action="set-all-upkeep" data-arg="on"'));
+  assert.ok(full.includes('data-action="set-all-upkeep" data-arg="off"'));
+  assert.ok(full.includes('0 of 5 kept up'));
+  assert.ok(full.includes('toggle-autocast'), 'and every choice individually');
+  assert.ok(full.includes('toggle-autodrink'));
+  assert.ok(full.includes('toggle-autoheal'));
+});

@@ -37,6 +37,10 @@ body {
 .hidden { display: none !important; }
 
 /* Sidebar */
+/* The map is the ONLY child allowed to give ground: everything else declares
+   flex-shrink: 0 below. Without that, a short window squeezes the nav and the
+   footer to fit the map, which is how you end up with tab buttons you cannot
+   press. */
 #sidebar {
   width: 220px;
   min-width: 220px;
@@ -79,7 +83,7 @@ body {
   text-align: left;
 }
 
-#tab-nav { display: flex; flex-direction: column; gap: 4px; }
+#tab-nav { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
 
 .tab-btn {
   background: none;
@@ -111,6 +115,7 @@ body {
 /* Hero stats sit at the TOP of the sidebar: they're the numbers you glance at
    constantly, and pinned to the bottom they were the easiest thing to miss. */
 #hero-summary {
+  flex-shrink: 0;
   border-bottom: 1px solid var(--border);
   padding-bottom: 10px;
   font-size: 12px;
@@ -125,6 +130,7 @@ body {
    and it was reading as more nav. Empty, it collapses away entirely. */
 #sidebar-upkeep {
   display: flex;
+  flex-shrink: 0;
   flex-direction: column;
   gap: 3px;
   font-size: 11px;
@@ -143,6 +149,9 @@ body {
 }
 #sidebar-upkeep .up-row .t { color: var(--text-dim); font-variant-numeric: tabular-nums; flex-shrink: 0; }
 #sidebar-upkeep .up-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -151,6 +160,32 @@ body {
   margin-bottom: 2px;
   border-bottom: 1px solid var(--border);
 }
+#sidebar-upkeep .up-count { font-variant-numeric: tabular-nums; letter-spacing: 0; }
+/* The switch is the one control here you press often, so it is a switch and not
+   another word to read: on sight it says how many of your automations are on. */
+#sidebar-upkeep .up-switch {
+  margin-left: auto; flex-shrink: 0;
+  width: 24px; height: 13px; padding: 0;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 7px;
+  cursor: pointer; position: relative; transition: background 0.15s ease, border-color 0.15s ease;
+}
+#sidebar-upkeep .up-switch .knob {
+  position: absolute; top: 1px; left: 1px; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--text-dim); transition: left 0.15s ease, background 0.15s ease;
+}
+#sidebar-upkeep .up-switch:hover { border-color: var(--accent); }
+#sidebar-upkeep .up-switch.on { background: var(--accent); border-color: var(--accent); }
+#sidebar-upkeep .up-switch.on .knob { left: 12px; background: var(--bg); }
+#sidebar-upkeep .up-gear {
+  flex-shrink: 0; background: none; border: none; padding: 0 1px;
+  color: var(--text-dim); font: inherit; font-size: 12px; line-height: 1; cursor: pointer;
+}
+#sidebar-upkeep .up-gear:hover, #sidebar-upkeep .up-gear.active { color: var(--accent); }
+
+/* The Upkeep screen behind that gear. */
+.upkeep-screen-head { display: flex; align-items: baseline; gap: 12px; }
+.upkeep-screen-head h2 { margin: 0; }
+.upkeep-screen-head .actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 #sidebar-upkeep .up-none { color: var(--text-dim); opacity: 0.7; }
 #sidebar-upkeep .up-act { margin-left: auto; }
 
@@ -159,7 +194,7 @@ body {
    detail. See ui/sidebarMap.js. */
 /* The map can be taller than the sidebar once several regions are open, so it
    takes the scroll rather than pushing the footer off the bottom. */
-#nav-shortcuts { display: flex; flex-direction: column; gap: 0; margin-bottom: auto; overflow-y: auto; min-height: 0; }
+#nav-shortcuts { display: flex; flex-direction: column; gap: 0; margin-bottom: auto; overflow: hidden auto; min-height: 0; }
 #nav-shortcuts:empty { display: none; }
 
 /* Band colours, matched to the POI grid so a band means the same thing in both. */
@@ -182,9 +217,6 @@ body {
 }
 .band-head:hover { color: var(--accent); }
 .band-head .n { margin-left: auto; }
-
-/* A row wrapper exists only to anchor the hover card. */
-.map-row-wrap { position: relative; }
 
 .place-row {
   position: relative;
@@ -224,17 +256,15 @@ body {
 /* The hover card: sized to its contents and never wrapped, because a tooltip
    that folds a monster's name onto two lines is harder to read than a wide one.
    Shown on hover and on keyboard focus, so it isn't mouse-only. */
+#hovercard-layer { position: fixed; inset: 0; pointer-events: none; z-index: 60; }
 .hovercard {
-  position: absolute; left: 100%; top: -6px; margin-left: 8px; z-index: 60;
+  position: fixed; left: 0; top: 0;
   width: max-content; max-width: 460px;
   background: var(--bg-panel); border: 1px solid var(--accent); border-radius: 6px;
   padding: 11px 14px; font-size: 12px; white-space: nowrap;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
-  opacity: 0; visibility: hidden; transition: opacity 0.12s ease;
   pointer-events: none;
 }
-.map-row-wrap:hover > .hovercard,
-.map-row-wrap:focus-within > .hovercard { opacity: 1; visibility: visible; }
 .hovercard .hc-head { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
 .hovercard .hc-name { font-weight: bold; font-size: 13px; }
 .hovercard .hc-sub { color: var(--text-dim); font-size: 11px; margin-left: auto; }
@@ -266,7 +296,7 @@ body {
 
 /* Settings is a gear in the corner rather than a nav entry — it's a place you go
    once, not part of the run. */
-#sidebar-footer { display: flex; justify-content: flex-end; gap: 4px; padding-top: 8px; }
+#sidebar-footer { display: flex; flex-shrink: 0; justify-content: flex-end; gap: 4px; padding-top: 8px; }
 /* Hard reset lives one click from every screen now, so it reads as dangerous
    before it's pressed and only arms with Shift held (see ui/render.js). */
 .icon-btn.danger:hover { border-color: var(--hp); color: var(--hp); }

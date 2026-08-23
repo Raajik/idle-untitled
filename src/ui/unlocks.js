@@ -53,6 +53,9 @@ export const UNLOCKS = [
   // Routable, but deliberately not in the nav list — index.html has a gear button
   // in the sidebar footer that selects it (see ui/render.js renderNav).
   { id: 'settings', kind: 'tab', label: '⚙ Settings', when: () => true, hidden: true },
+  // Same idea: reached from the gear on the sidebar's Upkeep panel, which only
+  // draws once there is something to keep up (see ui/tabs.js sidebarUpkeepHtml).
+  { id: 'upkeep', kind: 'tab', label: '⚙ Upkeep', when: () => true, hidden: true },
 ];
 
 // Flat top-level nav entries: routable tabs with no parent, plus category headers.
