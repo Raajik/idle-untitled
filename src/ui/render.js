@@ -22,6 +22,8 @@ import { vitaePct } from '../game/vitae.js';
 import { setHeroName, answerSeenLifestone, acknowledgeAlcottIntro } from '../game/onboarding.js';
 import { recallTo, sacrificeVitae } from '../game/lifestone.js';
 import { startMeditating, stopMeditating } from '../game/meditation.js';
+import { castBuffSpell, toggleAutoCast } from '../game/buffs.js';
+import { useConsumable } from '../game/consumables.js';
 import { jumpTo } from '../game/shortcuts.js';
 import { applyTinkering } from '../game/tinkering.js';
 import { buyItem, sellItem, healService } from '../game/shop.js';
@@ -53,7 +55,10 @@ function battleStructureKey(state) {
   // rotates out from under an open panel, the panel has to be rebuilt.
   const open = state.ui.activeBuilding;
   const buildingKey = open ? `${open}:${state.buildings[open] ? state.buildings[open].rotatesAt : ''}` : '';
-  return `${state.onboarding.step}|${t ? t.kind + ':' + t.id : ''}|${state.location.regionId}|${state.location.poiId}|${tutorialMonster}|${buildingKey}|${state.meditating ? 'med' : ''}`;
+  // Which buffs are up (not how long they have left) is part of the shape: the
+  // Upkeep rows change between "Cast" and a countdown as they come and go.
+  const buffKey = state.buffs.map((b) => b.id).join(',');
+  return `${state.onboarding.step}|${t ? t.kind + ':' + t.id : ''}|${state.location.regionId}|${state.location.poiId}|${tutorialMonster}|${buildingKey}|${state.meditating ? 'med' : ''}|${buffKey}`;
 }
 
 function toast(text) {
@@ -428,6 +433,10 @@ export function createRenderer(state, { onImport }) {
       case 'ack-intro': acknowledgeAlcottIntro(state); break;
       case 'flee-tutorial': fleeTutorialEncounter(state); break;
       case 'recall': recallTo(state, arg); break;
+      case 'cast-spell': castBuffSpell(state, arg); break;
+      case 'toggle-autocast': toggleAutoCast(state, arg); break;
+      case 'use-consumable': useConsumable(state, arg); break;
+      case 'toggle-autoheal': state.settings.autoHeal = !state.settings.autoHeal; break;
       case 'toggle-meditate':
         if (state.meditating) stopMeditating(state, 'You rise, and the quiet lets go of you.');
         else startMeditating(state);

@@ -61,6 +61,7 @@ export function createInitialState() {
       // Asheron's Call's death penalty (see game/vitae.js): `stacks` x 5% off the
       // hero's body, worked back off by earning `xpRemaining` experience.
       vitae: { stacks: 0, xpRemaining: 0 },
+      knownSpells: [], // self-buff spell ids (see data/buffSpells.js); Alcott teaches the first three
       // combat timers
       attackTimer: 0,
       monsterTimer: 0,
@@ -110,6 +111,8 @@ export function createInitialState() {
       boundLifestone: { regionId: null, poiId: null },
       lifestoneGrowth: {}, // poiId -> 0..LIFESTONE_GROWTH_REQUIRED for each budding Lifestone
       recallUnlocked: false,
+      autoHealUnlocked: false, // set by receiving a Healing Kit
+      alchemyUnlocked: false, // set by drinking your first potion
       recallCooldown: 0, // seconds remaining until Recall can be used again
       jumpCooldown: 0, // seconds remaining until a shortcut Jump can be used again
     },
@@ -119,6 +122,8 @@ export function createInitialState() {
     achievements: [], // earned achievement ids (see data/achievements.js); permanent, survives Enlightenment
     materials: {}, // materialId -> count, no cap
     trophies: {}, // trophyId -> count (see data/trophies.js); quest and turn-in stock
+    consumables: {}, // consumableId -> charges remaining (see data/consumables.js)
+    buffs: [], // running timed effects: { id, name, remaining, effect } (see game/buffs.js)
     buildings: freshBuildings(), // buildingId -> { level, stock, rotatesAt }; only the General Store starts open
     training: { atk: 0, hp: 0, pyreals: 0 },
     enlightenment: {
@@ -128,6 +133,8 @@ export function createInitialState() {
     },
     settings: {
       autoEquip: true, // charter: QoL free from the start
+      autoHeal: false, // spend Stamina and Healing Kit charges to stay standing
+      autoCastSpells: [], // self-buff spell ids kept up automatically
     },
     log: [], // recent combat log lines (newest last)
     ui: {
@@ -163,6 +170,8 @@ export function resetRun(state) {
   state.inventory = fresh.inventory;
   state.materials = fresh.materials;
   state.trophies = fresh.trophies;
+  state.consumables = fresh.consumables;
+  state.buffs = fresh.buffs;
   state.buildings = freshBuildings(); // town is rebuilt from scratch: buildings cost run currency, like Training
   state.training = fresh.training;
   state.log = fresh.log;

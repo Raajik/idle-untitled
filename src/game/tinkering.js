@@ -36,7 +36,8 @@ export const MAX_SPELLS_PER_ITEM = 5;
 // The highest spell level Tinkering can imbue at a given rank — climbs toward
 // MAX_SPELL_LEVEL as the skill approaches rank 100.
 function tinkerLevelCeiling(rank) {
-  return Math.max(1, Math.min(MAX_SPELL_LEVEL, 1 + Math.floor(rank / 13)));
+  // Pitched so a maxed Tinkering skill can just reach MAX_SPELL_LEVEL.
+  return Math.max(1, Math.min(MAX_SPELL_LEVEL, 1 + Math.floor(rank / 11)));
 }
 
 // What a material would teach the item in this slot, or null if it has nothing

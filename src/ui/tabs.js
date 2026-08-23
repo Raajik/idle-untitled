@@ -27,6 +27,10 @@ import {
   LIFESTONE_GROWTH_REQUIRED,
 } from '../game/lifestone.js';
 import { canMeditate, isRested } from '../game/meditation.js';
+import { BUFF_SPELLS } from '../data/buffSpells.js';
+import { knowsSpell, canCastBuffSpell, isAutoCast } from '../game/buffs.js';
+import { CONSUMABLES } from '../data/consumables.js';
+import { charges, canAutoHeal, STAMINA_PER_HP } from '../game/consumables.js';
 import { vitaePct, atMaxVitae, xpToClearStack, VITAE_PER_STACK, MAX_VITAE_PCT } from '../game/vitae.js';
 import { ACHIEVEMENTS } from '../data/achievements.js';
 import { availableShortcutsFrom, canJump } from '../game/shortcuts.js';
@@ -177,6 +181,50 @@ function attackBarHtml(state, d) {
       <div class="stance-row">${stanceHtml}</div>
       ${bar(`attack res-${activeAttackResource(state)}`, pct, label, 'atk-bar')}
     </div>`;
+}
+
+// Everything you can keep running or keep drinking: the three self-buffs, the
+// automation toggles they and the Healing Kit unlock, and whatever is in your
+// pack. Lives next to the vitals because that's what all of it is for.
+function upkeepHtml(state) {
+  const spellRows = BUFF_SPELLS.filter((sp) => knowsSpell(state, sp.id))
+    .map((sp) => {
+      const buff = state.buffs.find((b) => b.id === sp.id);
+      const auto = isAutoCast(state, sp.id);
+      const status = buff ? `<span class="xp-text">${formatDuration(buff.remaining)} left</span>` : '<span class="muted">not up</span>';
+      return `<div class="upgrade-row">
+        <div><b>${esc(sp.name)}</b> ${status}<div class="desc">${esc(sp.desc)} · ${sp.manaCost} mana</div></div>
+        <div class="actions">
+          <button class="btn" data-action="cast-spell" data-arg="${sp.id}" ${canCastBuffSpell(state, sp.id) ? '' : 'disabled'}>Cast</button>
+          <button class="btn small${auto ? ' active' : ''}" data-action="toggle-autocast" data-arg="${sp.id}">Auto ${auto ? 'ON' : 'OFF'}</button>
+        </div>
+      </div>`;
+    })
+    .join('');
+
+  const packRows = CONSUMABLES.filter((c) => charges(state, c.id) > 0)
+    .map(
+      (c) => `<div class="upgrade-row">
+        <div><b class="rarity-${c.rarity}">${esc(c.name)}</b> <span class="muted">${plural(charges(state, c.id), 'charge')}</span><div class="desc">${esc(c.desc)}</div></div>
+        <div class="actions">${c.buff ? `<button class="btn" data-action="use-consumable" data-arg="${c.id}">Use</button>` : '<span class="muted">Spent by auto-healing</span>'}</div>
+      </div>`
+    )
+    .join('');
+
+  const autoHealRow = state.progress.autoHealUnlocked
+    ? `<div class="upgrade-row">
+        <div><b>Auto-heal</b><div class="desc">Below half health, spends ${STAMINA_PER_HP} stamina and a kit charge per point of health.</div></div>
+        <button class="btn small${state.settings.autoHeal ? ' active' : ''}" data-action="toggle-autoheal" ${canAutoHeal(state) || state.settings.autoHeal ? '' : 'disabled'}>${state.settings.autoHeal ? 'ON' : 'OFF'}</button>
+      </div>`
+    : '';
+
+  if (!spellRows && !packRows && !autoHealRow) return '';
+  return `<div class="panel">
+    <h2>Upkeep</h2>
+    ${autoHealRow}
+    ${spellRows}
+    ${packRows}
+  </div>`;
 }
 
 // Meditation is the only way to get stamina back at any speed, and fighting is
@@ -393,6 +441,7 @@ export function battleTab(state) {
     const fleeBtn = state.monster ? `<div class="actions" style="margin:8px 0"><button class="btn" data-action="flee-tutorial">Try to run away</button></div>` : '';
     return `
       ${combatDisplayHtml(state, header, fleeBtn)}
+      ${upkeepHtml(state)}
       <div class="panel"><h2>Combat Log</h2><div class="log" id="combat-log">${logHtml(state)}</div></div>`;
   }
 
@@ -486,6 +535,7 @@ export function battleTab(state) {
     ${poiSection}
     ${townSection}
     ${combatPanel}
+    ${upkeepHtml(state)}
     <div class="panel"><h2>Combat Log</h2><div class="log" id="combat-log">${logHtml(state)}</div></div>`;
 }
 

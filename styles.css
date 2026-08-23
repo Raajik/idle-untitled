@@ -326,6 +326,7 @@ button.btn.primary { border-color: var(--accent); color: var(--accent); }
 .item .actions { margin-top: 4px; display: flex; gap: 6px; }
 .item button { font-size: 12px; padding: 2px 8px; }
 .hp-text { color: var(--hp); }
+.xp-text { color: var(--xp); }
 .rarity-Common { color: var(--rarity-common); }
 .rarity-Uncommon { color: var(--rarity-uncommon); }
 .rarity-Rare { color: var(--rarity-rare); }

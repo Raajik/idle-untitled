@@ -4,8 +4,8 @@
 
 import { DAMAGE_TYPES } from './regions.js';
 
-const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
-export const MAX_SPELL_LEVEL = 8;
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+export const MAX_SPELL_LEVEL = 10;
 
 // How high a spell can roll here: driven by how deep into a POI's waves the drop
 // happened (0 to ~1.1, see game/waves.js waveDifficulty) and how far out the

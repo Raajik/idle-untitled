@@ -29,6 +29,8 @@ import { tickTravel, arrive } from './travel.js';
 import { tickRecallCooldown, respawnAtLifestone, tickLifestoneGrowth } from './lifestone.js';
 import { tickMeditation } from './meditation.js';
 import { gainVitae } from './vitae.js';
+import { tickBuffs, tickAutoCast } from './buffs.js';
+import { tickAutoHeal } from './consumables.js';
 import { tickJumpCooldown } from './shortcuts.js';
 import { beginWaveIfNeeded, recordWaveKill, waveDifficulty } from './waves.js';
 import { tickBuildings } from './buildings.js';
@@ -396,12 +398,29 @@ export function canAffordAttack(state, stats = derivedStats(state)) {
   return state.hero.stamina - amount >= DEFENSIVE_STAMINA_RESERVE;
 }
 
+// Vitals start as null (see game/state.js) and get their real values here. This
+// runs before any of the location guards below, because a hero standing in town
+// or walking the road still has HP — and still needs to be able to meditate or
+// cast the spells Alcott taught them, both of which check that they have the
+// mana to spend.
+function fillInVitals(state) {
+  const h = state.hero;
+  if (h.hp !== null && h.stamina !== null && h.mana !== null) return;
+  const stats = derivedStats(state);
+  if (h.hp === null) h.hp = stats.maxHp;
+  if (h.stamina === null) h.stamina = stats.maxStamina;
+  if (h.mana === null) h.mana = stats.maxMana;
+}
+
 // One game tick. dt in seconds.
 export function tickCombat(state, dt) {
   tickRecallCooldown(state, dt);
   tickJumpCooldown(state, dt);
   tickBuildings(state);
   tickLifestoneGrowth(state, dt);
+  fillInVitals(state);
+  tickBuffs(state, dt);
+  tickAutoCast(state);
 
   if (state.travel && state.travel.tutorial) {
     tickTutorialJourney(state, dt);
@@ -416,10 +435,6 @@ export function tickCombat(state, dt) {
   if (isSite(resolvePoi(state))) return; // a site (e.g. a budding Lifestone): nothing to fight either
 
   const stats = derivedStats(state);
-
-  if (h.hp === null) h.hp = stats.maxHp; // fill the vitals in on the first tick
-  if (h.stamina === null) h.stamina = stats.maxStamina;
-  if (h.mana === null) h.mana = stats.maxMana;
 
   if (h.dead) {
     h.respawnTimer -= dt;
@@ -564,6 +579,8 @@ export function tickCombat(state, dt) {
       return;
     }
   }
+
+  tickAutoHeal(state);
 
   // Slow passive regen for all three vitals (healing/meditation are skills, not a given)
   h.hp = Math.min(stats.maxHp, h.hp + regenPerSecond(stats.maxHp, HP_REGEN_PER_SECOND, HP_REGEN_FLOOR, stats.hpRegenFlat) * dt);
