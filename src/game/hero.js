@@ -8,7 +8,7 @@
 
 import { ENLIGHTENMENT_UPGRADES } from '../data/enlightenment.js';
 import { heroBuildingBonuses } from '../data/buildings.js';
-import { weaponClass, isArmorSlot, slotKind, ARMOR_SLOTS } from '../data/items.js';
+import { weaponClass, isArmorSlot, slotKind, skillForWeapon, ARMOR_SLOTS } from '../data/items.js';
 import { achievementBonuses } from '../data/achievements.js';
 import { spellBonusKeys } from '../data/spells.js';
 import { vitaeMultiplier, workOffVitae } from './vitae.js';
@@ -53,7 +53,7 @@ export function levelFromTotalXp(xp) {
 // buildings, and enlightenment upgrades.
 export function getBonuses(state) {
   const b = {
-    atkPct: 0, atkFlat: 0, hpFlat: 0, hpPct: 0, pyrealsPct: 0, xpPct: 0, critPct: 0, luckPct: 0,
+    atkPct: 0, atkFlat: 0, hpFlat: 0, hpPct: 0, pyrealsPct: 0, xpPct: 0, luckPct: 0,
     weaponAtk: 0, armorDef: 0, armorFlat: 0, maxManaFlat: 0, startStats: 0,
     hpRegenFlat: 0, staminaRegenFlat: 0, manaRegenFlat: 0,
     magicAtkFlat: 0, hitChancePct: 0, attackSpeedPct: 0, manaCostPct: 0, minDamagePct: 0,
@@ -128,6 +128,18 @@ export function getBonuses(state) {
 // scientific notation to write down. Every multiplier that feeds them (training,
 // building perks, Enlightenment upgrades) is capped or exponentially priced for
 // the same reason: growth here is meant to be wide, not vertical.
+// Crit floor everyone has, and what a rank of your weapon skill adds. Rank 100
+// in a weapon takes you from 5% to 30%.
+export const CRIT_BASE_PCT = 5;
+export const CRIT_PCT_PER_RANK = 0.25;
+
+function activeWeaponRank(state) {
+  const weapon = state.equipment.weapon;
+  const key = skillForWeapon(weapon && weapon.baseType);
+  const skill = state.hero.skills.offense[key];
+  return skill ? skill.rank : 0;
+}
+
 export function derivedStats(state) {
   const h = state.hero;
   const b = getBonuses(state);
@@ -144,7 +156,11 @@ export function derivedStats(state) {
   const magicAtk = Math.floor((3 + attr('focus') * 1.5 + b.magicAtkFlat) * vitae); // Magic's own damage baseline, off Focus not Strength
   const def = Math.floor((attr('end') * 0.5 + b.armorDef + b.armorFlat) * vitae);
   const spd = 1 + attr('quick') * 0.04; // attacks per second
-  const critChance = 5 + attr('coord') * 0.2 + b.critPct; // percent
+  // Crit is earned, not bought. Nothing in the game grants crit chance directly —
+  // no spell, no tinker, no shop perk. It scales off the rank of whatever weapon
+  // skill you're actually using, so how good your crits get is a consequence of
+  // what you chose to specialise in rather than a stat you shop for.
+  const critChance = CRIT_BASE_PCT + activeWeaponRank(state) * CRIT_PCT_PER_RANK;
   const maxStamina = Math.floor((17 + attr('end') * 1.5 + attr('quick') * 1.5) * vitae);
   const maxMana = Math.floor((16.5 + attr('self') * 3.5 + b.maxManaFlat) * vitae);
   return {

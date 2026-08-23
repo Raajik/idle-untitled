@@ -117,6 +117,22 @@ export function weaponClass(baseType) {
   return null;
 }
 
+// Which offense skill a weapon trains. Lives here rather than in game/skills.js
+// so game/hero.js can read it without an import cycle — crit now scales off the
+// rank of whatever you're actually swinging (see derivedStats).
+export const WEAPON_BASE_TO_SKILL = {
+  sword: 'sword', spear: 'spear', axe: 'axe', mace: 'mace',
+  katar: 'unarmed', cestus: 'unarmed', nekode: 'unarmed',
+  bow: 'bow', crossbow: 'crossbow',
+  // Casting devices all channel War Magic — the device shapes how well, not which
+  // skill.
+  wand: 'war', orb: 'war', staff: 'war',
+};
+
+export function skillForWeapon(baseType) {
+  return (baseType && WEAPON_BASE_TO_SKILL[baseType]) || 'unarmed';
+}
+
 export const BASE_NAMES = {
   weapon: ['Sword', 'Axe', 'Mace', 'Spear', 'Katar', 'Cestus', 'Nekode', 'Bow', 'Crossbow', 'Wand', 'Orb', 'Staff'],
   shirt: ['Shirt', 'Tunic', 'Doublet'],

@@ -10,6 +10,7 @@
 
 import { addLog } from './state.js';
 import { ATTRIBUTES } from './hero.js';
+import { skillForWeapon } from '../data/items.js';
 
 export const MAX_SKILL_RANK = 100;
 // Walking is effortless and Athletics is the skill that shortens walking, so a
@@ -54,14 +55,6 @@ export const OFFENSE_SKILLS = [
 ];
 
 export const MELEE_WEAPON_BASE_TYPES = ['sword', 'spear', 'axe', 'mace'];
-// Casting devices all channel War Magic — the device shapes how well, not which
-// skill (see data/items.js WEAPON_CLASSES).
-const WEAPON_BASE_TO_SKILL = {
-  sword: 'sword', spear: 'spear', axe: 'axe', mace: 'mace',
-  katar: 'unarmed', cestus: 'unarmed', nekode: 'unarmed',
-  bow: 'bow', crossbow: 'crossbow',
-  wand: 'war', orb: 'war', staff: 'war',
-};
 
 // Gathering skills, in the order they're listed in the Skills tab.
 export const GATHERING_SKILLS = [
@@ -134,7 +127,7 @@ export function hitChance(rank) {
 // Which offense skill governs the hero's current attacks, and its rank.
 export function activeWeaponSkill(state) {
   const weapon = state.equipment.weapon;
-  const key = weapon && weapon.baseType ? WEAPON_BASE_TO_SKILL[weapon.baseType] || 'unarmed' : 'unarmed';
+  const key = skillForWeapon(weapon && weapon.baseType);
   const meta = OFFENSE_SKILLS.find((s) => s.key === key);
   return { key, label: meta.label, skill: state.hero.skills.offense[key], weaponName: weapon ? weapon.name : null };
 }

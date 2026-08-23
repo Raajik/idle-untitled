@@ -120,12 +120,10 @@ const DEFS = {
     effectLabel: (v) => `+${v}% XP`,
     bonusKey: () => 'xpPct',
   },
-  critPct: {
-    name: 'Precision',
-    roll: (level) => ({ value: magnitude(level, 1) }),
-    effectLabel: (v) => `+${v}% Crit`,
-    bonusKey: () => 'critPct',
-  },
+  // No crit spell, deliberately. Crit chance is the one number nothing in the
+  // game grants directly — it comes from the rank of the weapon skill you chose
+  // to raise (see game/hero.js), so it stays a consequence of specialising
+  // rather than an affix to shop for.
   maxManaFlat: {
     name: 'Clarity',
     roll: (level) => ({ value: magnitude(level, 4) }),
@@ -211,9 +209,9 @@ function cap(s) {
 export const SPELL_IDS_FOR_SLOT = {
   weapon: ['attribute', 'skillRank', 'flatDamage', 'atkPct'],
   shield: ['attribute', 'mitigation', 'armor'],
-  amulet: ['attribute', 'skillRank', 'mitigation', 'pyrealsPct', 'xpPct', 'critPct', 'maxManaFlat'],
-  bracelet: ['attribute', 'skillRank', 'mitigation', 'pyrealsPct', 'xpPct', 'critPct', 'maxManaFlat'],
-  ring: ['attribute', 'skillRank', 'mitigation', 'pyrealsPct', 'xpPct', 'critPct', 'maxManaFlat'],
+  amulet: ['attribute', 'skillRank', 'mitigation', 'pyrealsPct', 'xpPct', 'maxManaFlat'],
+  bracelet: ['attribute', 'skillRank', 'mitigation', 'pyrealsPct', 'xpPct', 'maxManaFlat'],
+  ring: ['attribute', 'skillRank', 'mitigation', 'pyrealsPct', 'xpPct', 'maxManaFlat'],
 };
 // Every piece of armor rolls from the same pool.
 for (const slot of ARMOR_SLOTS) SPELL_IDS_FOR_SLOT[slot] = ['attribute', 'mitigation', 'armor'];

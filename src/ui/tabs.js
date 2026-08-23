@@ -43,8 +43,8 @@ import {
   conditionOf,
   LIFESTONE_GROWTH_REQUIRED,
 } from '../game/lifestone.js';
-import { BUFF_SPELLS } from '../data/buffSpells.js';
-import { knowsSpell, knownBuff, canCastBuffSpell, isAutoCast } from '../game/buffs.js';
+import { BUFF_SPELLS, getBuffSpell, buffSpellName, effectText } from '../data/buffSpells.js';
+import { knowsSpell, knownBuff, canCastBuffSpell, isAutoCast, spellLevel as knownSpellLevel } from '../game/buffs.js';
 import { getConsumable } from '../data/consumables.js';
 import { charges, canAutoHeal, isAutoDrink, upkeepConsumables, STAMINA_PER_HP } from '../game/consumables.js';
 import { vitaePct, atMaxVitae, xpToClearStack, VITAE_PER_STACK, MAX_VITAE_PCT } from '../game/vitae.js';
@@ -1246,7 +1246,6 @@ const SPELL_ID_LABELS = {
   defensiveBoost: 'Defensive Boost',
   pyrealsPct: 'Fortune (+% Pyreals)',
   xpPct: 'Wisdom (+% XP)',
-  critPct: 'Precision (+% Crit)',
   maxManaFlat: 'Clarity (+Max Mana)',
   weaponDamage: 'Keenness (+ATK)',
   magicDamage: 'Channeling (+Magic ATK)',
@@ -1532,30 +1531,53 @@ export function recallTab(state) {
 // Timers carry their own sb- prefixed ids: the Battle tab's Upkeep rows can be on
 // screen at the same time, and two elements sharing an id means getElementById
 // only ever finds the first, leaving the other frozen.
+const VITAL_TEXT_BY_NAME = { hp: 'hp-text', stamina: 'stamina-text', mana: 'mana-text' };
+
 export function sidebarUpkeepHtml(state) {
   const rows = [];
+  // Every row says what it does on hover. A name and a countdown is enough to
+  // check on something you already understand; it is not enough to remember
+  // which of three similarly-named spells is the stamina one.
   for (const buff of state.buffs) {
-    rows.push(`<div class="up-row"><span class="${vitalTextClass(buff.effect)}">${esc(buff.name)}</span><span class="t" id="sb-buff-timer-${buff.id}">${formatDuration(buff.remaining)}</span></div>`);
+    const spell = getBuffSpell(buff.id);
+    const tip = spell
+      ? `${buff.name} — ${effectText(buff.id, knownSpellLevel(state, buff.id) || 1)}`
+      : buff.name;
+    rows.push(
+      `<div class="up-row" title="${esc(tip)}"><span class="${vitalTextClass(buff.effect)}">${esc(buff.name)}</span><span class="t" id="sb-buff-timer-${buff.id}">${formatDuration(buff.remaining)}</span></div>`
+    );
   }
 
   // Automation that's switched on is "running" too, and it's worth seeing that
   // a kit is quietly draining before it runs out rather than after.
   const kit = charges(state, 'healing-kit');
   if (state.settings.autoHeal && kit > 0) {
-    rows.push(`<div class="up-row"><span class="hp-text">Auto-heal</span><span class="t">${fmt(kit)}</span></div>`);
+    const tip = `Auto-heal — below half health, spends ${STAMINA_PER_HP} stamina and a kit charge per point of health. ${plural(kit, 'charge')} left.`;
+    rows.push(`<div class="up-row" title="${esc(tip)}"><span class="hp-text">Auto-heal</span><span class="t">${fmt(kit)}</span></div>`);
   }
   for (const c of upkeepConsumables(state)) {
     if (!isAutoDrink(state, c.id)) continue;
     const left = charges(state, c.id);
     if (state.buffs.some((b) => c.buff && b.id === c.buff.id)) continue; // already listed above
-    rows.push(`<div class="up-row"><span class="muted">${esc(c.name)}</span><span class="t">${left ? fmt(left) : 'none'}</span></div>`);
+    const tip = `${c.name} — re-drunk whenever its effect lapses. ${left ? plural(left, 'charge') : 'None'} left.`;
+    rows.push(`<div class="up-row" title="${esc(tip)}"><span class="muted">${esc(c.name)}</span><span class="t">${left ? fmt(left) : 'none'}</span></div>`);
+  }
+
+  // Spells you know but aren't running, so the panel is somewhere to see the
+  // whole picture rather than only the half that happens to be up.
+  for (const sp of BUFF_SPELLS) {
+    const level = knownSpellLevel(state, sp.id);
+    if (!level || state.buffs.some((b) => b.id === sp.id)) continue;
+    const name = buffSpellName(sp.id, level);
+    rows.push(
+      `<div class="up-row" title="${esc(`${name} — ${effectText(sp.id, level)}`)}"><span class="${VITAL_TEXT_BY_NAME[sp.vital]}">${esc(name)}</span><span class="t">—</span></div>`
+    );
   }
 
   // Nothing running and nothing to run: say nothing at all rather than taking up
   // room to report the absence.
-  const known = BUFF_SPELLS.some((sp) => knowsSpell(state, sp.id));
-  if (!rows.length && !known) return '';
-  return `<div class="up-head">Upkeep</div>${rows.join('') || '<div class="up-none">nothing running</div>'}`;
+  if (!rows.length) return '';
+  return `<div class="up-head">Upkeep</div>${rows.join('')}`;
 }
 
 export function battleDockHtml(state) {

@@ -97,7 +97,16 @@ body {
 
 .nav-category { display: flex; flex-direction: column; gap: 2px; }
 .nav-category-label { padding: 6px 10px 2px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); }
-.tab-btn.nav-child { padding-left: 20px; font-size: 13px; }
+/* Children sit clearly under their heading — a rule down the left and enough
+   indent that the hierarchy reads without counting pixels. */
+.tab-btn.nav-child {
+  padding-left: 22px;
+  margin-left: 10px;
+  font-size: 13px;
+  border-left: 1px solid var(--border);
+  border-radius: 0 4px 4px 0;
+}
+.tab-btn.nav-child.active { border-left-color: var(--accent); }
 
 /* Hero stats sit at the TOP of the sidebar: they're the numbers you glance at
    constantly, and pinned to the bottom they were the easiest thing to miss. */
@@ -110,14 +119,40 @@ body {
 }
 #hero-summary b { color: var(--text); }
 
-/* Everything you have running, without opening the Battle tab to find out.
-   Empty (nothing up, nothing to drink) it collapses away entirely. */
-#sidebar-upkeep { display: flex; flex-direction: column; gap: 3px; font-size: 11px; }
+/* Everything you have running, without opening the Battle tab to find out. It's
+   a panel of its own rather than a run of text in the sidebar's flow: what's up
+   and how long it has left is a different KIND of thing from the nav around it,
+   and it was reading as more nav. Empty, it collapses away entirely. */
+#sidebar-upkeep {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 7px 9px;
+}
 #sidebar-upkeep:empty { display: none; }
-#sidebar-upkeep .up-row { display: flex; justify-content: space-between; gap: 6px; }
-#sidebar-upkeep .up-row .t { color: var(--text-dim); font-variant-numeric: tabular-nums; }
-#sidebar-upkeep .up-head { color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; }
+#sidebar-upkeep .up-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+  cursor: help; /* every row carries a title saying what it does */
+}
+#sidebar-upkeep .up-row .t { color: var(--text-dim); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+#sidebar-upkeep .up-head {
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 10px;
+  padding-bottom: 4px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--border);
+}
 #sidebar-upkeep .up-none { color: var(--text-dim); opacity: 0.7; }
+#sidebar-upkeep .up-act { margin-left: auto; }
 
 /* Quick-travel shortcuts under the tab nav — somewhere to click "back to town"
    from without hunting through the region list. */

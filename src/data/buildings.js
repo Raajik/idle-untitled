@@ -109,7 +109,9 @@ const BUILDING_TEMPLATES = [
     unlock: { pyreals: 1800, materialKind: 'wood', materials: 8 },
     upgrade: { pyreals: 1200, growth: 1.7, materialKind: 'wood', materials: 4 },
     stock: { slots: ['weapon'], weaponFilter: 'ranged', min: 2, max: 4 },
-    perk: { key: 'critPct', perLevel: 0.6, text: (v) => `+${v.toFixed(1)}% crit chance` },
+    // Not crit chance: nothing buys that (see game/hero.js). A bowyer sells you
+    // range, so what investing buys is the shot itself landing.
+    perk: { key: 'hitChancePct', perLevel: 1, text: (v) => `+${v}% chance to hit` },
   },
   {
     id: 'armorsmith',

@@ -91,16 +91,32 @@ test('the sidebar says nothing at all until there is upkeep to speak of', () => 
 
 test('the sidebar lists what is running, and what is merely known', () => {
   const s = createInitialState();
-  learnSpell(s, 'regeneration');
+  learnSpell(s, 'regeneration', 1);
+  // A spell you know but haven't cast is still upkeep — the panel is the whole
+  // picture, not only the half that happens to be up.
   const idle = sidebarUpkeepHtml(s);
-  assert.ok(idle.includes('nothing running'), 'knowing a spell earns the panel, empty');
+  assert.ok(idle.includes('Regeneration I'), 'a known spell should be listed');
+  assert.ok(idle.includes('>—<'), 'with a dash where its countdown would be');
 
   s.hero.mana = derivedStats(s).maxMana;
   assert.equal(castBuffSpell(s, 'regeneration'), true);
   const live = sidebarUpkeepHtml(s);
   assert.ok(live.includes('Regeneration'));
-  assert.ok(!live.includes('nothing running'));
   assert.match(live, /id="sb-buff-timer-regeneration"/, 'the timer needs its own id to be patched');
+});
+
+test('every upkeep row says what it does on hover', () => {
+  // A name and a countdown is enough to check on something you already
+  // understand; it is not enough to remember which of three similarly-named
+  // spells is the stamina one.
+  const s = createInitialState();
+  for (const id of ['regeneration', 'rejuvenation', 'renewal']) learnSpell(s, id, 2);
+  const html = sidebarUpkeepHtml(s);
+  const titles = [...html.matchAll(/title="([^"]*)"/g)].map((m) => m[1]);
+  assert.equal(titles.length, 3, 'every row should carry one');
+  assert.ok(titles.some((t) => /Regeneration II .* \+2 Health regeneration/.test(t)), titles.join(' | '));
+  assert.ok(titles.some((t) => /Stamina regeneration/.test(t)));
+  assert.ok(titles.some((t) => /Mana regeneration/.test(t)));
 });
 
 test('sidebar timers never collide with the Upkeep panel on the Battle tab', () => {
