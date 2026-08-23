@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>III — navigation, C + D</title>
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { overflow: auto; }
+  .mock-page { max-width: 1100px; margin: 0 auto; padding: 24px 20px 90px; }
+  .mock-head h1 { font-size: 20px; margin-bottom: 6px; }
+  .mock-head p { color: var(--text-dim); font-size: 13px; max-width: 76ch; }
+  .mock { margin: 34px 0; border-top: 1px solid var(--border); padding-top: 18px; }
+  .mock > h2 { font-size: 16px; margin-bottom: 4px; }
+  .mock > .why { color: var(--text-dim); font-size: 12px; margin-bottom: 14px; max-width: 80ch; }
+  .mock > .why b { color: var(--text); }
+  .frame { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 14px; }
+  .verdict { margin-top: 10px; font-size: 12px; color: var(--text-dim); }
+  .verdict .good { color: var(--xp); }
+  .verdict .bad { color: var(--hp); }
+
+  /* --- the sidebar map --- */
+  .demo { display: flex; gap: 14px; }
+  .fake-side { width: 232px; flex-shrink: 0; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
+  .fake-main { flex: 1; min-width: 0; }
+
+  .place-group { margin-bottom: 12px; }
+  .place-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em;
+    font-size: 10px; margin-bottom: 5px; padding-bottom: 3px;
+    border-bottom: 1px solid var(--border);
+  }
+  .place-head .rep { letter-spacing: 0; text-transform: none; color: var(--accent); }
+
+  .place-row {
+    position: relative;
+    display: grid;
+    grid-template-columns: 14px 1fr auto;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    background: none;
+    border: 1px solid transparent;
+    border-left: 3px solid var(--tier-edge, transparent);
+    color: var(--text);
+    font: inherit; font-size: 12px; text-align: left;
+    padding: 3px 6px; border-radius: 0 4px 4px 0; cursor: pointer;
+  }
+  .place-row:hover { background: var(--bg-inset); border-color: var(--border); border-left-color: var(--tier-edge, var(--accent)); }
+  .place-row.here { background: var(--bg-inset); border-color: var(--accent); color: var(--accent); }
+  .place-row .lv { color: var(--text-dim); font-size: 9px; text-align: center; font-variant-numeric: tabular-nums; }
+  .place-row.here .lv { color: var(--accent); }
+  .place-row .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .place-row .t { color: var(--text-dim); font-size: 10px; font-variant-numeric: tabular-nums; }
+  .place-row .t.faster { color: var(--xp); }
+  .place-row .t.even { color: var(--text); }
+  .place-row .mk {
+    position: absolute; right: 2px; top: -3px;
+    font-size: 9px; line-height: 12px; padding: 0 3px; border-radius: 2px;
+    background: var(--accent); color: var(--bg); font-weight: bold;
+  }
+  .place-row .mk.bounty { background: var(--mana); }
+  .place-row.town { --tier-edge: var(--accent); }
+  .place-row.town .nm { color: var(--accent); }
+
+  .more-row { color: var(--text-dim); font-size: 11px; padding: 3px 6px 3px 9px; background: none; border: none; cursor: pointer; text-align: left; width: 100%; }
+  .more-row:hover { color: var(--accent); }
+
+  /* --- the hover card: C's information, on demand --- */
+  .hoverwrap { position: relative; }
+  .hovercard {
+    position: absolute; left: 100%; top: -6px; margin-left: 8px; z-index: 30;
+    width: 236px; background: var(--bg-panel); border: 1px solid var(--accent);
+    border-radius: 6px; padding: 10px 12px; font-size: 12px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.55);
+  }
+  .hovercard .hc-name { font-weight: bold; margin-bottom: 2px; }
+  .hovercard .hc-sub { color: var(--text-dim); font-size: 11px; margin-bottom: 7px; }
+  .hovercard .hc-line { display: flex; justify-content: space-between; gap: 10px; margin: 3px 0; }
+  .hovercard .hc-line .k { color: var(--text-dim); }
+  .hovercard .hc-note { margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--border); font-size: 11px; }
+  .hovercard .hc-art { float: right; opacity: 0.5; }
+
+  .caption { color: var(--text-dim); font-size: 11px; margin-top: 8px; font-style: italic; }
+</style>
+</head>
+<body>
+<div class="mock-page">
+
+  <div class="mock-head">
+    <h1>Navigation — C folded into D</h1>
+    <p>D's sidebar map, carrying C's information without becoming a wall of text. Three moves:
+       <b>the row is the summary</b> (band colour, level, travel time, marker), <b>the hover card is the detail</b>
+       (everything a location card said, on demand), and <b>bands collapse</b> so a long region is a few rows
+       rather than fifteen.</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <div class="mock">
+    <h2>The map at rest</h2>
+    <p class="why">Every row is four facts wide: <b>level band</b> (the colour of its left edge and the number),
+      <b>name</b>, <b>travel time</b> in the same red/white/green as the cards, and a corner <b>marker</b> when
+      something wants doing there. Town leads in gold. Bands you aren't working collapse to one line.</p>
+    <div class="frame">
+      <div class="demo">
+        <div class="fake-side">
+
+          <div class="place-group">
+            <div class="place-head"><span>Holtburg</span><span class="rep">rep 35</span></div>
+            <button class="place-row town"><span class="lv">⌂</span><span class="nm">Holtburg</span><span class="t faster">0:04</span><span class="mk">!</span></button>
+            <button class="place-row" style="--tier-edge:#6ab0a4"><span class="lv">◈</span><span class="nm">Lifestone</span><span class="t faster">0:03</span></button>
+          </div>
+
+          <div class="place-group">
+            <div class="place-head"><span>Lv 1–10</span><span>12</span></div>
+            <button class="place-row here" style="--tier-edge:#6ab06a"><span class="lv">2</span><span class="nm">Drudge Hideout</span><span class="t">here</span><span class="mk bounty">¤</span></button>
+            <button class="place-row" style="--tier-edge:#6ab06a"><span class="lv">3</span><span class="nm">Holtburg Redoubt</span><span class="t faster">0:09</span></button>
+            <button class="place-row" style="--tier-edge:#6ab06a"><span class="lv">3</span><span class="nm">Colier Mine</span><span class="t faster">0:12</span></button>
+            <button class="place-row" style="--tier-edge:#6ab06a"><span class="lv">3</span><span class="nm">Green Mire Grave</span><span class="t faster">0:18</span><span class="mk bounty">¤</span></button>
+            <button class="more-row">▸ 8 more in this band</button>
+          </div>
+
+          <div class="place-group">
+            <div class="place-head"><span>Lv 11–20</span><span>3</span></div>
+            <button class="more-row">▸ Hunter's Leap, Daiklos, Heart of Innocence</button>
+          </div>
+
+          <div class="place-group">
+            <div class="place-head"><span>Glenden Wood</span><span class="rep">rep 0</span></div>
+            <button class="place-row"><span class="lv">→</span><span class="nm">Travel there</span><span class="t faster">14:32</span></button>
+          </div>
+
+        </div>
+        <div class="fake-main">
+          <div class="panel">
+            <h2>Drudge Hideout <span class="muted" style="font-size:0.7em">Wave 4/10 · +36% difficulty · clear for 2 Mahogany</span></h2>
+            <div class="monster-head">
+              <div style="width:32px;height:32px;border:1px dashed var(--border);border-radius:4px"></div>
+              <div class="monster-head-text">
+                <div><b>Drudge (Lv 2)</b></div>
+                <div class="bar hp"><div class="fill" style="width:62%"></div><div class="label">31 / 50</div></div>
+                <div class="muted" style="font-size:11px">ATK 6 · DEF 2 · bludgeon</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="caption">The Battle tab is only the fight and the log. Regions and Points of Interest are gone from it entirely.</div>
+    </div>
+    <div class="verdict"><span class="good">+</span> Everywhere you can go, always on screen, with its travel time.
+      &nbsp; <span class="bad">−</span> A row can't say what a card said — which is what the next frame is for.</div>
+  </div>
+
+  <!-- ============================================================ -->
+  <div class="mock">
+    <h2>Hovering a row — C's card, on demand</h2>
+    <p class="why">Everything the location card carried, shown only when you ask for it: <b>level range, walk time
+      against base, what a clear yields, how many times you've cleared it, what lives there</b>, and any job or
+      bounty that points at it. Nothing is lost from C; it just stops competing for permanent space.</p>
+    <div class="frame">
+      <div class="demo">
+        <div class="fake-side">
+          <div class="place-group">
+            <div class="place-head"><span>Lv 1–10</span><span>12</span></div>
+            <button class="place-row here" style="--tier-edge:#6ab06a"><span class="lv">2</span><span class="nm">Drudge Hideout</span><span class="t">here</span></button>
+            <div class="hoverwrap">
+              <button class="place-row" style="--tier-edge:#6ab06a;background:var(--bg-inset);border-color:var(--border)"><span class="lv">3</span><span class="nm">Green Mire Grave</span><span class="t faster">0:18</span><span class="mk bounty">¤</span></button>
+              <div class="hovercard">
+                <div class="hc-art">🐾</div>
+                <div class="hc-name">Green Mire Grave</div>
+                <div class="hc-sub">Lv 3–4 · foraging</div>
+                <div class="hc-line"><span class="k">Travel</span><span class="xp-text">0:18 <span class="muted">(base 0:24)</span></span></div>
+                <div class="hc-line"><span class="k">Clears</span><span>2 Velvet · 7 done</span></div>
+                <div class="hc-line"><span class="k">Lives here</span><span>Grave Mite, Wisp, Zombie</span></div>
+                <div class="hc-line"><span class="k">Soft to</span><span class="el-acid" style="color:#8ac06a">Acid</span></div>
+                <div class="hc-note"><span class="mana-text">¤ Bounty</span> — Wanted: Velvet, 4 / 18</div>
+              </div>
+            </div>
+            <button class="place-row" style="--tier-edge:#6ab06a"><span class="lv">4</span><span class="nm">A Rat Nest</span><span class="t faster">0:15</span></button>
+            <button class="place-row" style="--tier-edge:#6ab06a"><span class="lv">4</span><span class="nm">The Ursuin Run</span><span class="t faster">0:21</span></button>
+          </div>
+        </div>
+        <div class="fake-main">
+          <div class="panel"><h2>Drudge Hideout</h2><p class="muted">…the fight carries on underneath.</p></div>
+        </div>
+      </div>
+    </div>
+    <div class="verdict"><span class="good">+</span> Every fact C's card had, and room for more than C had space for.
+      &nbsp; <span class="bad">−</span> Hover isn't reachable by touch or keyboard — it needs a click-to-pin as well.</div>
+  </div>
+
+  <!-- ============================================================ -->
+  <div class="mock">
+    <h2>If you'd rather not lose the grid</h2>
+    <p class="why">The middle road: the sidebar map is the <b>fast</b> way to travel, and the Battle tab keeps a
+      collapsed "Points of Interest" section with C's full card grid for when you want to compare properly.
+      Costs nothing — the section already folds, and most people would leave it folded.</p>
+    <div class="frame">
+      <div class="panel section folded">
+        <button class="section-head"><span class="caret">▸</span><h2>Holtburg &gt; Points of Interest</h2>
+          <span class="section-summary muted">at Drudge Hideout · 2 bounties nearby</span></button>
+      </div>
+      <div class="caption">Folded by default once the sidebar map exists; unfolds to exactly what C ships today.</div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
