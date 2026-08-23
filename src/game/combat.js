@@ -16,6 +16,7 @@ import {
   BLEED_DURATION_SECONDS,
   BLEED_MAX_STACKS,
   BLEED_DAMAGE_PER_STACK_PCT,
+  staminaCostForWindup,
 } from '../data/combatStances.js';
 import { pick } from '../engine/rng.js';
 import { pushFx } from '../engine/fx.js';
@@ -54,6 +55,15 @@ const RESPAWN_DELAY = 3.0;
 
 const HERO_STAMINA_COST_PER_DEFEND = 4;
 const MONSTER_STAMINA_COST_PER_DODGE = 3;
+
+// Passive in-combat regen, as a fraction of each vital's maximum per second.
+// Stamina's rate has to cover both halves of what it now pays for — every attack
+// (1-5 by windup, see data/combatStances.js) and every Dodge/Block/Parry — or a
+// fresh hero spends the fight winded rather than fighting. Meditation is still
+// far faster; this is just the trickle you get for staying in the fight.
+const HP_REGEN_PER_SECOND = 0.01;
+const STAMINA_REGEN_PER_SECOND = 0.035;
+const MANA_REGEN_PER_SECOND = 0.02;
 
 function resolvePoi(state) {
   return state.location.poiId === TUTORIAL_ROAD.id ? TUTORIAL_ROAD : getPoiById(state.location.poiId);
@@ -302,14 +312,32 @@ export function activeAttackInterval(state, stats) {
   return stance.interval ?? 1 / stats.spd;
 }
 
+// What the active attack costs: which vital it draws on and how much one attack
+// spends. Melee and archery pay Stamina scaled 1-5 to the length of the windup
+// (see data/combatStances.js); magic pays its spell's mana.
+export function activeAttackCost(state, stats = derivedStats(state)) {
+  const h = state.hero;
+  const mode = h.combat.mode;
+  if (mode === 'magic') {
+    const spell = MAGIC_SPELLS[h.combat.magicSpell];
+    return { resource: spell.resource, amount: spell.manaCost };
+  }
+  const stance = mode === 'archery' ? ARCHERY_STANCES[h.combat.archeryStance] : MELEE_STANCES[h.combat.meleeStance];
+  return { resource: stance.resource, amount: staminaCostForWindup(activeAttackInterval(state, stats)) };
+}
+
 // Which vital the active attack draws on ('stamina' | 'mana' | 'life'). Used to
 // color the attack bar to match that vital's own bar.
 export function activeAttackResource(state) {
-  const h = state.hero;
-  const mode = h.combat.mode;
-  if (mode === 'archery') return ARCHERY_STANCES[h.combat.archeryStance].resource;
-  if (mode === 'magic') return MAGIC_SPELLS[h.combat.magicSpell].resource;
-  return MELEE_STANCES[h.combat.meleeStance].resource;
+  return activeAttackCost(state).resource;
+}
+
+// Whether the hero can pay for the attack they're winding up. Running dry parks
+// the attack bar at full instead of resetting it (see the loops in tickCombat):
+// you're wound up and waiting to recover, not swinging at nothing.
+export function canAffordAttack(state, stats = derivedStats(state)) {
+  const { resource, amount } = activeAttackCost(state, stats);
+  return state.hero[resource === 'mana' ? 'mana' : 'stamina'] >= amount;
 }
 
 // One game tick. dt in seconds.
@@ -332,9 +360,9 @@ export function tickCombat(state, dt) {
 
   const stats = derivedStats(state);
 
-  if (h.hp === 0) h.hp = stats.maxHp; // initialize on first tick
-  if (h.stamina === 0) h.stamina = stats.maxStamina;
-  if (h.mana === 0) h.mana = stats.maxMana;
+  if (h.hp === null) h.hp = stats.maxHp; // fill the vitals in on the first tick
+  if (h.stamina === null) h.stamina = stats.maxStamina;
+  if (h.mana === null) h.mana = stats.maxMana;
 
   if (h.dead) {
     h.respawnTimer -= dt;
@@ -366,9 +394,15 @@ export function tickCombat(state, dt) {
   if (mode === 'archery') {
     const stance = ARCHERY_STANCES[h.combat.archeryStance];
     const attackInterval = stance.interval ?? 1 / stats.spd;
+    const staminaCost = staminaCostForWindup(attackInterval);
     h.attackTimer += dt;
     while (h.attackTimer >= attackInterval) {
+      if (h.stamina < staminaCost) {
+        h.attackTimer = attackInterval; // too winded to loose the arrow; hold the bar full
+        break;
+      }
       h.attackTimer -= attackInterval;
+      h.stamina -= staminaCost; // the effort is spent whether or not the shot lands
       if (rollMonsterDodge(state)) continue;
 
       const weaponSkill = activeWeaponSkill(state);
@@ -387,9 +421,11 @@ export function tickCombat(state, dt) {
     const spell = MAGIC_SPELLS[h.combat.magicSpell];
     h.attackTimer += dt;
     while (h.attackTimer >= spell.castTime) {
+      if (h.mana < spell.manaCost) {
+        h.attackTimer = spell.castTime; // spell held on the tongue until the mana is there
+        break;
+      }
       h.attackTimer -= spell.castTime;
-      if (h.mana < spell.manaCost) continue; // not enough mana to cast yet; wait for regen
-
       h.mana -= spell.manaCost;
       if (rollMonsterDodge(state)) continue;
 
@@ -408,9 +444,15 @@ export function tickCombat(state, dt) {
   } else {
     const stance = MELEE_STANCES[h.combat.meleeStance];
     const attackInterval = stance.interval ?? 1 / stats.spd;
+    const staminaCost = staminaCostForWindup(attackInterval);
     h.attackTimer += dt;
     while (h.attackTimer >= attackInterval) {
+      if (h.stamina < staminaCost) {
+        h.attackTimer = attackInterval; // too winded to swing; hold the bar full
+        break;
+      }
       h.attackTimer -= attackInterval;
+      h.stamina -= staminaCost; // the effort is spent whether or not the blow lands
       if (rollMonsterDodge(state)) continue;
 
       const weaponSkill = activeWeaponSkill(state);
@@ -465,9 +507,9 @@ export function tickCombat(state, dt) {
   }
 
   // Slow passive regen for all three vitals (healing/meditation are skills, not a given)
-  h.hp = Math.min(stats.maxHp, h.hp + stats.maxHp * 0.01 * dt);
-  h.stamina = Math.min(stats.maxStamina, h.stamina + stats.maxStamina * 0.03 * dt);
-  h.mana = Math.min(stats.maxMana, h.mana + stats.maxMana * 0.02 * dt);
+  h.hp = Math.min(stats.maxHp, h.hp + stats.maxHp * HP_REGEN_PER_SECOND * dt);
+  h.stamina = Math.min(stats.maxStamina, h.stamina + stats.maxStamina * STAMINA_REGEN_PER_SECOND * dt);
+  h.mana = Math.min(stats.maxMana, h.mana + stats.maxMana * MANA_REGEN_PER_SECOND * dt);
 }
 
 // Bail on the current tutorial-road encounter instead of fighting it. Always

@@ -99,6 +99,13 @@ function migrate(raw) {
     state.progress.boundLifestone = { regionId: state.progress.unlockedRegions[0], poiId: null };
   }
 
+  // Vitals used to use 0 as their "not filled in yet" sentinel, which silently
+  // refilled anyone who hit exactly 0. They use null now — an old save sitting on a
+  // literal 0 was always an uninitialized one, so carry it over as such.
+  for (const vital of ['hp', 'stamina', 'mana']) {
+    if (state.hero[vital] === 0 || state.hero[vital] === undefined) state.hero[vital] = null;
+  }
+
   // Pre-level-rework saves may have a stale in-progress monster instance missing the
   // newer fields (level, dmgType, stamina) — drop it so a fresh one spawns next tick.
   if (state.monster && state.monster.level === undefined) state.monster = null;

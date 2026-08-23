@@ -15,9 +15,9 @@ import {
   GATHERING_SKILLS,
   MAX_SKILL_RANK,
 } from '../game/skills.js';
-import { activeAttackInterval, activeAttackResource } from '../game/combat.js';
+import { activeAttackInterval, activeAttackResource, activeAttackCost, canAffordAttack } from '../game/combat.js';
 import { WAVES_PER_POI, waveDifficulty, clearYield } from '../game/waves.js';
-import { MELEE_STANCES, ARCHERY_STANCES, MAGIC_SPELLS } from '../data/combatStances.js';
+import { MELEE_STANCES, ARCHERY_STANCES, MAGIC_SPELLS, staminaCostForWindup } from '../data/combatStances.js';
 import {
   canRecall,
   canFeedLifestone,
@@ -101,12 +101,19 @@ function onboardingHtml(state) {
   </div>`;
 }
 
-// The attack bar's text: how far into the current swing/cast you are, and how long
-// the whole thing takes, both spelled out in seconds rather than left implicit.
+// The attack bar's text: how far into the current swing/cast you are, how long the
+// whole thing takes, and what it will cost — all spelled out rather than implicit.
+// When the hero can't pay, the bar parks at full and says why.
 // Exported because the renderer rewrites it every frame (see ui/render.js).
 export function attackBarLabel(state, elapsed, interval) {
+  const { resource, amount } = activeAttackCost(state);
+  if (!canAffordAttack(state)) {
+    return resource === 'mana'
+      ? `Gathering mana — needs ${amount}`
+      : `Catching your breath — needs ${amount} stamina`;
+  }
   const verb = state.hero.combat.mode === 'magic' ? 'Casting' : 'Winding up';
-  return `${verb} — ${Math.min(elapsed, interval).toFixed(1)}s / ${interval.toFixed(1)}s`;
+  return `${verb} — ${Math.min(elapsed, interval).toFixed(1)}s / ${interval.toFixed(1)}s · ${amount} ${resource}`;
 }
 
 // AC-style attack bar: a mode switcher (Melee/Archery/Magic — Archery needs a
@@ -130,19 +137,21 @@ function attackBarHtml(state, d) {
   if (mode === 'archery') {
     stanceHtml = ARCHERY_STANCES.map(
       (s, i) =>
-        `<button class="stance-seg${h.combat.archeryStance === i ? ' active' : ''}" data-action="set-archery-stance" data-arg="${i}">${esc(s.label)}</button>`
+        `<button class="stance-seg${h.combat.archeryStance === i ? ' active' : ''}" data-action="set-archery-stance" data-arg="${i}" title="${plural(staminaCostForWindup(s.interval ?? 1 / d.spd), 'stamina', 'stamina')} per shot">${esc(s.label)}</button>`
     ).join('');
   } else if (mode === 'magic') {
     stanceHtml = Object.entries(MAGIC_SPELLS)
       .map(
         ([id, s]) =>
-          `<button class="stance-seg${h.combat.magicSpell === id ? ' active' : ''}" data-action="set-magic-spell" data-arg="${id}">${esc(s.label)}</button>`
+          `<button class="stance-seg${h.combat.magicSpell === id ? ' active' : ''}" data-action="set-magic-spell" data-arg="${id}" title="${plural(s.manaCost, 'mana', 'mana')} per cast">${esc(s.label)}</button>`
       )
       .join('');
   } else {
     stanceHtml = MELEE_STANCES.map(
-      (s, i) =>
-        `<button class="stance-seg${h.combat.meleeStance === i ? ' active' : ''}" data-action="set-melee-stance" data-arg="${i}" title="${s.bleed ? 'Applies a stacking Bleed' : ''}">${esc(s.label)}</button>`
+      (s, i) => {
+        const tip = [`${plural(staminaCostForWindup(s.interval ?? 1 / d.spd), 'stamina', 'stamina')} per swing`, s.bleed ? 'Applies a stacking Bleed' : null].filter(Boolean).join(' · ');
+        return `<button class="stance-seg${h.combat.meleeStance === i ? ' active' : ''}" data-action="set-melee-stance" data-arg="${i}" title="${tip}">${esc(s.label)}</button>`;
+      }
     ).join('');
   }
 

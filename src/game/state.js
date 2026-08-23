@@ -50,9 +50,12 @@ export function createInitialState() {
       focus: 5,
       self: 5,
       attrXp: { str: 0, end: 0, coord: 0, quick: 0, focus: 0, self: 0 }, // progress toward each attribute's next point
-      hp: 0, // current HP; 0 = "initialize on first tick"
-      stamina: 0, // current Stamina; 0 = "initialize on first tick"
-      mana: 0, // current Mana; 0 = "initialize on first tick"
+      // null = "not filled in yet"; the first combat tick sets these to their maxima.
+      // Deliberately not 0: attacks spend whole points of Stamina, so a hero can land
+      // on exactly 0, and a 0-means-uninitialized sentinel would hand them a free refill.
+      hp: null,
+      stamina: null,
+      mana: null,
       // combat timers
       attackTimer: 0,
       monsterTimer: 0,
