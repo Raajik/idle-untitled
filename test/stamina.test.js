@@ -1,8 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createInitialState } from '../src/game/state.js';
-import { tickCombat, activeAttackCost, canAffordAttack, activeAttackInterval } from '../src/game/combat.js';
+import {
+  tickCombat,
+  activeAttackCost,
+  canAffordAttack,
+  activeAttackInterval,
+  DEFENSIVE_STAMINA_RESERVE,
+} from '../src/game/combat.js';
 import { derivedStats } from '../src/game/hero.js';
+import { startMeditating } from '../src/game/meditation.js';
 import {
   MELEE_STANCES,
   ARCHERY_STANCES,
@@ -109,9 +116,11 @@ test('hitting exactly zero stamina does not hand out a free refill', () => {
   assert.ok(s.hero.stamina < d.maxStamina * 0.5, `stamina jumped to ${s.hero.stamina} of ${d.maxStamina}`);
 });
 
-test('a fresh hero can still fight without stalling out', () => {
-  // Stamina should be a pressure, not a handbrake: the opening stance on a
-  // level-1 hero has to sustain itself against passive regen.
+test('a fresh hero is genuinely limited by stamina, but still kills', () => {
+  // Fighting is meant to outpace passive regen, so a level-1 hero spends most of
+  // the fight waiting on their next swing — that's the pressure that makes
+  // Endurance worth raising and recovery worth seeking out. It has to bite
+  // without stopping progress outright.
   const s = atPoi();
   let stalledTicks = 0;
   let liveTicks = 0;
@@ -121,6 +130,75 @@ test('a fresh hero can still fight without stalling out', () => {
     liveTicks++;
     if (!canAffordAttack(s)) stalledTicks++;
   }
-  assert.ok(s.progress.totalKills > 0);
-  assert.ok(stalledTicks / liveTicks < 0.25, `stalled ${((stalledTicks / liveTicks) * 100).toFixed(0)}% of the fight`);
+  const stalled = stalledTicks / liveTicks;
+  assert.ok(stalled > 0.3, `stamina should bite, but only stalled ${(stalled * 100).toFixed(0)}%`);
+  assert.ok(s.progress.totalKills > 0, 'a stamina-limited hero should still be killing things');
+});
+
+test('an endurance-heavy hero grows out of the stamina wall', () => {
+  // Regen is a fraction of the pool, so raising Endurance and Quickness is the
+  // in-game answer to being winded — the wall has to actually come down.
+  const s = atPoi();
+  s.hero.end = 40;
+  s.hero.quick = 40;
+  s.hero.combat.meleeStance = 2; // Heavy: middle of the cost ladder
+  let stalledTicks = 0;
+  let liveTicks = 0;
+  for (let i = 0; i < 2400; i++) {
+    tickCombat(s, 0.25);
+    if (s.hero.dead) continue;
+    liveTicks++;
+    if (!canAffordAttack(s)) stalledTicks++;
+  }
+  assert.ok(stalledTicks / liveTicks < 0.2, `still stalled ${((stalledTicks / liveTicks) * 100).toFixed(0)}% with 40 END/QUICK`);
+});
+
+test('attacks stop while there is still stamina left to defend with', () => {
+  // Being winded should cost damage, not your guard: if attacks could drain the
+  // pool to nothing, Dodge/Block/Parry would all fail too and an unattended hero
+  // would spiral into repeated deaths instead of just fighting slower. Attacks
+  // therefore stop DEFENSIVE_STAMINA_RESERVE short of empty, leaving enough for
+  // one defensive roll.
+  const setup = (stamina) => {
+    const s = atPoi();
+    s.hero.combat.meleeStance = 4; // the most expensive swing
+    const d = derivedStats(s);
+    s.hero.hp = d.maxHp;
+    s.hero.mana = d.maxMana;
+    s.hero.stamina = stamina;
+    s.hero.attackTimer = activeAttackInterval(s, d); // wound all the way up
+    return s;
+  };
+
+  const cost = activeAttackCost(setup(50)).amount;
+  // One point short of cost + reserve: the swing must not go off, and the hero
+  // must still be holding more than a single defensive roll's worth.
+  const winded = setup(cost + DEFENSIVE_STAMINA_RESERVE - 1);
+  assert.equal(canAffordAttack(winded), false);
+  const before = winded.hero.stamina;
+  tickCombat(winded, 0.25);
+  assert.ok(winded.hero.stamina >= before, 'a blocked swing should not have spent anything');
+
+  // Exactly at the threshold, it does go off.
+  const ready = setup(cost + DEFENSIVE_STAMINA_RESERVE);
+  assert.equal(canAffordAttack(ready), true);
+  tickCombat(ready, 0.25);
+  assert.ok(ready.hero.stamina < cost + DEFENSIVE_STAMINA_RESERVE, 'the swing should have spent its cost');
+});
+
+test('meditating restores stamina far faster than fighting does', () => {
+  const fighting = atPoi();
+  const resting = atPoi();
+  for (const st of [fighting, resting]) {
+    const d = derivedStats(st);
+    st.hero.hp = d.maxHp;
+    st.hero.mana = d.maxMana;
+    st.hero.stamina = 1;
+  }
+  startMeditating(resting);
+  for (let i = 0; i < 40; i++) {
+    tickCombat(fighting, 0.25);
+    tickCombat(resting, 0.25);
+  }
+  assert.ok(resting.hero.stamina > fighting.hero.stamina * 2, `rest ${resting.hero.stamina} vs fight ${fighting.hero.stamina}`);
 });

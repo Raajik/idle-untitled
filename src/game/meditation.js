@@ -11,9 +11,12 @@ import { derivedStats } from './hero.js';
 import { trainAttribute } from './skills.js';
 import { addLog } from './state.js';
 
-// Fractions of each vital's maximum restored per second of meditation.
+// Fractions of each vital's maximum restored per second of meditation. Stamina
+// comes back several times faster than the in-combat trickle (see combat.js
+// STAMINA_REGEN_PER_SECOND) because catching your breath is the entire point:
+// fighting is meant to run you down, and stopping is meant to be the fix.
 const MEDITATE_HP_PER_SECOND = 0.02;
-const MEDITATE_STAMINA_PER_SECOND = 0.04;
+const MEDITATE_STAMINA_PER_SECOND = 0.1;
 const MEDITATE_MANA_PER_SECOND = 0.03;
 
 // Sitting with your own thoughts is how Focus and Self grow outside a fight.

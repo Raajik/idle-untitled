@@ -262,10 +262,7 @@ export function createRenderer(state, { onImport }) {
 
     if (m) {
       const nameEl = document.getElementById('m-name');
-      if (nameEl) {
-        nameEl.textContent = `${m.name} (Lv ${m.level})` + (m.isBoss ? ' ☠ BOSS' : '');
-        nameEl.className = m.isBoss ? 'soul' : '';
-      }
+      if (nameEl) nameEl.textContent = state.meditating ? 'Resting — the fight can wait.' : `${m.name} (Lv ${m.level})`;
       setBar('m-hp', (m.hp / m.maxHp) * 100, `${Math.max(0, Math.ceil(m.hp))} / ${m.maxHp}`);
       setText('m-meta', `ATK ${m.atk} · DEF ${m.def} · ${m.dmgType}`);
     }

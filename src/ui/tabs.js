@@ -167,6 +167,17 @@ function attackBarHtml(state, d) {
     </div>`;
 }
 
+// Meditation is the only way to get stamina back at any speed, and fighting is
+// tuned to run you out of it, so this control has to be within reach wherever
+// you might run dry — not just at the Lifestone that introduced it.
+function meditateButtonHtml(state) {
+  const resting = state.meditating;
+  const disabled = resting ? false : !canMeditate(state);
+  const label = resting ? 'Stop meditating' : 'Meditate';
+  const hint = !resting && isRested(state) ? ' <span class="muted">(fully rested)</span>' : '';
+  return `<button class="btn ${resting ? '' : 'primary'}" data-action="toggle-meditate" ${disabled ? 'disabled' : ''}>${label}</button>${hint}`;
+}
+
 // Shared monster/hero combat display used by both real POI fights and the tutorial
 // road — `extraHtml` slots in anything extra (e.g. a Flee button during the tutorial).
 function combatDisplayHtml(state, headerHtml, extraHtml = '') {
@@ -179,7 +190,7 @@ function combatDisplayHtml(state, headerHtml, extraHtml = '') {
   return `
     <div class="panel">
       ${headerHtml}
-      <div><b id="m-name" class="${m && m.isBoss ? 'soul' : ''}">${m ? esc(m.name) + ` (Lv ${m.level})` + (m.isBoss ? ' ☠ BOSS' : '') : 'Searching...'}</b></div>
+      <div><b id="m-name">${state.meditating ? 'Resting — the fight can wait.' : m ? esc(m.name) + ` (Lv ${m.level})` : 'Searching...'}</b></div>
       ${bar('hp', m ? (m.hp / m.maxHp) * 100 : 0, m ? `${Math.max(0, Math.ceil(m.hp))} / ${m.maxHp}` : '...', 'm-hp', 'monster')}
       <div id="m-meta" class="muted">${m ? `ATK ${m.atk} · DEF ${m.def} · ${esc(m.dmgType)}` : ''}</div>
       ${extraHtml}
@@ -191,6 +202,7 @@ function combatDisplayHtml(state, headerHtml, extraHtml = '') {
       </div>
       ${bar('xp', (xpProgress / xpForLevel(h.level)) * 100, `XP ${fmt(xpProgress)} / ${fmt(xpForLevel(h.level))}`, 'h-xp')}
       ${attackBarHtml(state, d)}
+      <div class="actions" style="margin-top:8px">${meditateButtonHtml(state)}</div>
       <div id="h-attack-line" class="muted">${attackLine}, ${esc(aw.label)} (Rank ${aw.skill.rank}).</div>
       <div id="h-stats" class="muted">ATK ${d.atk} · DEF ${d.def} · SPD ${d.spd.toFixed(2)}/s · Crit ${d.critChance.toFixed(1)}% · ${fmt(state.pyreals)} pyreals</div>
     </div>`;
@@ -300,8 +312,6 @@ function buildingPanelHtml(state) {
 function restHtml(state) {
   const d = derivedStats(state);
   const h = state.hero;
-  const label = state.meditating ? 'Stop meditating' : 'Meditate';
-  const disabled = state.meditating ? false : !canMeditate(state);
   return `
     <div class="vitals-row">
       ${bar('hp', (h.hp / d.maxHp) * 100, `${Math.ceil(h.hp)} / ${d.maxHp} HP`, 'h-hp', 'hero')}
@@ -309,8 +319,7 @@ function restHtml(state) {
       ${bar('mana', (h.mana / d.maxMana) * 100, `${Math.ceil(h.mana)} / ${d.maxMana} Mana`, 'h-mana')}
     </div>
     <div class="actions" style="margin-top:8px">
-      <button class="btn ${state.meditating ? '' : 'primary'}" data-action="toggle-meditate" ${disabled ? 'disabled' : ''}>${label}</button>
-      ${isRested(state) && !state.meditating ? '<span class="muted">Fully rested.</span>' : ''}
+      ${meditateButtonHtml(state)}
     </div>`;
 }
 
@@ -436,7 +445,8 @@ export function battleTab(state) {
           return `<button class="${cls}" data-action="open-building" data-arg="${building.id}">${esc(building.name)}${sub}</button>`;
         })
         .join('');
-      townSection = `<div class="panel"><h2>Town — ${esc(region.name)}</h2><div class="tile-list">${buildingTiles}</div>${buildingPanelHtml(state)}</div>`;
+      townSection = `<div class="panel"><h2>Town — ${esc(region.name)}</h2><div class="tile-list">${buildingTiles}</div>${buildingPanelHtml(state)}</div>
+        <div class="panel"><h2>Rest</h2>${restHtml(state)}</div>`;
     }
   }
 
@@ -812,7 +822,7 @@ export function overviewTab(state) {
 
   const poi = state.location.poiId ? getPoiById(state.location.poiId) : null;
   tiles.push(`<div class="panel"><h2>Battle — ${poi ? esc(poi.name) : 'Town'}</h2>
-    <b id="m-name" class="${m && m.isBoss ? 'soul' : ''}">${m ? esc(m.name) + ` (Lv ${m.level})` + (m.isBoss ? ' ☠ BOSS' : '') : state.travel ? 'Travelling...' : 'Searching...'}</b>
+    <b id="m-name">${m ? esc(m.name) + ` (Lv ${m.level})` : state.travel ? 'Travelling...' : 'Searching...'}</b>
     ${bar('hp', m ? (m.hp / m.maxHp) * 100 : 0, m ? `${Math.ceil(m.hp)} / ${m.maxHp}` : '...', 'm-hp', 'monster')}
     <div id="ov-kills" class="muted">${poi ? esc(waveLine(state, poi)) : ''}</div></div>`);
 
@@ -869,7 +879,7 @@ export function battleDockHtml(state) {
 
   const monsterHtml = m
     ? `<div class="dock-monster">
-        <b class="${m.isBoss ? 'soul' : ''}">${esc(m.name)} (Lv ${m.level})${m.isBoss ? ' ☠' : ''}</b>
+        <b>${esc(m.name)} (Lv ${m.level})</b>
         ${bar('hp mini', (m.hp / m.maxHp) * 100, `${Math.max(0, Math.ceil(m.hp))}/${m.maxHp}`, 'dock-m-hp')}
       </div>`
     : `<div class="dock-monster muted">—</div>`;

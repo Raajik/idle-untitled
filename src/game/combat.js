@@ -56,13 +56,21 @@ const RESPAWN_DELAY = 3.0;
 const HERO_STAMINA_COST_PER_DEFEND = 4;
 const MONSTER_STAMINA_COST_PER_DODGE = 3;
 
+// Attacks stop before they can spend the last of the pool, so being winded costs
+// you damage but never your guard. Without this, a drained hero can't Dodge,
+// Block or Parry either, which turns a bad stretch into an unattended death
+// spiral rather than a slower fight.
+export const DEFENSIVE_STAMINA_RESERVE = HERO_STAMINA_COST_PER_DEFEND;
+
 // Passive in-combat regen, as a fraction of each vital's maximum per second.
-// Stamina's rate has to cover both halves of what it now pays for — every attack
-// (1-5 by windup, see data/combatStances.js) and every Dodge/Block/Parry — or a
-// fresh hero spends the fight winded rather than fighting. Meditation is still
-// far faster; this is just the trickle you get for staying in the fight.
+//
+// Stamina's rate is deliberately below what swinging costs (roughly 1.1-1.6 a
+// second, see data/combatStances.js), so fighting runs you down and your attack
+// rate settles at whatever regen can pay for. That's the intended pressure: it
+// makes Endurance and Quickness worth raising, and it's the problem that
+// Meditation answers now and that healing/alchemy/magic will answer better.
 const HP_REGEN_PER_SECOND = 0.01;
-const STAMINA_REGEN_PER_SECOND = 0.035;
+const STAMINA_REGEN_PER_SECOND = 0.015;
 const MANA_REGEN_PER_SECOND = 0.02;
 
 function resolvePoi(state) {
@@ -337,7 +345,8 @@ export function activeAttackResource(state) {
 // you're wound up and waiting to recover, not swinging at nothing.
 export function canAffordAttack(state, stats = derivedStats(state)) {
   const { resource, amount } = activeAttackCost(state, stats);
-  return state.hero[resource === 'mana' ? 'mana' : 'stamina'] >= amount;
+  if (resource === 'mana') return state.hero.mana >= amount;
+  return state.hero.stamina - amount >= DEFENSIVE_STAMINA_RESERVE;
 }
 
 // One game tick. dt in seconds.
@@ -397,7 +406,7 @@ export function tickCombat(state, dt) {
     const staminaCost = staminaCostForWindup(attackInterval);
     h.attackTimer += dt;
     while (h.attackTimer >= attackInterval) {
-      if (h.stamina < staminaCost) {
+      if (h.stamina - staminaCost < DEFENSIVE_STAMINA_RESERVE) {
         h.attackTimer = attackInterval; // too winded to loose the arrow; hold the bar full
         break;
       }
@@ -447,7 +456,7 @@ export function tickCombat(state, dt) {
     const staminaCost = staminaCostForWindup(attackInterval);
     h.attackTimer += dt;
     while (h.attackTimer >= attackInterval) {
-      if (h.stamina < staminaCost) {
+      if (h.stamina - staminaCost < DEFENSIVE_STAMINA_RESERVE) {
         h.attackTimer = attackInterval; // too winded to swing; hold the bar full
         break;
       }
