@@ -3,16 +3,17 @@
 // monster a level to show the player roughly how tough it is relative to the hero.
 //
 // HP is tuned so a hero whose Strength has kept pace with the content (roughly
-// str = 5 + level*2) needs about 8-12 successful hits to drop a normal monster —
+// str = 1 + level*2, since every attribute now starts at 1) needs about 8-12
+// successful hits to drop a normal monster —
 // how MANY of the hero's swings that takes depends on their offense skill rank
 // (see game/skills.js `hitChance`), so undertrained skills mean more total swings,
 // not more raw monster toughness.
 
 export function monsterStatsForLevel(level) {
   return {
-    hp: Math.round(100 + level * 26),
-    atk: Math.round(2 + level * 1.1),
-    def: Math.floor(level * 0.4),
+    hp: Math.round(20 + level * 22),
+    atk: 1 + level * 0.8,
+    def: Math.floor(level * 0.3),
     xp: Math.round(12 + level * 7),
     pyreals: Math.round(8 + level * 5),
     dodge: Math.min(25, 5 + level * 0.25), // % chance to dodge the hero's attack

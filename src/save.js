@@ -43,6 +43,7 @@ function migrate(raw) {
   state.hero.skills.gathering = { ...fresh.hero.skills.gathering, ...(rawSkills.gathering || {}) };
   state.hero.vitae = { ...fresh.hero.vitae, ...((raw.hero && raw.hero.vitae) || {}) };
   state.achievements = Array.isArray(raw.achievements) ? raw.achievements : [];
+  state.trophies = { ...fresh.trophies, ...(raw.trophies || {}) };
   // Run was renamed to Athletics — carry an old save's progress over rather than losing it.
   if (rawSkills.run && !rawSkills.athletics) {
     state.hero.skills.athletics = { ...rawSkills.run };

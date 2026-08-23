@@ -43,12 +43,14 @@ export function createInitialState() {
     hero: {
       name: '',
       level: 1,
-      str: 5,
-      end: 5,
-      coord: 5,
-      quick: 5,
-      focus: 5,
-      self: 5,
+      // Everyone starts at 1 in everything — see ATTRIBUTE_BASE in game/skills.js,
+      // which anchors the attribute XP curve to the same number.
+      str: 1,
+      end: 1,
+      coord: 1,
+      quick: 1,
+      focus: 1,
+      self: 1,
       attrXp: { str: 0, end: 0, coord: 0, quick: 0, focus: 0, self: 0 }, // progress toward each attribute's next point
       // null = "not filled in yet"; the first combat tick sets these to their maxima.
       // Deliberately not 0: attacks spend whole points of Stamina, so a hero can land
@@ -116,6 +118,7 @@ export function createInitialState() {
     inventory: [],
     achievements: [], // earned achievement ids (see data/achievements.js); permanent, survives Enlightenment
     materials: {}, // materialId -> count, no cap
+    trophies: {}, // trophyId -> count (see data/trophies.js); quest and turn-in stock
     buildings: freshBuildings(), // buildingId -> { level, stock, rotatesAt }; only the General Store starts open
     training: { atk: 0, hp: 0, pyreals: 0 },
     enlightenment: {
@@ -159,6 +162,7 @@ export function resetRun(state) {
   state.equipment = fresh.equipment;
   state.inventory = fresh.inventory;
   state.materials = fresh.materials;
+  state.trophies = fresh.trophies;
   state.buildings = freshBuildings(); // town is rebuilt from scratch: buildings cost run currency, like Training
   state.training = fresh.training;
   state.log = fresh.log;

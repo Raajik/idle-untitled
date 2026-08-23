@@ -66,7 +66,7 @@ export function getBonuses(state) {
     }
     if (slot === 'armor') {
       b.armorDef += Math.floor(item.power * 0.6);
-      b.hpFlat += item.power * 2;
+      b.hpFlat += item.power;
     }
     if (slot === 'shield') b.armorDef += Math.floor(item.power * 0.5);
     for (const spell of item.spells) {
@@ -104,6 +104,13 @@ export function getBonuses(state) {
   return b;
 }
 
+// Vitals are deliberately scaled to stay legible for the whole game. Every
+// attribute starts at 1 and is meant to top out around 100, so these constants
+// put a fresh hero near 23/18/18 and a maxed one near 370/315/365 — Asheron's
+// Call territory, hundreds rather than thousands, and never a number that needs
+// scientific notation to write down. Every multiplier that feeds them (training,
+// building perks, Enlightenment upgrades) is capped or exponentially priced for
+// the same reason: growth here is meant to be wide, not vertical.
 export function derivedStats(state) {
   const h = state.hero;
   const b = getBonuses(state);
@@ -112,14 +119,14 @@ export function derivedStats(state) {
   // speed or crit — being weakened should cost you power, not turn the fight
   // into slow motion, which at the 40% floor would be miserable to watch.
   const vitae = vitaeMultiplier(state);
-  const maxHp = Math.floor((20 + h.end * 5 + b.hpFlat) * (1 + b.hpPct / 100) * vitae);
+  const maxHp = Math.floor((20 + h.end * 3.5 + b.hpFlat) * (1 + b.hpPct / 100) * vitae);
   const atk = Math.floor((3 + h.str * 1.5 + b.weaponAtk + b.atkFlat) * (1 + b.atkPct / 100) * vitae);
   const magicAtk = Math.floor((3 + h.focus * 1.5 + b.magicAtkFlat) * vitae); // Magic's own damage baseline, off Focus not Strength
   const def = Math.floor((h.end * 0.5 + b.armorDef + b.armorFlat) * vitae);
   const spd = 1 + h.quick * 0.04; // attacks per second
   const critChance = 5 + h.coord * 0.2 + b.critPct; // percent
-  const maxStamina = Math.floor((20 + h.end * 2 + h.quick * 2) * vitae);
-  const maxMana = Math.floor((20 + h.self * 4 + b.maxManaFlat) * vitae);
+  const maxStamina = Math.floor((15 + h.end * 1.5 + h.quick * 1.5) * vitae);
+  const maxMana = Math.floor((15 + h.self * 3.5 + b.maxManaFlat) * vitae);
   return {
     maxHp,
     atk,

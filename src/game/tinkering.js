@@ -16,7 +16,17 @@ import { rollSpell, rollSpellById, MAX_SPELL_LEVEL } from '../data/spells.js';
 import { trainSkill, trainAttribute, TINKER_ATTR_XP } from './skills.js';
 import { addLog } from './state.js';
 
-export const TINKER_COST = 3; // units of material consumed per application
+// Working the same property in again costs more each time, steeply. The first
+// few passes on a weapon are cheap enough to feel free; by the fourth or fifth
+// you're weighing another point of Accuracy against a building upgrade out of
+// the same pile of material. That trade-off is the point.
+export const TINKER_BASE_COST = 3;
+const TINKER_COST_GROWTH = 1.7;
+
+// Cost of taking a property from `level` to `level + 1` (level 0 = adding it).
+export function tinkerCostAtLevel(level) {
+  return Math.ceil(TINKER_BASE_COST * Math.pow(TINKER_COST_GROWTH, Math.max(0, level)));
+}
 const TINKER_XP = 20;
 // Room for every property a weapon class can be taught — magic and melee each
 // have five recipes, and a cap below that would mean spending a material on a
@@ -40,11 +50,26 @@ export function tinkerEffectFor(state, slot, materialId) {
   return SLOT_MATERIAL_CATEGORY[slot] === material.category ? 'any' : null;
 }
 
+// What the next application of this material to this slot will cost. For a
+// weapon that's exact — the recipe names the property, so we know its current
+// level. For armor and jewelry, which still roll randomly, the item's deepest
+// existing property stands in, so the curve behaves the same way.
+export function tinkerCostFor(state, slot, materialId) {
+  const effect = tinkerEffectFor(state, slot, materialId);
+  if (!effect) return null;
+  const item = state.equipment[slot];
+  const level =
+    effect === 'any'
+      ? item.spells.reduce((max, sp) => Math.max(max, sp.level), 0)
+      : (item.spells.find((sp) => sp.id === effect) || { level: 0 }).level;
+  return tinkerCostAtLevel(level);
+}
+
 // Which equipped item(s) a given material can be applied to, right now.
 export function canTinker(state, slot, materialId) {
   const effect = tinkerEffectFor(state, slot, materialId);
   if (!effect) return false;
-  if ((state.materials[materialId] || 0) < TINKER_COST) return false;
+  if ((state.materials[materialId] || 0) < tinkerCostFor(state, slot, materialId)) return false;
   // A full item can still be deepened, but only in a property it already has.
   const item = state.equipment[slot];
   if (item.spells.length < MAX_SPELLS_PER_ITEM) return true;
@@ -57,6 +82,7 @@ export function applyTinkering(state, slot, materialId) {
   const material = getMaterial(materialId);
   const tinkering = state.hero.skills.tinkering;
 
+  const cost = tinkerCostFor(state, slot, materialId);
   const ceiling = tinkerLevelCeiling(tinkering.rank);
   const effect = tinkerEffectFor(state, slot, materialId);
   // A weapon gets exactly the property its material teaches; anything else takes
@@ -69,7 +95,7 @@ export function applyTinkering(state, slot, materialId) {
   // no quietly spending a material to buff something else.
   if (!existing && item.spells.length >= MAX_SPELLS_PER_ITEM) return false;
 
-  state.materials[materialId] -= TINKER_COST;
+  state.materials[materialId] -= cost;
   let resultLabel;
   if (existing) {
     existing.level = Math.min(MAX_SPELL_LEVEL, existing.level + 1);
@@ -87,6 +113,6 @@ export function applyTinkering(state, slot, materialId) {
   trainSkill(state, tinkering, 'Tinkering', TINKER_XP);
   trainAttribute(state, 'coord', TINKER_ATTR_XP.coord);
   trainAttribute(state, 'focus', TINKER_ATTR_XP.focus);
-  addLog(state, `You work ${material.name} into ${item.name}: ${resultLabel}.`, 'good');
+  addLog(state, `You work ${cost} ${material.name} into ${item.name}: ${resultLabel}.`, 'good');
   return true;
 }

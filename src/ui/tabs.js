@@ -31,7 +31,8 @@ import { vitaePct, atMaxVitae, xpToClearStack, VITAE_PER_STACK, MAX_VITAE_PCT } 
 import { ACHIEVEMENTS } from '../data/achievements.js';
 import { availableShortcutsFrom, canJump } from '../game/shortcuts.js';
 import { getMaterial, materialsForSlot, MATERIALS } from '../data/materials.js';
-import { canTinker, tinkerEffectFor, TINKER_COST } from '../game/tinkering.js';
+import { TROPHIES } from '../data/trophies.js';
+import { canTinker, tinkerEffectFor, tinkerCostFor, tinkerCostAtLevel, TINKER_BASE_COST } from '../game/tinkering.js';
 import { TINKER_RECIPES } from '../data/tinkering.js';
 import {
   buildingsForRegion,
@@ -646,18 +647,19 @@ export function tinkeringTab(state) {
       const usable = materialsForSlot(slot)
         .concat(slot === 'weapon' ? MATERIALS.filter((m) => !materialsForSlot(slot).includes(m)) : [])
         .filter((m) => tinkerEffectFor(state, slot, m.id));
-      const affordable = usable.filter((m) => (state.materials[m.id] || 0) >= TINKER_COST);
+      const affordable = usable.filter((m) => canTinker(state, slot, m.id));
       const cls = slot === 'weapon' ? weaponClass(item.baseType) : null;
       const teaches = (m) => {
         const effect = tinkerEffectFor(state, slot, m.id);
-        return effect && effect !== 'any' ? ` — ${SPELL_ID_LABELS[effect] || effect}` : '';
+        const label = effect && effect !== 'any' ? ` — ${SPELL_ID_LABELS[effect] || effect}` : '';
+        return `${label} · costs ${tinkerCostFor(state, slot, m.id)}`;
       };
       const body = affordable.length
         ? `<select class="text-input" id="tinker-material-${slot}">${affordable
             .map((m) => `<option value="${m.id}">${esc(m.name)} (${state.materials[m.id]})${esc(teaches(m))}</option>`)
             .join('')}</select>
-           <button class="btn" data-action="apply-tinker" data-arg="${slot}">Apply (${TINKER_COST})</button>`
-        : `<span class="muted">Nothing to work in yet — needs ${TINKER_COST}+ of ${usable.length ? usable.map((m) => esc(m.name)).join(', ') : 'a matching material'}</span>`;
+           <button class="btn" data-action="apply-tinker" data-arg="${slot}">Apply</button>`
+        : `<span class="muted">Nothing to work in yet — needs ${usable.length ? usable.map((m) => `${tinkerCostFor(state, slot, m.id)} ${esc(m.name)}`).join(' / ') : `${TINKER_BASE_COST}+ of a matching material`}</span>`;
       return `<div class="upgrade-row">
         <div><b>${esc(item.name)}</b> <span class="muted">[${cls ? `${cls} weapon` : slot}]</span></div>
         <div class="actions">${body}</div>
@@ -680,6 +682,9 @@ export function tinkeringTab(state) {
     <div class="panel">
       <h2>Tinkering</h2>
       <p class="muted">Works a material into an equipped item. No risk and no workmanship roll — but a weapon only takes what its kind has a use for, and each material always teaches the same thing.</p>
+      <p class="muted" style="margin-top:6px">Deepening a property costs more every time: ${[0, 1, 2, 3, 4, 5]
+        .map((lvl) => tinkerCostAtLevel(lvl))
+        .join(' → ')} → … The same materials raise your town's buildings, so past the first few passes it's a choice.</p>
     </div>
     <div class="panel"><h2>Equipped Gear</h2>${slotRows || '<p class="muted">Nothing equipped yet.</p>'}</div>
     <div class="panel"><h2>Weapon Recipes</h2>${recipeRows}</div>
@@ -823,6 +828,12 @@ export function inventoryTab(state) {
     })
     .join('');
 
+  const heldTrophies = TROPHIES.filter((t) => (state.trophies[t.id] || 0) > 0)
+    .map(
+      (t) => `<div class="stat-row" title="${esc(t.desc)}"><span class="k">${esc(t.name)}</span><span class="v">${fmt(state.trophies[t.id])}</span></div>`
+    )
+    .join('');
+
   return `
     <div class="panel"><h2>Equipped</h2><div class="doll-grid">${equippedGridHtml(state)}</div></div>
     <div class="panel">
@@ -833,7 +844,12 @@ export function inventoryTab(state) {
       ${inventoryGridHtml(state, filtered)}
       <div class="slot-detail">${selectedItemHtml(state)}</div>
     </div>
-    <div class="panel"><h2>Materials</h2>${heldMaterials || '<p class="muted">None gathered or salvaged yet.</p>'}</div>`;
+    <div class="panel"><h2>Materials</h2>${heldMaterials || '<p class="muted">None gathered or salvaged yet.</p>'}</div>
+    <div class="panel">
+      <h2>Trophies</h2>
+      ${heldTrophies || '<p class="muted">Nothing worth keeping yet.</p>'}
+      ${heldTrophies ? '<p class="muted" style="margin-top:6px">Kept for quest and turn-in rewards.</p>' : ''}
+    </div>`;
 }
 
 export function trainingTab(state) {

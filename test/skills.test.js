@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { trainSkill, trainAttribute, xpToNextAttrPoint, defensiveChance, resistanceMitigationPct, xpToNextRank, MAX_SKILL_RANK } from '../src/game/skills.js';
+import { trainSkill, trainAttribute, xpToNextAttrPoint, defensiveChance, resistanceMitigationPct, xpToNextRank, MAX_SKILL_RANK,
+  ATTRIBUTE_BASE,
+} from '../src/game/skills.js';
 import { monsterStatsForLevel, bossStatsForLevel } from '../src/data/monsterScaling.js';
 import { createInitialState } from '../src/game/state.js';
 import { tickCombat } from '../src/game/combat.js';
@@ -65,15 +67,18 @@ test('Parry trains once a melee weapon is equipped', () => {
 });
 
 test('xpToNextAttrPoint lines up with the skill curve at the attribute base value', () => {
-  assert.equal(xpToNextAttrPoint(5), xpToNextRank(0));
-  assert.equal(xpToNextAttrPoint(6), xpToNextRank(1));
+  // Attributes start at ATTRIBUTE_BASE, and that value is the curve's "rank 0" —
+  // the first point of Strength costs exactly what a skill's first rank does.
+  assert.equal(xpToNextAttrPoint(ATTRIBUTE_BASE), xpToNextRank(0));
+  assert.equal(xpToNextAttrPoint(ATTRIBUTE_BASE + 1), xpToNextRank(1));
 });
 
 test('trainAttribute logs the point gained', () => {
   const s = createInitialState();
+  assert.equal(s.hero.str, ATTRIBUTE_BASE, 'a fresh hero starts at the base value');
   trainAttribute(s, 'str', xpToNextAttrPoint(s.hero.str) + 1);
-  assert.equal(s.hero.str, 6);
-  assert.ok(s.log.some((l) => l.text === 'Strength increased to 6.'));
+  assert.equal(s.hero.str, ATTRIBUTE_BASE + 1);
+  assert.ok(s.log.some((l) => l.text === `Strength increased to ${ATTRIBUTE_BASE + 1}.`));
 });
 
 test('trainAttribute has no cap, unlike trainSkill', () => {

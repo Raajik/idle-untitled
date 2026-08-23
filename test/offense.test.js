@@ -28,8 +28,11 @@ test('activeWeaponSkill follows the equipped weapon baseType', () => {
 });
 
 test('a level-1 monster takes multiple successful hits for a modestly-geared hero', () => {
+  // Attributes start at 1 and gain roughly two a level, so a hero who has kept
+  // pace with level-1 content is around str 3 — the curve in monsterScaling.js is
+  // anchored to that, not to the old str-5 starting point.
   const stats = monsterStatsForLevel(1);
-  const typicalAtk = 3 + 7 * 1.5; // str 7, no gear — an early-game hero
+  const typicalAtk = 3 + 3 * 1.5;
   const hitsToKill = Math.ceil(stats.hp / Math.max(1, typicalAtk - stats.def));
   assert.ok(hitsToKill >= 5 && hitsToKill <= 20, `expected 5-20 hits, got ${hitsToKill}`);
 });

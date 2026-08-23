@@ -111,6 +111,20 @@ export function rollDrop(state) {
   });
 }
 
+// Trophies a monster leaves behind. Each entry rolls independently, so a rat can
+// hand over an ordinary tail and a pristine one from the same corpse. Returns
+// the ids granted, for the caller to log.
+export function rollTrophies(state, monsterDef) {
+  const granted = [];
+  for (const drop of monsterDef.drops || []) {
+    if (drop.chance < 1 && !chance(drop.chance)) continue;
+    const qty = drop.qty || 1;
+    state.trophies[drop.id] = (state.trophies[drop.id] || 0) + qty;
+    granted.push({ id: drop.id, qty });
+  }
+  return granted;
+}
+
 // Rough item "score" for auto-equip and comparison.
 export function itemScore(item) {
   if (!item) return 0;

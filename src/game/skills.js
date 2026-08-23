@@ -74,7 +74,8 @@ export function xpToNextRank(rank) {
   return Math.ceil(18 * Math.pow(rank + 1, 1.55));
 }
 
-const ATTR_BASE_VALUE = 5; // attributes start at 5 — treat that as "rank 0" for the shared curve
+export const ATTRIBUTE_BASE = 1; // attributes start at 1 — treat that as "rank 0" for the shared curve
+const ATTR_BASE_VALUE = ATTRIBUTE_BASE;
 
 export function xpToNextAttrPoint(value) {
   return xpToNextRank(Math.max(0, value - ATTR_BASE_VALUE));

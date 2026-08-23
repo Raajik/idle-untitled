@@ -7,7 +7,7 @@
 
 import { getPoiById, isMagicDamageType, isSite } from '../data/regions.js';
 import { monsterStatsForLevel } from '../data/monsterScaling.js';
-import { TUTORIAL_ROAD } from '../data/tutorial.js';
+import { TUTORIAL_ROAD, TUTORIAL_MONSTER_WEIGHTS } from '../data/tutorial.js';
 import {
   MELEE_STANCES,
   ARCHERY_STANCES,
@@ -18,11 +18,12 @@ import {
   BLEED_DAMAGE_PER_STACK_PCT,
   staminaCostForWindup,
 } from '../data/combatStances.js';
-import { pick } from '../engine/rng.js';
+import { pick, pickWeighted } from '../engine/rng.js';
 import { pushFx } from '../engine/fx.js';
 import { fmt } from '../engine/format.js';
 import { derivedStats, grantXp } from './hero.js';
-import { rollDrop, maybeAutoEquip } from './loot.js';
+import { rollDrop, rollTrophies, maybeAutoEquip } from './loot.js';
+import { getTrophy } from '../data/trophies.js';
 import { addLog } from './state.js';
 import { tickTravel, arrive } from './travel.js';
 import { tickRecallCooldown, respawnAtLifestone, tickLifestoneGrowth } from './lifestone.js';
@@ -74,6 +75,19 @@ const HP_REGEN_PER_SECOND = 0.01;
 const STAMINA_REGEN_PER_SECOND = 0.015;
 const MANA_REGEN_PER_SECOND = 0.02;
 
+// ...but a percentage of a tiny pool is nothing at all. A hero starts on 10 of
+// each, where 1.5% a second is one point every seven seconds and a single swing
+// costs one — which is a standstill, not a constraint. These floors keep the
+// early game moving; the percentages overtake them as the pools grow, so the
+// pressure arrives when there's something to push against.
+const HP_REGEN_FLOOR = 0.5;
+const STAMINA_REGEN_FLOOR = 1;
+const MANA_REGEN_FLOOR = 0.5;
+
+function regenPerSecond(max, pct, floor, flat) {
+  return Math.max(floor, max * pct) + flat;
+}
+
 function resolvePoi(state) {
   return state.location.poiId === TUTORIAL_ROAD.id ? TUTORIAL_ROAD : getPoiById(state.location.poiId);
 }
@@ -91,13 +105,16 @@ export function spawnMonster(state) {
   if (!tutorial) beginWaveIfNeeded(state);
 
   const depth = tutorial ? 0 : waveDifficulty(p.wave);
-  const def = pick(poi.monsters);
-  const base = monsterStatsForLevel(def.level);
+  // Roadside critters are weighted (mostly harmless, the occasional rat) and
+  // carry their own stat block; dungeon monsters roll flat off their level.
+  const def = tutorial ? pickWeighted(poi.monsters.map((m) => ({ ...m, weight: TUTORIAL_MONSTER_WEIGHTS[m.name] || 1 }))) : pick(poi.monsters);
+  const base = def.stats || monsterStatsForLevel(def.level);
   const r = 1 + depth;
   state.monster = {
     name: def.name,
     level: def.level,
     dmgType: def.dmgType,
+    drops: def.drops,
     maxHp: Math.round(base.hp * r),
     hp: Math.round(base.hp * r),
     atk: Math.round(base.atk * r),
@@ -266,7 +283,12 @@ function onMonsterDeath(state) {
     pushFx({ type: 'levelup' });
   }
 
-  if (onTutorialRoad(state)) return; // roadside critters carry nothing to loot, and aren't a wave
+  for (const { id, qty } of rollTrophies(state, m)) {
+    const trophy = getTrophy(id);
+    addLog(state, `You take ${qty} ${trophy ? trophy.name : id}.`, 'loot-line');
+  }
+
+  if (onTutorialRoad(state)) return; // roadside critters carry no gear, and aren't a wave
 
   const drop = rollDrop(state);
   if (drop) {
@@ -544,9 +566,9 @@ export function tickCombat(state, dt) {
   }
 
   // Slow passive regen for all three vitals (healing/meditation are skills, not a given)
-  h.hp = Math.min(stats.maxHp, h.hp + (stats.maxHp * HP_REGEN_PER_SECOND + stats.hpRegenFlat) * dt);
-  h.stamina = Math.min(stats.maxStamina, h.stamina + (stats.maxStamina * STAMINA_REGEN_PER_SECOND + stats.staminaRegenFlat) * dt);
-  h.mana = Math.min(stats.maxMana, h.mana + (stats.maxMana * MANA_REGEN_PER_SECOND + stats.manaRegenFlat) * dt);
+  h.hp = Math.min(stats.maxHp, h.hp + regenPerSecond(stats.maxHp, HP_REGEN_PER_SECOND, HP_REGEN_FLOOR, stats.hpRegenFlat) * dt);
+  h.stamina = Math.min(stats.maxStamina, h.stamina + regenPerSecond(stats.maxStamina, STAMINA_REGEN_PER_SECOND, STAMINA_REGEN_FLOOR, stats.staminaRegenFlat) * dt);
+  h.mana = Math.min(stats.maxMana, h.mana + regenPerSecond(stats.maxMana, MANA_REGEN_PER_SECOND, MANA_REGEN_FLOOR, stats.manaRegenFlat) * dt);
 }
 
 // Bail on the current tutorial-road encounter instead of fighting it. Always

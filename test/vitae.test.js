@@ -37,6 +37,9 @@ test('vitae stacks 5% at a time and stops at 40%', () => {
 
 test('vitae weakens the body without slowing it down', () => {
   const s = atPoi();
+  // A hero with room for 5% to actually register: at the starting value of 1 in
+  // everything, ATK is 4 and a 5% cut rounds away to nothing.
+  for (const attr of ['str', 'end', 'coord', 'quick', 'focus', 'self']) s.hero[attr] = 20;
   const clean = derivedStats(s);
   gainVitae(s, 'test');
   const hurt = derivedStats(s);
