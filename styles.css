@@ -97,6 +97,10 @@ body {
 }
 .tab-btn:hover { color: var(--text); background: var(--bg-inset); }
 .tab-btn.active { color: var(--accent); border-color: var(--border); background: var(--bg-inset); }
+/* .active and :hover share specificity, and .active comes second, so it wins
+   outright — hovering the tab you're already on (almost always Battle) showed
+   no feedback at all. This gives it one, without disturbing the resting look. */
+.tab-btn.active:hover { border-color: var(--accent); }
 .tab-btn .teaser { opacity: 0.55; }
 
 .nav-category { display: flex; flex-direction: column; gap: 2px; }
