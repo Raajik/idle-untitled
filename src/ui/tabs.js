@@ -939,19 +939,6 @@ export function battleTab(state) {
       <div class="panel"><h2>Combat Log</h2><div class="log" id="combat-log">${logHtml(state)}</div></div>`;
   }
 
-  const regionTiles = REGIONS.map((r) => {
-      const arrived = p.unlockedRegions.includes(r.id);
-      const travelling = travel && travel.kind === 'region' && travel.id === r.id;
-      const cls = ['tile', 'region-tile', arrived ? 'arrived' : '', travelling ? 'travelling' : ''].join(' ');
-      const sub = travelling
-        ? `<span class="travel-timer" id="region-timer-${r.id}">${formatDuration(travel.remaining)}</span>`
-        : arrived
-        ? '<span class="sub">arrived</span>'
-        : `<span class="sub">Travel (${formatDuration(r.walkSeconds)})</span>`;
-      return `<button class="${cls}" id="region-tile-${r.id}" title="Travel" data-action="travel-region" data-arg="${r.id}">${esc(r.name)}${sub}</button>`;
-    })
-    .join('');
-
   let poiSection = '';
   let townSection = '';
   if (state.location.regionId) {

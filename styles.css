@@ -530,6 +530,7 @@ button.btn.active { border-color: var(--accent); color: var(--accent); backgroun
 .log .good { color: var(--xp); }
 .log .loot-line { color: var(--accent); }
 .log .boss { color: var(--soul); font-weight: bold; }
+.log .npc-speech { color: var(--accent); }
 
 /* Buttons */
 button.btn {

@@ -38,7 +38,7 @@ export function answerSeenLifestone(state, hasSeenBefore) {
   if (state.onboarding.step !== 'seen-lifestone') return false;
   if (hasSeenBefore) {
     state.onboarding.step = 'done';
-    addLog(state, `"Good, good — one less thing to explain." Alcott waves you toward the road to Holtburg.`, 'dim');
+    addLog(state, `"Good, good — one less thing to explain." Alcott waves you toward the road to Holtburg.`, 'npc-speech');
     alcottOutfitsYou(state);
   } else {
     state.onboarding.step = 'alcott-explains';
@@ -50,7 +50,7 @@ export function acknowledgeAlcottIntro(state) {
   if (state.onboarding.step !== 'alcott-explains') return false;
   state.onboarding.step = 'done';
   state.onboarding.tutorialPending = true;
-  addLog(state, `Alcott points toward a distant village. "That's Holtburg. Stay sharp — and if you find trouble, my friend Thorolf there can help you get your bearings."`, 'dim');
+  addLog(state, `Alcott points toward a distant village. "That's Holtburg. Stay sharp — and if you find trouble, my friend Thorolf there can help you get your bearings."`, 'npc-speech');
   alcottOutfitsYou(state);
   return true;
 }

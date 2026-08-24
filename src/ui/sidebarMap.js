@@ -241,7 +241,6 @@ function townRow(state, region, travel) {
 export function sidebarMapHtml(state) {
   const travel = state.travel;
   const reached = REGIONS.filter((r) => state.progress.unlockedRegions.includes(r.id));
-  if (!reached.length) return '';
 
   const groups = reached.map((region) => {
     const tiers = tiersForRegion(region);

@@ -442,7 +442,7 @@ function handleHeroDeath(state) {
   addLog(
     state,
     `"Death's a fine teacher, if a rude one," Alcott says as the world knits itself back together. "You'll feel that Lifestone's pull now, wherever you've bonded with one — call on it, and it'll carry you there in an instant."`,
-    'good'
+    'npc-speech'
   );
 }
 
