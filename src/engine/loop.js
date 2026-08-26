@@ -43,9 +43,10 @@ export function createStepper({ tickMs = TICK_MS, renderMs = RENDER_MS, saveMs =
 export function createLoop({ tick, frame, autosave }) {
   const step = createStepper();
   let last = null;
-  let timer = null;
+  let rafTimer = null;
+  let intervalTimer = null;
 
-  function raf(now) {
+  function run(now) {
     if (last === null) last = now;
     let dt = now - last;
     last = now;
@@ -57,17 +58,54 @@ export function createLoop({ tick, frame, autosave }) {
     for (let i = 0; i < s.ticks; i++) tick(TICK_MS / 1000);
     if (frame) frame(dt);
     if (s.doSave) autosave();
+  }
 
-    timer = requestAnimationFrame(raf);
+  function raf(now) {
+    run(now);
+    rafTimer = requestAnimationFrame(raf);
+  }
+
+  // Browsers throttle requestAnimationFrame to a stop in hidden tabs — which,
+  // for an idle game, means it stops idling exactly when the player switches
+  // away to do something else. setInterval helps but Chrome throttles it too
+  // (down to ~1 fire/minute after a few minutes hidden). A Web Worker's timer
+  // is NOT throttled, so the worker is the heartbeat: it pings every tick and
+  // the page catches up on whatever time actually passed. The two drivers
+  // coexist because `last` is shared — whichever fires sees real elapsed time.
+  let worker = null;
+  let workerUrl = null;
+
+  function startWorker() {
+    try {
+      const src = 'setInterval(() => postMessage(0), ' + TICK_MS + ')';
+      workerUrl = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+      worker = new Worker(workerUrl);
+      worker.onmessage = () => {
+        if (document.visibilityState === 'visible') return; // rAF owns foreground timing
+        run(performance.now());
+      };
+    } catch (e) {
+      // Workers unavailable (file:// in some browsers): fall back to an interval,
+      // accepting its throttling rather than stopping outright.
+      intervalTimer = setInterval(() => {
+        if (document.visibilityState === 'visible') return; // rAF owns foreground timing
+        run(performance.now());
+      }, TICK_MS);
+    }
   }
 
   return {
     start() {
-      timer = requestAnimationFrame(raf);
+      rafTimer = requestAnimationFrame(raf);
+      startWorker();
     },
     stop() {
-      if (timer !== null) cancelAnimationFrame(timer);
-      timer = null;
+      if (rafTimer !== null) cancelAnimationFrame(rafTimer);
+      rafTimer = null;
+      if (worker) { worker.terminate(); worker = null; }
+      if (workerUrl) { URL.revokeObjectURL(workerUrl); workerUrl = null; }
+      if (intervalTimer !== null) clearInterval(intervalTimer);
+      intervalTimer = null;
     },
   };
 }
