@@ -103,7 +103,7 @@ test('where you are is marked, and is not a walk', () => {
   const s = inHoltburg('drudge-hideout');
   const html = sidebarMapHtml(s);
   assert.match(html, /class="place-row here[^"]*" id="map-poi-drudge-hideout"/, 'the row you are on is marked');
-  assert.match(html, /id="map-poi-drudge-hideout"[\s\S]{0,200}?<span class="t here">here</, 'and says "here" rather than a walk time');
+  assert.match(html, /id="map-poi-drudge-hideout"[\s\S]{0,300}?here-dot/, 'and carries the here-dot rather than a walk time');
 });
 
 // --- The hover card ------------------------------------------------------

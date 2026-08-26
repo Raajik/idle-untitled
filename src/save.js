@@ -61,6 +61,9 @@ function migrate(raw) {
   }
   state.settings.autoCastSpells = Array.isArray(state.settings.autoCastSpells) ? state.settings.autoCastSpells : [];
   state.settings.autoDrink = Array.isArray(state.settings.autoDrink) ? state.settings.autoDrink : [];
+  // UI scale arrived after the first saves; clamp anything a hand-edited save claims.
+  if (!Number.isFinite(state.settings.uiScale)) state.settings.uiScale = 1;
+  state.settings.uiScale = Math.min(1.4, Math.max(0.85, state.settings.uiScale));
   // Void Magic and War's element picker arrived after these saves were written.
   state.hero.combat = { ...fresh.hero.combat, ...(state.hero.combat || {}) };
   if (typeof state.progress.rotCooldown !== 'number') state.progress.rotCooldown = 0;

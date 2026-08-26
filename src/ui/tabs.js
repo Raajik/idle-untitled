@@ -119,6 +119,21 @@ function bar(cls, pct, label, id, target, { vitae = false } = {}) {
   return `<div class="bar ${cls}"${bid}${tgt}><div class="fill"${fid} style="width:${w}%"></div>${overlay}<div class="fx-flash"></div><div class="label"${lid}>${esc(label)}</div></div>`;
 }
 
+// The three vitals as compact bars for the sidebar summary (under the logo).
+// No ids: these are rebuilt wholesale with the summary text every frame, so
+// they don't join the fx/setBar targeting the big Battle-tab bars use. They do
+// carry the vitae overlay — being able to see the penalty from any tab is the
+// whole point of showing them here.
+export function heroBar(state) {
+  const h = state.hero;
+  const d = derivedStats(state);
+  return `<div class="summary-vitals">
+    ${bar('hp mini', (h.hp / d.maxHp) * 100, `${Math.ceil(h.hp)}/${d.maxHp}`, null, null, { vitae: true })}
+    ${bar('stamina mini', (h.stamina / d.maxStamina) * 100, `${Math.ceil(h.stamina)}/${d.maxStamina}`, null, null, { vitae: true })}
+    ${bar('mana mini', (h.mana / d.maxMana) * 100, `${Math.ceil(h.mana)}/${d.maxMana}`, null, null, { vitae: true })}
+  </div>`;
+}
+
 function logHtml(state, limit = 40) {
   const lines = state.log.slice(-limit);
   return lines.map((l) => `<div class="${l.cls}">${esc(l.text)}</div>`).join('');
@@ -491,7 +506,7 @@ function townTileHtml(state, region, travel) {
     // walk, and two elements sharing an id leaves one of them frozen.
     ? `<span class="travel-timer" id="town-timer-${region.id}">${formatDuration(travel.remaining)}</span>`
     : here
-    ? '<span class="sub">here</span>'
+    ? '<span class="sub here-dot-wrap"><span class="here-dot" title="You are here"></span></span>'
     : walkTimeHtml(state, backSeconds);
 
   const shops = buildingsForRegion(region.id);
@@ -1764,6 +1779,13 @@ export function battleDockHtml(state) {
 
 // --- Settings ---
 export function settingsTab(state) {
+  // Scale picker: 100% is the designed size; up to 140% for readability. The
+  // renderer applies it on the next frame, so the change is visible immediately.
+  const scale = state.settings.uiScale || 1;
+  const pct = Math.round(scale * 100);
+  const scaleBtns = [1, 1.15, 1.3, 1.4]
+    .map((v) => `<button class="btn small${Math.abs(scale - v) < 0.001 ? ' active' : ''}" data-action="set-ui-scale" data-arg="${v}">${Math.round(v * 100)}%</button>`)
+    .join('');
   return `
     <div class="panel"><h2>Save</h2>
       <p class="muted">Saved automatically every 10 seconds. You can also export your save as text to back it up or move devices.</p>
@@ -1773,6 +1795,10 @@ export function settingsTab(state) {
         <button class="btn" data-action="hard-reset">Hard reset</button>
       </div>
       <textarea class="save-io" id="save-io" placeholder="Exported save appears here; paste a save here and click Import"></textarea>
+    </div>
+    <div class="panel"><h2>Display</h2>
+      <p class="muted">Text size — currently ${pct}%. Larger sizes widen the sidebar to match.</p>
+      <div style="display:flex; gap:8px; margin:10px 0">${scaleBtns}</div>
     </div>
     <div class="panel"><h2>About</h2>
       <p class="muted">Immortal Isparian Incremental (III) — a text idle RPG in Asheron's Call's world. No energy, no tokens, no premium anything. v${state.version}</p>

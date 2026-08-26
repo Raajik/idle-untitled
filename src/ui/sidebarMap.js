@@ -192,7 +192,7 @@ function poiRow(state, poi, regionId, travel, tone) {
   const time = travelling
     ? { cls: 'travelling', text: `<span id="map-poi-timer-${poi.id}">${formatDuration(travel.remaining)}</span>` }
     : here
-    ? { cls: 'here', text: 'here' }
+    ? { cls: 'here', text: '<span class="here-dot" title="You are here"></span>' }
     : { cls: walk.tone, text: formatClock(walk.actual) };
 
   const mark = hasOpenQuest(state, poi.id)
@@ -225,7 +225,7 @@ function townRow(state, region, travel) {
   const time = travelling
     ? { cls: 'travelling', text: `<span id="map-town-timer-${region.id}">${formatDuration(travel.remaining)}</span>` }
     : here
-    ? { cls: 'here', text: 'here' }
+    ? { cls: 'here', text: '<span class="here-dot" title="You are here"></span>' }
     : { cls: walk.tone, text: formatClock(walk.actual) };
 
   return rowHtml({

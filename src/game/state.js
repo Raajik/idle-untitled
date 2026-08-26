@@ -154,6 +154,7 @@ export function createInitialState() {
       autoCastSpells: [], // self-buff spell ids kept up automatically
       autoDrink: [], // consumable ids re-drunk when their buff lapses
       autoSalvage: 'off', // 'off' or a rarity name: drops at or below it are broken down on sight
+      uiScale: 1, // multiplies root font size — accessibility scaling (see Settings)
     },
     log: [], // recent combat log lines (newest last)
     ui: {

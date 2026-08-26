@@ -6,7 +6,7 @@
 import { topLevelEntries, childTabs, drainNewUnlocks, UNLOCKS } from './unlocks.js';
 import { sidebarMapHtml, hoverCardHtml } from './sidebarMap.js';
 import { battleTab, attributesTab, skillsTab, inventoryTab, trainingTab, enlightenmentTab, recallTab, tinkeringTab, overviewTab, settingsTab,
-  upkeepTab, battleDockHtml, sidebarUpkeepHtml, waveLine, attackBarLabel, monsterLabel } from './tabs.js';
+  upkeepTab, battleDockHtml, sidebarUpkeepHtml, waveLine, attackBarLabel, monsterLabel, heroBar } from './tabs.js';
 import { startTravelToRegion, startTravelToPoi } from '../game/travel.js';
 import { derivedStats, xpForLevel, totalXpForLevel } from '../game/hero.js';
 import { equipItem, salvageItem, salvageAll } from '../game/loot.js';
@@ -118,7 +118,8 @@ export function createRenderer(state, { onImport }) {
       (state.enlightenment.count > 0 ? `\n<span class="soul">${state.enlightenment.souls} souls</span> · run ${state.enlightenment.count + 1}` : '') +
       `\nATK ${d.atk} · HP ${Math.ceil(state.hero.hp)}/${d.maxHp}` +
       // Vitae is a penalty you want to notice without going looking for it.
-      (vitaePct(state) > 0 ? `\n<span class="hp-text">Vitae ${vitaePct(state)}%</span>` : '');
+      (vitaePct(state) > 0 ? `\n<span class="hp-text">Vitae ${vitaePct(state)}%</span>` : '') +
+      heroBar(state);
   }
 
   function renderNav() {
@@ -228,7 +229,14 @@ export function createRenderer(state, { onImport }) {
     }
   }
 
+  // Accessibility: scale the whole UI from Settings. The stylesheet reads
+  // --ui-scale off :root (body { zoom }), so this is one variable write.
+  function applyUiScale() {
+    document.documentElement.style.setProperty('--ui-scale', state.settings.uiScale || 1);
+  }
+
   function render() {
+    applyUiScale();
     // Toasts for newly unlocked features
     for (const u of drainNewUnlocks(state)) toast(u.toast);
 
@@ -615,6 +623,13 @@ export function createRenderer(state, { onImport }) {
       }
       case 'equip': equipItem(state, Number(arg)); break;
       case 'cycle-auto-salvage': state.settings.autoSalvage = arg; break;
+      case 'set-ui-scale': {
+        // The buttons carry 1 / 1.15 / 1.3 / 1.4; Number() so a stale arg can't
+        // poison the clamp in save.js.
+        const v = Number(arg);
+        if (Number.isFinite(v)) state.settings.uiScale = v;
+        break;
+      }
       case 'salvage-shown': {
         const f = state.ui.inventoryFilter;
         const summary = salvageAll(state, (it) => {
