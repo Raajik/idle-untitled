@@ -169,11 +169,16 @@ function rowHtml({ action, arg, id, cls = '', tone = null, lv, name, time, mark 
   const classes = ['place-row', ...cls.split(' ').filter(Boolean)].join(' ');
   const style = tone ? ` style="--tier-edge:var(--tone-${tone})"` : '';
   const cardAttr = card ? ` data-card="${card}"` : '';
+  // A marker shares the leading slot with the level rather than taking a corner
+  // of its own: the two cross-fade in place, so every row stays the same shape
+  // and the level is still readable on a row that wants something.
+  const lead = mark
+    ? `<span class="lv swap"><span class="face">${lv}</span>${mark}</span>`
+    : `<span class="lv">${lv}</span>`;
   return `<button class="${classes}" id="${id}"${style} data-action="${action}" data-arg="${arg}"${cardAttr}>
-      <span class="lv">${lv}</span>
+      ${lead}
       <span class="nm">${esc(name)}</span>
       <span class="t ${time.cls}">${time.text}</span>
-      ${mark}
     </button>`;
 }
 
@@ -191,9 +196,9 @@ function poiRow(state, poi, regionId, travel, tone) {
     : { cls: walk.tone, text: formatClock(walk.actual) };
 
   const mark = hasOpenQuest(state, poi.id)
-    ? '<span class="mk">!</span>'
+    ? '<span class="mk face">!</span>'
     : bounties.length
-    ? '<span class="mk bounty">¤</span>'
+    ? '<span class="mk face bounty">¤</span>'
     : '';
 
   return rowHtml({
@@ -231,7 +236,7 @@ function townRow(state, region, travel) {
     lv: '⌂',
     name: region.name,
     time,
-    mark: asking ? '<span class="mk">!</span>' : '',
+    mark: asking ? '<span class="mk face">!</span>' : '',
     card: `town:${region.id}`,
   });
 }
@@ -242,6 +247,9 @@ export function sidebarMapHtml(state) {
   const travel = state.travel;
   const reached = REGIONS.filter((r) => state.progress.unlockedRegions.includes(r.id));
 
+  // No early return when nothing is reached yet: a fresh save must still see
+  // the "Travel there" rows, or there is no way to leave for the first region
+  // at all — the tutorial journey starts from one of these rows.
   const groups = reached.map((region) => {
     const tiers = tiersForRegion(region);
     const site = lifestoneSiteIn(region.id);

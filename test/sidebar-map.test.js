@@ -33,6 +33,13 @@ test('a region you have never reached is one row, not a band', () => {
   }
 });
 
+test('a fresh save with nothing unlocked still offers the road out', () => {
+  const s = inHoltburg();
+  s.progress.unlockedRegions = [];
+  const html = sidebarMapHtml(s);
+  assert.ok(html.includes('map-region-holtburg'), 'the first region must be travelable to or the game cannot start');
+});
+
 test('the town leads its region, with its reputation', () => {
   const s = inHoltburg();
   grantReputation(s, 'holtburg', 42);
