@@ -24,7 +24,10 @@ test("buying an item from a building's stock spends pyreals and adds it to inven
 
   assert.equal(buyItem(s, 'holtburg:general-store', 0), true);
   assert.equal(s.buildings['holtburg:general-store'].stock.length, originalLength - 1);
-  assert.ok(s.inventory.some((it) => it.id === item.id));
+  // Auto-equip is on by default: the purchase goes on your back rather than in
+  // your bag when it beats what you're wearing (nothing, at level 1).
+  const worn = s.equipment.weapon && s.equipment.weapon.id === item.id;
+  assert.ok(worn || s.inventory.some((it) => it.id === item.id));
   assert.ok(s.pyreals < before);
 });
 
@@ -109,7 +112,10 @@ test('buying really does move an item from the shelf to your pack', () => {
   s.pyreals = buyPrice(item) + 500;
 
   assert.equal(buyItem(s, 'holtburg:general-store', 0), true, 'the sale should go through');
-  assert.ok(s.inventory.some((it) => it.id === item.id));
+  assert.ok(
+    s.inventory.some((it) => it.id === item.id) || (s.equipment.weapon && s.equipment.weapon.id === item.id),
+    'the item reaches you — worn or carried'
+  );
   assert.ok(!s.buildings['holtburg:general-store'].stock.some((it) => it.id === item.id));
 
   // A shop id the handler mangled would look exactly like this.

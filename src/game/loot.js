@@ -74,9 +74,9 @@ export function rollRarity(luckPct = 0) {
   return pickWeighted(table);
 }
 
-export function generateItem(powerLevel, { luckPct = 0, rarityBoost = 0, forceSlot = null, forceBaseType = null, depth = 0, regionIdx = 0, preferMaterial = null, slotPool = null } = {}) {
-  let rarity = rollRarity(luckPct);
-  if (rarityBoost > 0) {
+export function generateItem(powerLevel, { luckPct = 0, rarityBoost = 0, forceSlot = null, forceBaseType = null, forceRarity = null, depth = 0, regionIdx = 0, preferMaterial = null, slotPool = null } = {}) {
+  let rarity = forceRarity ? RARITIES.find((r) => r.name === forceRarity) || rollRarity(luckPct) : rollRarity(luckPct);
+  if (rarityBoost > 0 && !forceRarity) {
     // deeper waves: bump rarity up by rarityBoost tiers (capped at Legendary)
     const idx = Math.min(RARITIES.indexOf(rarity) + rarityBoost, RARITIES.length - 1);
     rarity = RARITIES[idx];
@@ -299,6 +299,11 @@ export function maybeAutoEquip(state, item) {
   if (!slot) return false;
   const current = state.equipment[slot];
   if (itemScore(item) > itemScore(current)) {
+    // Take it out of the pack as it goes on. Leaving the same id in both places
+    // duplicated every auto-equipped drop — and let a later "equip" pull a
+    // ghost copy out of the bag.
+    const idx = state.inventory.findIndex((it) => it.id === item.id);
+    if (idx !== -1) state.inventory.splice(idx, 1);
     state.equipment[slot] = item;
     if (current) state.inventory.push(current);
     return true;
@@ -338,7 +343,7 @@ export function expectedSalvageYield(rarity, salvagingRank, base = (SALVAGE_BASE
 // `filter` picks which items to take; the default is everything.
 // Returns a summary for the caller to log, or null if nothing matched.
 export function salvageAll(state, filter = () => true) {
-  const doomed = state.inventory.filter(filter);
+  const doomed = state.inventory.filter((it) => !isQuestItem(it) && filter(it));
   if (!doomed.length) return null;
 
   const startRank = state.hero.skills.salvaging.rank;
@@ -369,9 +374,16 @@ export function autoSalvageRank(state) {
 // be able to destroy an upgrade.
 export function shouldAutoSalvage(state, item) {
   const threshold = autoSalvageRank(state);
-  if (threshold < 0 || !item || !item.material) return false;
+  if (threshold < 0 || !item || !item.material || isQuestItem(item)) return false;
   const rank = RARITIES.findIndex((r) => r.name === item.rarity);
   return rank >= 0 && rank <= threshold;
+}
+
+// Gear lent to you for a quest. It isn't yours to melt down or sell, and letting
+// it be either would strand a hand-in that asks for it back (see data/quests.js
+// THOROLF_TAG).
+export function isQuestItem(item) {
+  return !!(item && item.questTag);
 }
 
 // Destroys an unequipped item for a quantity of the raw material it's made from.
@@ -382,7 +394,7 @@ export function salvageItem(state, itemId) {
   const idx = state.inventory.findIndex((it) => it.id === itemId);
   if (idx === -1) return null;
   const item = state.inventory[idx];
-  if (!item.material) return null;
+  if (!item.material || isQuestItem(item)) return null;
   const amount = salvageYield(item.rarity, state.hero.skills.salvaging.rank);
   state.inventory.splice(idx, 1);
   state.materials[item.material] = (state.materials[item.material] || 0) + amount;

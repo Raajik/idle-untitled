@@ -10,7 +10,7 @@ import { getConsumable } from '../data/consumables.js';
 import { getMaterial } from '../data/materials.js';
 import { grantConsumable } from './consumables.js';
 import { isUnlocked } from './buildings.js';
-import { itemScore } from './loot.js';
+import { itemScore, isQuestItem, maybeAutoEquip } from './loot.js';
 import { derivedStats } from './hero.js';
 import { addLog } from './state.js';
 
@@ -38,6 +38,9 @@ export function buyItem(state, buildingId, stockIndex) {
   stock.splice(stockIndex, 1);
   state.inventory.push(item);
   addLog(state, `Bought ${item.name} from the ${building.name} for ${price} pyreals.`, 'good');
+  // Buying gear is how you say "I want to wear this" — a purchase that lands in
+  // the bag while an empty slot sits there reads as the shop cheating you.
+  maybeAutoEquip(state, item);
   return true;
 }
 
@@ -45,6 +48,7 @@ export function sellItem(state, itemId) {
   const idx = state.inventory.findIndex((it) => it.id === itemId);
   if (idx === -1) return false;
   const item = state.inventory[idx];
+  if (isQuestItem(item)) return false;
   const price = sellPrice(item);
   state.inventory.splice(idx, 1);
   state.pyreals += price;
