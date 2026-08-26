@@ -441,7 +441,7 @@ function handleHeroDeath(state) {
   p.recallUnlocked = true;
   addLog(
     state,
-    `"Death's a fine teacher, if a rude one," Alcott says as the world knits itself back together. "You'll feel that Lifestone's pull now, wherever you've bonded with one — call on it, and it'll carry you there in an instant."`,
+    `Alcott is there when the world comes back. "That's the worst of it over with. You'll feel the pull of any stone you've bonded with now — call on it and it'll carry you there."`,
     'npc-speech'
   );
 }

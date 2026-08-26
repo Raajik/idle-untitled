@@ -32,7 +32,7 @@ import { applyRending } from '../game/rending.js';
 import { buyItem, sellItem, healService, buyConsumable, buyMaterial } from '../game/shop.js';
 import { getMaterial } from '../data/materials.js';
 import { addLog } from '../game/state.js';
-import { completeQuest } from '../game/quests.js';
+import { completeQuest, setQuestChoice } from '../game/quests.js';
 import { claimBounty } from '../game/bounties.js';
 
 const TAB_RENDERERS = {
@@ -60,7 +60,10 @@ function battleStructureKey(state) {
   // The open building's restock timestamp is part of the shape: when its stock
   // rotates out from under an open panel, the panel has to be rebuilt.
   const open = state.ui.activeBuilding;
-  const buildingKey = open ? `${open}:${state.buildings[open] ? state.buildings[open].rotatesAt : ''}:${state.ui.activeShopTab}` : '';
+  // The picked reward is part of the shape too: choosing one flips which button
+  // reads as active and can enable the hand-in.
+  const choiceKey = Object.entries(state.ui.questChoice || {}).map(([k, v]) => `${k}=${v}`).sort().join(',');
+  const buildingKey = open ? `${open}:${state.buildings[open] ? state.buildings[open].rotatesAt : ''}:${state.ui.activeShopTab}:${choiceKey}` : '';
   // Which buffs are up (not how long they have left) is part of the shape: the
   // Upkeep rows change between "Cast" and a countdown as they come and go.
   const buffKey = state.buffs.map((b) => b.id).join(',');
@@ -574,7 +577,7 @@ export function createRenderer(state, { onImport }) {
     const loaded = importSave(text);
     if (loaded) {
       onImport(loaded);
-      toast('Save imported!');
+      toast('Save imported.');
     } else {
       toast('Import failed — invalid save data.');
     }
@@ -664,6 +667,13 @@ export function createRenderer(state, { onImport }) {
       case 'invest-building': investInBuilding(state, arg); break;
       case 'take-tour': takeTour(state, arg); break;
       case 'hand-in-quest': completeQuest(state, arg, state.location.regionId); break;
+      case 'set-quest-choice': {
+        // arg is `<questKey>:<optionId>`, and a quest key can itself contain a
+        // colon (`holtburg:store-larder`), so split the option off the end.
+        const cut = arg.lastIndexOf(':');
+        setQuestChoice(state, arg.slice(0, cut), arg.slice(cut + 1));
+        break;
+      }
       case 'claim-bounty': {
         const [buildingId, id] = splitBuildingArg(arg);
         claimBounty(state, buildingId, Number(id));

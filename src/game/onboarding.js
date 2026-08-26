@@ -50,7 +50,7 @@ export function acknowledgeAlcottIntro(state) {
   if (state.onboarding.step !== 'alcott-explains') return false;
   state.onboarding.step = 'done';
   state.onboarding.tutorialPending = true;
-  addLog(state, `Alcott points toward a distant village. "That's Holtburg. Stay sharp — and if you find trouble, my friend Thorolf there can help you get your bearings."`, 'npc-speech');
+  addLog(state, `Alcott points toward a distant village. "That's Holtburg. Keep your eyes up on the way. Ask for Thorolf when you get there — he'll set you straight."`, 'npc-speech');
   alcottOutfitsYou(state);
   return true;
 }

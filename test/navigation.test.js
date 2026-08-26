@@ -5,6 +5,7 @@ import { battleTab } from '../src/ui/tabs.js';
 import { sidebarMapHtml } from '../src/ui/sidebarMap.js';
 import { startTravelToRegion, startTravelToPoi, arrive } from '../src/game/travel.js';
 import { takeTour, tickBuildings } from '../src/game/buildings.js';
+import { completeQuest, setQuestChoice } from '../src/game/quests.js';
 import { getRegion, tiersForRegion } from '../src/data/regions.js';
 import { formatClock } from '../src/engine/format.js';
 import { modifiedWalkTime } from '../src/game/skills.js';
@@ -103,7 +104,21 @@ test('the town card carries the Town Hall\'s quest marker', () => {
   s.progress.quests['holtburg:town-hall'] = 'active';
   assert.ok(battleTab(s).includes('quest-mark'), 'an unfinished tour should show on the town card');
 
+  // The tour hands the Town Hall straight to Thorolf, so the marker stays up —
+  // it means "this building still wants something", not "the tour is pending".
   takeTour(s, 'holtburg:town-hall');
+  const mid = battleTab(s);
+  assert.ok(
+    mid.slice(mid.indexOf('town-tile-holtburg')).slice(0, 500).includes('quest-mark'),
+    'Thorolf takes over the hall once the tour is done'
+  );
+
+  // Only once every job in town is paid out does the card go quiet. The tour is
+  // also when the rest of the town posts its work, so clear those too.
+  completeQuest(s, 'thorolf-armory', 'holtburg');
+  setQuestChoice(s, 'thorolf-return', 'onyx');
+  completeQuest(s, 'thorolf-return', 'holtburg');
+  for (const key of Object.keys(s.progress.quests)) s.progress.quests[key] = 'done';
   const done = battleTab(s);
   const townCard = done.slice(done.indexOf('town-tile-holtburg'));
   assert.ok(!townCard.slice(0, 500).includes('quest-mark'), 'and stop once it is done');

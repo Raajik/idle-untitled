@@ -327,7 +327,7 @@ export function applyOfflineProgress(state) {
   };
   addLog(
     state,
-    `Welcome back! Away ${hours < 1 ? Math.round(elapsedSec / 60) + 'm' : hours.toFixed(1) + 'h'}: ${fmt(kills)} kills, +${fmt(pyrealsGain)} pyreals${summary.levelsGained ? `, +${summary.levelsGained} levels` : ''}${clears ? `, ${fmt(clears)} full clears` : ''}.`,
+    `You kept swinging while you were gone. Away ${hours < 1 ? Math.round(elapsedSec / 60) + 'm' : hours.toFixed(1) + 'h'}: ${fmt(kills)} kills, +${fmt(pyrealsGain)} pyreals${summary.levelsGained ? `, +${summary.levelsGained} levels` : ''}${clears ? `, ${fmt(clears)} full clears` : ''}.`,
     'good'
   );
   return summary;

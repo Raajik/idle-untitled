@@ -241,13 +241,33 @@ body {
 .place-row .t.even { color: var(--text); }
 .place-row .t.slower { color: var(--hp); }
 .place-row .t.travelling { color: var(--xp); font-weight: bold; }
-.place-row .mk {
-  position: absolute; right: 2px; top: -3px;
-  font-size: 9px; line-height: 12px; padding: 0 3px; border-radius: 2px;
-  background: var(--accent); color: var(--bg); font-weight: bold;
-  animation: quest-pulse 1.8s ease-in-out infinite;
+/* The leading slot holds two faces — the level (or ⌂ / ◈) and, when the place
+   wants something, its marker — and cross-fades between them in place. The level
+   face stays in normal flow so the slot keeps its height; the marker lies over
+   it. Half a cycle of delay puts them exactly out of phase. */
+.place-row .lv.swap { position: relative; }
+.place-row .lv.swap .face { display: block; animation: place-swap 3.6s ease-in-out infinite; }
+.place-row .lv.swap .face.mk {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  border-radius: 2px; background: var(--accent); color: var(--bg);
+  font-size: 9px; line-height: 1; font-weight: bold;
+  /* Out of phase with the level face by exactly half a cycle. Must out-specify
+     the rule above, whose `animation` shorthand would otherwise reset this. */
+  animation-delay: -1.8s;
 }
-.place-row .mk.bounty { background: var(--mana); animation: none; }
+.place-row .lv.swap .face.mk.bounty { background: var(--mana); }
+@keyframes place-swap {
+  0%, 42% { opacity: 1; }
+  50%, 92% { opacity: 0; }
+  100% { opacity: 1; }
+}
+/* Nothing in a sidebar should pulse forever at someone who asked it not to.
+   The marker is the more important of the two faces, so it's the one that stays. */
+@media (prefers-reduced-motion: reduce) {
+  .place-row .lv.swap .face { animation: none; }
+  .place-row .lv.swap .face:not(.mk) { opacity: 0; }
+}
 .place-row.town { --tier-edge: var(--accent); }
 .place-row.town .nm { color: var(--accent); }
 .place-row.unvisited .nm { color: var(--text-dim); }
@@ -786,6 +806,8 @@ button.btn.primary { border-color: var(--accent); color: var(--accent); }
 .quest-panel .quest-progress { margin-top: 6px; font-variant-numeric: tabular-nums; }
 .quest-panel .quest-progress.ready { color: var(--xp); }
 .quest-panel .quest-reward { margin-top: 4px; font-size: 11px; }
+.quest-panel .quest-choice-prompt { margin-top: 8px; font-size: 11px; }
+.quest-choices { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .quest-mark.static { position: static; animation: none; margin-right: 6px; }
 /* A bounty you could work here, as opposed to a quest that lives here. Quieter
    and a different colour, so the two never read as the same kind of thing. */

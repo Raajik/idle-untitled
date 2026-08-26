@@ -67,12 +67,12 @@ import {
   MAX_BUILDING_LEVEL,
 } from '../data/buildings.js';
 import { rotationRemaining, buildingHasQuest, buildingQuestText, buildingQuest } from '../game/buildings.js';
-import { objectiveHave, objectiveText, canCompleteQuest, reputation } from '../game/quests.js';
+import { objectiveHave, objectiveText, canCompleteQuest, questChoice, reputation } from '../game/quests.js';
 import { bountyReady, bountiesAt } from '../game/bounties.js';
 import { buyPrice, sellPrice, healCost } from '../game/shop.js';
 import { TRAINING_TRACKS, trainingCost } from '../game/training.js';
 import { soulsAvailable, canEnlighten, ENLIGHTENMENT_UPGRADES } from '../game/enlightenment.js';
-import { itemScore, expectedSalvageYield, AUTO_SALVAGE_OFF } from '../game/loot.js';
+import { itemScore, expectedSalvageYield, isQuestItem, AUTO_SALVAGE_OFF } from '../game/loot.js';
 import {
   STARTING_SLOTS,
   EQUIP_SLOTS,
@@ -132,8 +132,8 @@ function onboardingHtml(state) {
   if (step === 'name') {
     return `<div class="panel intro-panel">
       <p>You feel as if you've just woken up from a very long and uncomfortable sleep. Your entire body is sore.</p>
-      <p style="margin-top:8px">A voice, unfamiliar, asks: <em>"...first time?"</em></p>
-      <p class="npc-speech" style="margin-top:12px">"What's your name, newbie?"</p>
+      <p style="margin-top:8px">A voice you don't know, somewhere above you: <em>"...first time?"</em></p>
+      <p style="margin-top:12px"><em class="npc-speech">"Take your time. What do they call you?"</em></p>
       <div style="display:flex; gap:8px; margin-top:8px">
         <input type="text" id="name-input" class="text-input" maxlength="24" placeholder="Enter your name" />
         <button class="btn primary" data-action="submit-name">Continue</button>
@@ -153,8 +153,8 @@ function onboardingHtml(state) {
 
   // step === 'alcott-explains'
   return `<div class="panel intro-panel">
-    <p class="npc-speech">"Name's Alcott. That glow behind you — that's a <span class="lifestone-glow">Lifestone</span>. It'll keep you from dying for good, though it won't spare you the pain of it. Bond with enough of them and you'll be able to call on one to travel between them in an instant."</p>
-    <p style="margin-top:8px">He points toward a distant huddle of rooftops. <span class="npc-speech">"That's Holtburg. Stay sharp on the way — and if trouble finds you, my friend Thorolf there can help you get your bearings."</span></p>
+    <p class="npc-speech">"Name's Alcott. That glow behind you is a <span class="lifestone-glow">Lifestone</span>. It won't stop you dying — it'll just stop it being the end of you, and you'll feel every bit of it either way. Bond with enough of them and you can call on one from anywhere."</p>
+    <p style="margin-top:8px">He points toward a distant huddle of rooftops. <span class="npc-speech">"That's Holtburg. Keep your eyes up on the way. Ask for Thorolf when you get there — he'll set you straight."</span></p>
     <button class="btn primary" data-action="ack-intro" style="margin-top:10px">Set out for Holtburg</button>
   </div>`;
 }
@@ -660,8 +660,10 @@ function stockHtml(state, buildingId, entry, filter = () => true) {
 }
 
 function sellHtml(state) {
-  if (!state.inventory.length) return '<p class="muted">Nothing in your inventory to sell.</p>';
-  return state.inventory
+  // Anything lent for a quest is not on the table (see game/shop.js sellItem).
+  const sellable = state.inventory.filter((it) => !isQuestItem(it));
+  if (!sellable.length) return '<p class="muted">Nothing in your inventory to sell.</p>';
+  return sellable
     .map(
       (item) => `<div class="item">
         <div class="name rarity-${item.rarity}">${esc(item.name)}</div>
@@ -804,14 +806,33 @@ function buildingPanelHtml(state) {
       `+${rewards.reputation ?? 10} reputation`,
       (rewards.skills || []).length ? `the ${(rewards.skills || []).join(' and ')} skill` : null,
       Object.entries(rewards.consumables || {}).map(([id, n]) => `${n}x ${esc((getConsumable(id) || {}).name || id)}`).join(', ') || null,
+      (rewards.weapons || []).length ? `one of every weapon (${(rewards.weapons || []).length})` : null,
     ]
       .filter(Boolean)
       .join(' · ');
+
+    // A reward the player picks. Nothing is chosen by default — hand-in stays
+    // disabled until one is, because the choosing IS the reward.
+    let choicePanel = '';
+    if (rewards.choice) {
+      const chosen = questChoice(state, key);
+      const opts = rewards.choice.options
+        .map((id) => {
+          const m = getMaterial(id);
+          const type = gemDamageType(id);
+          return `<button class="btn small quest-choice${chosen === id ? ' active' : ''}" data-action="set-quest-choice" data-arg="${key}:${id}" title="${esc(damageLabel(type))}">${esc(m ? m.name : id)}</button>`;
+        })
+        .join('');
+      choicePanel = `<div class="muted quest-choice-prompt">${esc(rewards.choice.prompt || 'Choose your reward')}</div>
+        <div class="quest-choices">${opts}</div>`;
+    }
+
     questPanel = `<div class="quest-panel">
       <div class="quest-title"><span class="quest-mark static">!</span>${esc(def.title)}</div>
       <p class="muted">${esc(def.desc)}</p>
-      ${def.objective ? `<div class="quest-progress ${ready ? 'ready' : ''}">${esc(objectiveText(def.objective))} — <b>${fmt(have)} / ${fmt(need)}</b></div>` : ''}
+      ${def.objective ? `<div class="quest-progress ${ready ? 'ready' : ''}">${esc(objectiveText(def.objective))} — <b>${fmt(Math.min(have, need))} / ${fmt(need)}</b></div>` : ''}
       <div class="muted quest-reward">Pays ${paid}</div>
+      ${choicePanel}
       <div class="actions"><button class="btn primary" data-action="hand-in-quest" data-arg="${key}" ${ready ? '' : 'disabled'}>Hand it in</button></div>
     </div>`;
   }
@@ -1356,11 +1377,13 @@ function itemHtml(state, item, equipped) {
     const diff = itemScore(item) - itemScore(cur);
     cmp = cur ? (diff >= 0 ? `<span class="equip-better">▲ +${diff.toFixed(0)}</span>` : `<span class="equip-worse">▼ ${diff.toFixed(0)}</span>`) : '<span class="equip-better">▲ new slot</span>';
   }
+  // Lent gear can be equipped — that's how you say which one you're keeping — but
+  // not broken down, so the button that would silently do nothing isn't offered.
   const action = equipped
     ? ''
     : `<div class="actions">
         <button class="btn" data-action="equip" data-arg="${item.id}">Equip</button>
-        <button class="btn" data-action="salvage-item" data-arg="${item.id}">Salvage</button>
+        ${isQuestItem(item) ? '<span class="muted">Lent to you — not yours to break down.</span>' : `<button class="btn" data-action="salvage-item" data-arg="${item.id}">Salvage</button>`}
       </div>`;
   // The icon says what it is and the colour says how good it is, so "[Rare ring]"
   // was the same two facts written out a second time.
@@ -1435,7 +1458,9 @@ function selectedItemHtml(state) {
 // instead of being a second, separate way to choose. With no filters set it IS
 // salvage-all, and it says how many it's about to take either way.
 function salvageControlsHtml(state, filtered) {
-  const breakable = filtered.filter((it) => it.material);
+  // Gear lent for a quest isn't yours to melt down, so it must not be counted in
+  // an offer to melt everything down (see game/loot.js salvageAll, which skips it).
+  const breakable = filtered.filter((it) => it.material && !isQuestItem(it));
   const rank = state.hero.skills.salvaging.rank;
   const setting = state.settings.autoSalvage || AUTO_SALVAGE_OFF;
   const options = [AUTO_SALVAGE_OFF, ...RARITIES.map((r) => r.name)];

@@ -167,6 +167,7 @@ export function createInitialState() {
       collapsed: {}, // sectionId -> true when folded away (see `section` in ui/tabs.js)
       inventoryFilter: { slot: 'all', rarity: 'all', spellId: 'all' },
       selectedItemId: null, // which slot in the Inventory grid is open in the detail panel
+      questChoice: {}, // quest key -> which reward the player picked, for quests that pay a choice
     },
     lastSeen: Date.now(),
   };

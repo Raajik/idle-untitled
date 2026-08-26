@@ -30,13 +30,13 @@ export function startTravelToRegion(state, regionId) {
   const atHub = state.location.regionId === regionId && !state.location.poiId;
   if (!state.travel && atHub) return false;
 
-  // Alcott pointed this newbie at Holtburg specifically — the first walk there is
-  // the scripted tutorial journey (weak roadside monsters, fixed 3-minute length).
+  // Alcott pointed you at Holtburg specifically — the first walk there is the
+  // scripted tutorial journey (weak roadside monsters, fixed 3-minute length).
   if (regionId === 'holtburg' && state.onboarding.tutorialPending) {
     state.travel = { kind: 'region', id: regionId, remaining: TUTORIAL_JOURNEY_SECONDS, duration: TUTORIAL_JOURNEY_SECONDS, tutorial: true };
     state.location = { regionId: null, poiId: TUTORIAL_ROAD.id };
     state.monsters = [];
-      addLog(state, `You set out for Holtburg, alone on the open road...`, 'dim');
+      addLog(state, `You set out for Holtburg. The road is yours the whole way.`, 'dim');
     return true;
   }
 

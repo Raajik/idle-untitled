@@ -218,6 +218,10 @@ export function takeTour(state, buildingId, now = Date.now()) {
   if (def.unlocksOnService && openBuilding(state, def.unlocksOnService, now)) {
     addLog(state, `The ${getBuilding(def.unlocksOnService).name} opens its doors to you.`, 'good');
   }
+  // Anything that was waiting on the tour opens now rather than on the next
+  // arrival — Thorolf is standing in this building, and walking out and back in
+  // to find him would be absurd.
+  openQuestsFor(state, def.regionId);
   return true;
 }
 
