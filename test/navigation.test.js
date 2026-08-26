@@ -97,6 +97,7 @@ test('standing in town, the card says so rather than offering a walk', () => {
   const html = battleTab(s);
   assert.ok(html.includes('town-tile-holtburg'));
   assert.ok(/town-tile-holtburg[\s\S]{0,400}?>here</.test(html) === false, 'no walk is offered while you stand in town');
+  assert.ok(/town-tile-holtburg[\s\S]{0,400}?here-dot-wrap/.test(html), 'and carries the here-dot instead');
 });
 
 test('the town card carries the Town Hall\'s quest marker', () => {

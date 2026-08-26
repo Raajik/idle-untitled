@@ -123,10 +123,10 @@ function bar(cls, pct, label, id, target, { vitae = false } = {}) {
 // No ids: these are rebuilt wholesale with the summary text every frame, so
 // they don't join the fx/setBar targeting the big Battle-tab bars use. They do
 // carry the vitae overlay — being able to see the penalty from any tab is the
-// whole point of showing them here.
-export function heroBar(state) {
+// whole point of showing them here. Takes derived stats rather than computing
+// them: updateSummary already has them in hand this frame.
+export function heroBar(state, d) {
   const h = state.hero;
-  const d = derivedStats(state);
   return `<div class="summary-vitals">
     ${bar('hp mini', (h.hp / d.maxHp) * 100, `${Math.ceil(h.hp)}/${d.maxHp}`, null, null, { vitae: true })}
     ${bar('stamina mini', (h.stamina / d.maxStamina) * 100, `${Math.ceil(h.stamina)}/${d.maxStamina}`, null, null, { vitae: true })}

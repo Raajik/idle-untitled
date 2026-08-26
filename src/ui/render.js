@@ -119,7 +119,7 @@ export function createRenderer(state, { onImport }) {
       `\nATK ${d.atk} · HP ${Math.ceil(state.hero.hp)}/${d.maxHp}` +
       // Vitae is a penalty you want to notice without going looking for it.
       (vitaePct(state) > 0 ? `\n<span class="hp-text">Vitae ${vitaePct(state)}%</span>` : '') +
-      heroBar(state);
+      heroBar(state, d);
   }
 
   function renderNav() {
@@ -624,10 +624,10 @@ export function createRenderer(state, { onImport }) {
       case 'equip': equipItem(state, Number(arg)); break;
       case 'cycle-auto-salvage': state.settings.autoSalvage = arg; break;
       case 'set-ui-scale': {
-        // The buttons carry 1 / 1.15 / 1.3 / 1.4; Number() so a stale arg can't
-        // poison the clamp in save.js.
+        // The buttons carry 1 / 1.15 / 1.3 / 1.4; clamp at write time too —
+        // same bounds as save.js — so nothing but a clean value ever lands.
         const v = Number(arg);
-        if (Number.isFinite(v)) state.settings.uiScale = v;
+        if (Number.isFinite(v)) state.settings.uiScale = Math.min(1.4, Math.max(0.85, v));
         break;
       }
       case 'salvage-shown': {

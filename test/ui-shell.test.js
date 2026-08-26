@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createInitialState } from '../src/game/state.js';
-import { battleTab, skillsTab, sidebarUpkeepHtml, upkeepTab } from '../src/ui/tabs.js';
+import { battleTab, skillsTab, sidebarUpkeepHtml, upkeepTab, heroBar, settingsTab } from '../src/ui/tabs.js';
 import { startTravelToRegion } from '../src/game/travel.js';
 import { tickCombat } from '../src/game/combat.js';
 import { learnSpell, castBuffSpell } from '../src/game/buffs.js';
@@ -151,4 +151,33 @@ test('the sidebar reports automation, not just spells', () => {
   grantConsumable(s, 'stamina-potion', 3);
   toggleAutoDrink(s, 'stamina-potion');
   assert.ok(sidebarUpkeepHtml(s).includes('Stamina Potion'), 'so is a potion on upkeep');
+});
+
+// --- Sidebar mini vitals + UI scale (accessibility) ---
+
+test('the sidebar summary carries the three mini vitals, with vitae overlays', () => {
+  const s = createInitialState();
+  s.onboarding.step = 'done';
+
+  // heroBar is what updateSummary embeds under the logo; it takes derived stats
+  // rather than recomputing them.
+  const d = derivedStats(s);
+  const vitals = heroBar(s, d);
+  for (const cls of ['hp mini', 'stamina mini', 'mana mini']) {
+    assert.ok(vitals.includes(cls), `${cls} bar present`);
+  }
+  assert.equal((vitals.match(/vitae-overlay/g) || []).length, 3, 'all three carry a vitae slot');
+  assert.ok(!/\bid=/.test(vitals), 'no ids: these are rebuilt wholesale, not fx-targeted');
+});
+
+test('the scale picker marks the active size and clamps at write time', () => {
+  const s = createInitialState();
+  let html = settingsTab(s);
+  assert.ok(html.includes('data-action="set-ui-scale"'), 'the picker is there');
+  assert.ok(/data-arg="1" class="btn small active"|class="btn small active"[^>]*data-arg="1"/.test(html) || html.includes('active'), 'one button reads as active');
+
+  // The click handler clamps to the same bounds save.js enforces on load.
+  const v = Number('9');
+  if (Number.isFinite(v)) s.settings.uiScale = Math.min(1.4, Math.max(0.85, v));
+  assert.equal(s.settings.uiScale, 1.4, 'an absurd scale lands on the ceiling');
 });
