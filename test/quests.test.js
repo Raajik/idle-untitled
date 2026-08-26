@@ -13,6 +13,8 @@ import {
   canCompleteQuest,
   completeQuest,
   recordKill,
+  questChoice,
+  setQuestChoice,
 } from '../src/game/quests.js';
 import { rollBounties, bountyReady, claimBounty, poiServesBounty, bountiesAt, BOUNTIES_PER_BOARD } from '../src/game/bounties.js';
 import { takeTour, tickBuildings, investToOpen, isUnlocked } from '../src/game/buildings.js';
@@ -300,4 +302,27 @@ test('the Inventory tab opens on your first loot, whatever it was', () => {
     setup(s);
     assert.equal(inventory.when(s), true, `${what} should open the Inventory tab`);
   }
+});
+
+// The click handler passes `<questKey>:<optionId>` and splits at the last
+// colon, because a per-region quest key carries a colon of its own. Pin that
+// shape down: the split must survive a colon-containing key, and setQuestChoice
+// must reject anything that isn't one of the quest's options.
+test('a quest choice round-trips through the colon-split arg shape', () => {
+  const s = createInitialState();
+  s.progress.quests['holtburg:thorolf-return'] = 'active';
+
+  // What render.js builds: `holtburg:thorolf-return:onyx`.
+  const arg = `holtburg:thorolf-return:onyx`;
+  const cut = arg.lastIndexOf(':');
+  assert.ok(setQuestChoice(s, arg.slice(0, cut), arg.slice(cut + 1)));
+  assert.equal(questChoice(s, 'holtburg:thorolf-return'), 'onyx');
+
+  // An option that isn't on the shelf is refused, not stored.
+  assert.equal(setQuestChoice(s, 'holtburg:thorolf-return', 'not-a-gem'), false);
+  assert.equal(questChoice(s, 'holtburg:thorolf-return'), 'onyx');
+
+  // A quest with no choice pays nothing to pick from.
+  assert.equal(setQuestChoice(s, 'thorolf-armory', 'onyx'), false);
+  assert.equal(questChoice(s, 'thorolf-armory'), null);
 });

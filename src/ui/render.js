@@ -670,7 +670,10 @@ export function createRenderer(state, { onImport }) {
       case 'set-quest-choice': {
         // arg is `<questKey>:<optionId>`, and a quest key can itself contain a
         // colon (`holtburg:store-larder`), so split the option off the end.
+        // No colon at all means a malformed arg — setQuestChoice would reject
+        // the empty key anyway, but say so instead of slicing at index -1.
         const cut = arg.lastIndexOf(':');
+        if (cut === -1) break;
         setQuestChoice(state, arg.slice(0, cut), arg.slice(cut + 1));
         break;
       }
